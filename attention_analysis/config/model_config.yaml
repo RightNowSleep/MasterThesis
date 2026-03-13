@@ -1,0 +1,30 @@
+# 基础模型
+base_model: "huggyllama/llama-7b" # 或您有权访问的任何Llama模型
+# base_model: "NousResearch/Llama-2-7b-hf" # 也可以使用开源替代品
+
+# 要测试的RoPE配置列表
+rope_configs:
+  - name: "default"
+    rope_scaling: null
+
+  - name: "dynamic"
+    rope_scaling:
+      type: "dynamic"
+      factor: 2.0
+
+  - name: "linear"
+    rope_scaling:
+      type: "linear"
+      factor: 2.0
+
+  - name: "yarn"
+    rope_scaling:
+      type: "yarn"
+      factor: 2.0
+      # yarn 可能需要更多参数，如 `original_max_position_embeddings`
+
+# 可视化设置
+visualization:
+  layers_to_plot: [0, 15, 31] # 选择要绘制的层（例如：浅层、中层、深层）
+  heads_to_plot: [0, 7]       # 选择要绘制的注意力头
+  max_seq_length: 512         # 为分析截断的最大序列长度
