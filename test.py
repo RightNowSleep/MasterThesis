@@ -11,12 +11,34 @@ from eval.quality import QualityEvaluator, add_args_quality
 from eval.performance import PerformanceEvaluator, add_args_performance
 
 
+def generate_save_filename(args):
+    """
+    Generate filename based on model and RoPE configuration.
+
+    Examples:
+        --rope-type none                              → llama-7b_none.json
+        --rope-type linear --rope-dynamic             → llama-7b_linear_dynamic.json
+        --rope-type linear --rope-factor 4.0          → llama-7b_linear_factor4_0.json
+        --rope-type ntk --rope-factor 2.5             → llama-7b_ntk_factor2_5.json
+    """
+    model_name = args.model_name.split("/")[-1]
+
+    parts = [model_name, args.rope_type]
+
+    if args.rope_type != "none":
+        if args.rope_factor is not None:
+            factor_str = str(args.rope_factor).replace(".", "_")
+            parts.append(f"factor{factor_str}")
+        elif args.rope_dynamic:
+            parts.append("dynamic")
+
+    return "_".join(parts) + ".json"
+
+
 def test_perplexity(args):
     (model, config), tokenizer = load_model(args), load_tokenizer(args)
 
-    args.save_file = (
-        args.save_file or f"{args.model_name.split('/')[-1]}_{args.rope_type}.json"
-    )
+    args.save_file = args.save_file or generate_save_filename(args)
 
     evaluator = PerplexityEvaluator(
         model=model,
@@ -42,9 +64,7 @@ def test_perplexity(args):
 def test_passkey(args):
     (model, config), tokenizer = load_model(args), load_tokenizer(args)
 
-    args.save_file = (
-        args.save_file or f"{args.model_name.split('/')[-1]}_{args.rope_type}.json"
-    )
+    args.save_file = args.save_file or generate_save_filename(args)
     evaluator = PasskeyEvaluator(
         model=model,
         tokenizer=tokenizer,
@@ -68,9 +88,7 @@ def test_passkey(args):
 def test_quality(args):
     (model, config), tokenizer = load_model(args), load_tokenizer(args)
 
-    args.save_file = (
-        args.save_file or f"{args.model_name.split('/')[-1]}_{args.rope_type}.json"
-    )
+    args.save_file = args.save_file or generate_save_filename(args)
     evaluator = QualityEvaluator(
         model=model,
         tokenizer=tokenizer,
@@ -93,9 +111,7 @@ def test_quality(args):
 def test_performance(args):
     (model, config), tokenizer = load_model(args), load_tokenizer(args)
 
-    args.save_file = (
-        args.save_file or f"{args.model_name.split('/')[-1]}_{args.rope_type}.json"
-    )
+    args.save_file = args.save_file or generate_save_filename(args)
     evaluator = PerformanceEvaluator(
         model=model,
         tokenizer=tokenizer,

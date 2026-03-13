@@ -4,24 +4,54 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 export USE_FLASH_ATTN=0
 
-MODEL_NAME="${MODEL_NAME:-huggyllama/llama-7b}"
-MAX_LENGTH="${MAX_LENGTH:-8192}"
-MIN_LENGTH="${MIN_LENGTH:-2048}"
-DEVICE="${DEVICE:-}"
-DTYPE="${DTYPE:-auto}"
+# Model
+MODEL="--model-name huggyllama/llama-7b --load-in-4bit --min-length 2048 --max-length 65536 --load-in-4bit"
 
-ROPE_TYPES=("none" "linear" "ntk" "part-ntk" "yarn" "my-rope" "dynamic-my-rope")
-ROPE_FACTORS=("none" "4.0" "4.0" "4.0" "4.0" "4.0" "4.0")
-EVAL_TYPES=("perplexity" "passkey" "quality" "performance")
+# RoPE method
+# NOTE: --rope-factor and --rope-dynamic are mutually exclusive.
+#   --rope-dynamic only  → runtime scaling (s = seq_len / original_L), no fixed ratio
+#   --rope-factor F only → static scaling with a fixed ratio F &gt; 1.0
+# Evaluation tests use dynamic mode so the model self-adapts across all length steps.
+ROPE_METHODS=(
+    "--rope-type none"
+    "--rope-type linear --rope-dynamic"
+    "--rope-type ntk --rope-dynamic"
+    "--rope-type part-ntk --rope-dynamic"
+    "--rope-type yarn --rope-dynamic"
+    "--rope-type my-rope --rope-dynamic"
+    "--rope-type my-rope-scaled --rope-dynamic"
+    "--rope-type my-rope2 --rope-dynamic"
+    "--rope-type my-rope2-scaled --rope-dynamic"
+    "--rope-type block-layered --rope-dynamic"
+    "--rope-type block-layered-scaled --rope-dynamic"
+    "--rope-type linear --rope-factor 4.0"
+    "--rope-type ntk --rope-factor 4.0"
+    "--rope-type part-ntk --rope-factor 4.0"
+    "--rope-type yarn --rope-factor 4.0"
+    "--rope-type my-rope --rope-factor 4.0"
+    "--rope-type my-rope-scaled --rope-factor 4.0"
+    "--rope-type my-rope2 --rope-factor 4.0"
+    "--rope-type my-rope2-scaled --rope-factor 4.0"
+    "--rope-type block-layered --rope-factor 4.0"
+    "--rope-type block-layered-scaled --rope-factor 4.0"
+)
+
+# Evaluation type
+TEST_TYPES=(
+    "perplexity"
+    "passkey"
+    "quality"
+    "performance"
+)
+
+TEST_SET="--length-step 2048"
 
 echo "=========================================="
 echo "Running all RoPE method evaluations"
 echo "=========================================="
-echo "Model: $MODEL_NAME"
-echo "Max Length: $MAX_LENGTH"
-echo "Min Length: $MIN_LENGTH"
-echo "Device: ${DEVICE:-auto}"
-echo "Dtype: $DTYPE"
+echo "Model: $MODEL"
+echo "Test types: ${TEST_TYPES[*]}"
+echo "RoPE methods: ${#ROPE_METHODS[@]}"
 echo "=========================================="
 
 run_eval() {
@@ -43,7 +73,7 @@ run_eval() {
     
     if [ "$rope_type" != "none" ] && [ "$rope_factor" != "none" ]; then
         cmd="$cmd --rope-factor $rope_factor"
-    fi
+    fi 
     
     if [ -n "$DEVICE" ]; then
         cmd="$cmd --device $DEVICE"
@@ -64,12 +94,14 @@ run_eval() {
     fi
 }
 
-for i in "${!ROPE_TYPES[@]}"; do
-    rope_type="${ROPE_TYPES[$i]}"
-    rope_factor="${ROPE_FACTORS[$i]}"
+for rope_method in "${ROPE_METHODS[@]}"; do
+    echo ""
+    echo "=========================================="
+    echo "RoPE Method: $rope_method"
+    echo "=========================================="
     
-    for eval_type in "${EVAL_TYPES[@]}"; do
-        run_eval "$eval_type" "$rope_type" "$rope_factor"
+    for test_type in "${TEST_TYPES[@]}"; do
+        run_test "$test_type" "$rope_method"
     done
 done
 

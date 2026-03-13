@@ -72,13 +72,13 @@ run_test() {
     fi
 }
 
-for rope_method in "${ROPE_METHODS[@]}"; do
+for test_type in "${TEST_TYPES[@]}"; do
     echo ""
     echo "=========================================="
-    echo "RoPE Method: $rope_method"
+    echo "Test Type: $test_type"
     echo "=========================================="
     
-    for test_type in "${TEST_TYPES[@]}"; do
+    for rope_method in "${ROPE_METHODS[@]}"; do
         run_test "$test_type" "$rope_method"
     done
 done
