@@ -18,6 +18,12 @@ __all__ = [
     # Block-Layered family
     "LlamaBlockLayeredRotaryEmbedding",
     "LlamaBlockLayeredScaledRotaryEmbedding",
+    # Freq-Smooth family
+    "LlamaFreqSmoothRotaryEmbedding",
+    "LlamaFreqSmoothScaledRotaryEmbedding",
+    # Freq-Reciprocal family
+    "LlamaFreqReciprocalRotaryEmbedding",
+    "LlamaFreqReciprocalScaledRotaryEmbedding",
 ]
 
 # ================================================================================== #
@@ -35,6 +41,10 @@ __all__ = [
 #  LlamaMyScaledRotaryEmbedding2          (My RoPE2 + attention temperature)         #
 #  LlamaBlockLayeredRotaryEmbedding       (Block-Layered RoPE, position only)        #
 #  LlamaBlockLayeredScaledRotaryEmbedding (Block-Layered RoPE + attn temperature)    #
+#  LlamaFreqSmoothRotaryEmbedding         (Freq-Smooth RoPE, position only)          #
+#  LlamaFreqSmoothScaledRotaryEmbedding   (Freq-Smooth RoPE + attn temperature)      #
+#  LlamaFreqReciprocalRotaryEmbedding     (Freq-Reciprocal RoPE, position only)      #
+#  LlamaFreqReciprocalScaledRotaryEmbedding (Freq-Reciprocal RoPE + attn temperature)#
 #                                                                                    #
 #  Each class accepts a ``dynamic: bool`` constructor argument:                      #
 #    dynamic=False (default) – static mode: frequencies are pre-cached once          #
@@ -1088,6 +1098,533 @@ class LlamaBlockLayeredScaledRotaryEmbedding(LlamaBlockLayeredRotaryEmbedding):
 
         scale = 1 + layer_alpha * log(max(1, seq_len / L_0))
         layer_alpha = 0.1 * (1 - u_norm),  u_norm = 1 - layer_norm^2
+
+    In static mode the scalar is baked into the cos/sin cache at construction.
+    In dynamic mode it is recomputed on every forward pass.
+    """
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        super()._set_cos_sin_cache(seq_len, device, dtype)
+        attn_scale = _layer_aware_attn_scale(
+            self.layer_idx,
+            self.N,
+            seq_len,
+            self.original_max_position_embeddings,
+        )
+        self.register_buffer(
+            "cos_cached",
+            (self.cos_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+        self.register_buffer(
+            "sin_cached",
+            (self.sin_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        if self.dynamic:
+            if seq_len is None:
+                seq_len = x.shape[2]
+            cos, sin = super().forward(x, seq_len)
+            attn_scale = _layer_aware_attn_scale(
+                self.layer_idx,
+                self.N,
+                seq_len,
+                self.original_max_position_embeddings,
+            )
+            return (cos * attn_scale).to(x.dtype), (sin * attn_scale).to(x.dtype)
+        return super().forward(x, seq_len)
+
+
+# ============================================================================ #
+#  Freq-Smooth RoPE                                                            #
+# ============================================================================ #
+
+
+class LlamaFreqSmoothRotaryEmbedding(nn.Module):
+    """
+    Freq-Smooth Block RoPE — position encoding only (no attention scaling).
+
+    Core idea
+    ---------
+    Like Block-Layered RoPE, each RoPE dimension i uses a quantised effective
+    position index:
+
+        t_eff(i) = floor(t / b_i)
+
+    The block-size schedule b_i is derived from the RoPE base frequency θ_i
+    via a **normalised quadratic** that satisfies three design requirements
+    simultaneously:
+
+    Requirements
+    ------------
+    (R1) Value range  : b_i ∈ [1, S] for all i, with b_0 = 1 and b_i = S
+         for all i ≥ i*.
+    (R2) Strong freq-correlation : b_i is a monotone function of θ_i, with
+         rate of change proportional to θ_i (decelerating, matching θ_i decay).
+    (R3) C¹ smooth at i*  : db_i/di → 0 as i → i*⁻, matching the zero
+         derivative of the constant S plateau on the right.
+
+    Formula
+    -------
+    Let i* be the critical dimension — the first index where r_i < 1, i.e.
+    the dimension whose wavelength first exceeds the original context L_0:
+
+        θ_i   = base^{−2i/d}              (RoPE base frequency; θ_0 = 1)
+        r_i   = L_0 · θ_i / (2π)          (rotations within L_0)
+        i*    = min{ i : r_i < 1 }
+
+    Normalised frequency (maps θ_0 → 1, θ_{i*} → 0):
+
+        θ̂_i  = (θ_i − θ_{i*}) / (1 − θ_{i*})
+
+    Block-size schedule:
+
+        b_i = S − (S − 1) · θ̂_i²    for i < i*
+        b_i = S                        for i ≥ i*
+
+    Why the quadratic?
+    ------------------
+    Because θ̂_{i*} = 0, the derivative dθ̂²/di|_{i*} = 2θ̂_{i*}·dθ̂/di = 0
+    regardless of dθ̂/di, so b_i meets S with zero slope — C¹ continuity is
+    a purely algebraic consequence, not a heuristic patch.
+
+    Behaviour by zone
+    -----------------
+    i = 0      : b_0 = S − (S−1)·1 = 1  (full resolution)
+    0 < i < i* : b_i grows with decelerating speed, tracking θ̂_i² ∝ θ_i²
+    i = i*−1   : db_{i*-1}/di ≈ 0  (smooth approach to S)
+    i ≥ i*     : b_i = S exactly  (full compression, no OOD angles)
+
+    Degradation
+    -----------
+    S = 1  →  b_i = 1 for all i  (standard RoPE, no quantisation).
+    seq_len ≤ original_L (dynamic mode)  →  S = 1  →  same.
+
+    Parameters
+    ----------
+    scaling_factor : float
+        Static extension ratio S > 1.0.  Ignored in dynamic mode.
+    dynamic : bool
+        False (default) — static mode: b_i and cos/sin pre-cached at init.
+        True            — dynamic mode: S = max(1, seq_len / L_0) at runtime.
+    layer_idx : int
+        0-based index of this attention layer.  Stored for use by
+        ``LlamaFreqSmoothScaledRotaryEmbedding``; not used in this base class.
+    num_hidden_layers : int
+        Total transformer layers.  Stored for use by the scaled subclass.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        layer_idx: int = 0,
+        num_hidden_layers: int = 32,
+        dynamic: bool = False,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.base = base
+        self.max_position_embeddings = max_position_embeddings
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.scaling_factor = scaling_factor
+        self.layer_idx = layer_idx
+        self.N = num_hidden_layers
+        self.dynamic = dynamic
+
+        # ── Base inv_freq: θ_i = base^{-2i/d}, θ_0 = 1 ─────────────── #
+        inv_freq = 1.0 / (
+            base ** (torch.arange(0, dim, 2, device=device, dtype=torch.float32) / dim)
+        )
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        # ── Critical dimension i* and anchor θ_{i*} ──────────────────── #
+        # r_i = L_0 · θ_i / (2π) ≥ 1  ↔  dim completes ≥ 1 full rotation
+        # i* = first index where r_i < 1
+        r = original_max_position_embeddings * inv_freq / (2.0 * math.pi)
+        # number of dims with r_i >= 1
+        i_star = int((r >= 1.0).sum().item())
+        # guard: keep i* in (0, d//2 - 1) so both zones are non-empty
+        self.i_star = max(1, min(i_star, dim // 2 - 1))
+        # θ at i* — used as the normalisation anchor
+        self.theta_istar: float = float(inv_freq[self.i_star].item())
+
+        if not dynamic:
+            block_sizes = self._compute_block_sizes(scaling_factor, device=device)
+            self.register_buffer("block_sizes", block_sizes, persistent=False)
+            self._set_cos_sin_cache(
+                seq_len=max_position_embeddings,
+                device=device or inv_freq.device,
+                dtype=torch.get_default_dtype(),
+            )
+        # dynamic: block_sizes recomputed each forward pass
+
+    # ------------------------------------------------------------------ #
+
+    def _compute_block_sizes(self, S: float, device=None) -> torch.Tensor:
+        """
+        Per-dimension block sizes for extension ratio S.
+
+        Formula
+        -------
+        θ̂_i = clamp( (θ_i − θ_{i*}) / (1 − θ_{i*}), 0, 1 )
+        b_i  = S − (S−1) · θ̂_i²          (i < i*:  quadratic, 1 → S)
+        b_i  = S                            (i ≥ i*:  constant S)
+        b_i  = clamp(b_i, 1, S)            (numerical safety)
+
+        The clamp on θ̂_i is redundant by construction (θ_i is monotone and
+        θ_{i*} is its value at the boundary) but guards against floating-point
+        edge cases.
+
+        S = 1.0  →  b_i = 1 for all i  (standard RoPE).
+        """
+        theta = self.inv_freq.to(device=device)  # [d//2]
+        S = float(S)
+        th_star = self.theta_istar  # scalar anchor
+
+        # Normalised frequency: 1 at i=0, 0 at i=i*, <0 beyond (clamped)
+        denom = max(1.0 - th_star, 1e-8)  # avoid div-by-zero
+        theta_hat = torch.clamp(
+            (theta - th_star) / denom,
+            min=0.0,
+            max=1.0,
+        )  # [d//2]
+
+        # Quadratic schedule: b_i = S − (S−1) · θ̂_i²
+        b = S - (S - 1.0) * theta_hat * theta_hat  # [d//2]
+
+        # Hard-set i ≥ i* to exactly S (avoids any residual float deviation)
+        b[self.i_star :] = S
+
+        return torch.clamp(b, min=1.0, max=S)
+
+    # ------------------------------------------------------------------ #
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        self.max_seq_len_cached = seq_len
+        b = self.block_sizes.to(device=device)  # [d//2]
+        inv_freq = self.inv_freq.to(device=device)  # [d//2]
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)  # [N]
+
+        # t_eff[n, i] = floor(t[n] / b[i])
+        t_eff = torch.floor(t[:, None] / b[None, :])  # [N, d//2]
+        freqs = t_eff * inv_freq[None, :]  # [N, d//2]
+        emb = torch.cat((freqs, freqs), dim=-1)  # [N, d]
+
+        self.register_buffer("cos_cached", emb.cos().to(dtype), persistent=False)
+        self.register_buffer("sin_cached", emb.sin().to(dtype), persistent=False)
+
+    # ------------------------------------------------------------------ #
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        device, dtype = x.device, x.dtype
+        if seq_len is None:
+            seq_len = x.shape[2]
+
+        if self.dynamic:
+            S = max(1.0, seq_len / self.original_max_position_embeddings)
+            b = self._compute_block_sizes(S, device=device)
+            inv_freq = self.inv_freq.to(device=device)
+            t = torch.arange(seq_len, device=device, dtype=torch.float32)
+            t_eff = torch.floor(t[:, None] / b[None, :])
+            freqs = t_eff * inv_freq[None, :]
+            emb = torch.cat((freqs, freqs), dim=-1)
+            return emb.cos().to(dtype=dtype), emb.sin().to(dtype=dtype)
+        else:
+            if seq_len > self.max_seq_len_cached:
+                self._set_cos_sin_cache(seq_len=seq_len, device=device, dtype=dtype)
+            return (
+                self.cos_cached[:seq_len].to(dtype=dtype),
+                self.sin_cached[:seq_len].to(dtype=dtype),
+            )
+
+
+# ---------------------------------------------------------------------------- #
+
+
+class LlamaFreqSmoothScaledRotaryEmbedding(LlamaFreqSmoothRotaryEmbedding):
+    """
+    Freq-Smooth Block RoPE + attention temperature scaling.
+
+    Inherits all position-encoding logic from
+    ``LlamaFreqSmoothRotaryEmbedding`` and multiplies the resulting cos/sin
+    values by the layer-dependent global scalar shared across the My RoPE /
+    Block-Layered family:
+
+        scale       = 1 + layer_alpha · log(max(1, seq_len / L_0))
+        layer_alpha = 0.1 · (1 − u_norm)
+        u_norm      = 1 − layer_norm²
+        layer_norm  = 2 · layer_idx / (N − 1) − 1
+
+    The inverted-U profile gives stronger correction to the first and last
+    transformer layers (low attention entropy) and weaker correction to the
+    middle layers (high attention entropy).
+
+    In static mode the scalar is baked into the cos/sin cache at construction.
+    In dynamic mode it is recomputed on every forward pass.
+    """
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        super()._set_cos_sin_cache(seq_len, device, dtype)
+        attn_scale = _layer_aware_attn_scale(
+            self.layer_idx,
+            self.N,
+            seq_len,
+            self.original_max_position_embeddings,
+        )
+        self.register_buffer(
+            "cos_cached",
+            (self.cos_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+        self.register_buffer(
+            "sin_cached",
+            (self.sin_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        if self.dynamic:
+            if seq_len is None:
+                seq_len = x.shape[2]
+            cos, sin = super().forward(x, seq_len)
+            attn_scale = _layer_aware_attn_scale(
+                self.layer_idx,
+                self.N,
+                seq_len,
+                self.original_max_position_embeddings,
+            )
+            return (cos * attn_scale).to(x.dtype), (sin * attn_scale).to(x.dtype)
+        return super().forward(x, seq_len)
+
+
+# ============================================================================ #
+#  Freq-Reciprocal RoPE                                                        #
+# ============================================================================ #
+
+
+class LlamaFreqReciprocalRotaryEmbedding(nn.Module):
+    """
+    Freq-Reciprocal Block RoPE — position encoding only (no attention scaling).
+
+    Core idea
+    ---------
+    Like Block-Layered RoPE, each RoPE dimension i uses a quantised effective
+    position index:
+
+        t_eff(i) = floor(t / b_i)
+
+    The block-size schedule b_i is defined so that its rate of change db_i/di
+    and the rate of decay |dθ_i/di| of the RoPE base frequency satisfy a
+    **constant-product (reciprocal) relationship** for all i < i*:
+
+        db_i/di · |dθ_i/di| = const
+
+    Because |dθ_i/di| ∝ θ_i (decelerating), the reciprocal constraint forces
+    db_i/di ∝ 1/θ_i (accelerating) — matching the BlockLayered design
+    philosophy while being grounded in the frequency structure of the model.
+
+    Formula
+    -------
+    Let i* be the critical dimension (first index where r_i = L_0·θ_i/(2π) < 1).
+    Let K = (S−1) / (1/θ_{i*} − 1).  Then:
+
+        b_i = 1 + K · (1/θ_i − 1)    for i < i*
+        b_i = S                        for i ≥ i*
+
+    Equivalently, using θ_i = base^{−2i/d}:
+
+        b_i = 1 + (S−1) · (base^{2i/d} − 1) / (base^{2i*/d} − 1)
+
+    Properties
+    ----------
+    * b_0 = 1  (i=0: 1/θ_0 = 1, so b_0 = 1 + K·0 = 1)
+    * b_{i*} = S  (by definition of K)
+    * b_i ∈ [1, S] for all i  (b is monotone increasing in i)
+    * db_i/di = K · (2·ln·base/d) / θ_i  — accelerating, mirrors 1/θ_i growth
+    * db_i/di · |dθ_i/di| = K · (2·ln·base/d)² = const  ✓
+    * b_i = S exactly for all i ≥ i*  (hard-set, no floating-point residual)
+    * No additional hyper-parameters beyond S
+    * Degrades to standard RoPE when S = 1
+
+    Relationship to BlockLayered
+    ----------------------------
+    BlockLayered uses b_i = S^{i/i*}, whose derivative grows as b_i · ln(S).
+    Freq-Reciprocal uses db/di ∝ 1/θ_i = base^{2i/d}, which is also
+    accelerating but tied to the model's own frequency grid rather than to S.
+    This means the acceleration profile is independent of the choice of S,
+    making the method more principled when S varies (e.g. in dynamic mode).
+
+    Parameters
+    ----------
+    scaling_factor : float
+        Static extension ratio S > 1.0.  Ignored in dynamic mode.
+    dynamic : bool
+        False (default) — static mode: b_i and cos/sin pre-cached at init.
+        True            — dynamic mode: S = max(1, seq_len / L_0) at runtime.
+    layer_idx : int
+        0-based index of this attention layer.  Stored for use by
+        ``LlamaFreqReciprocalScaledRotaryEmbedding``; not used here.
+    num_hidden_layers : int
+        Total transformer layers.  Stored for the scaled subclass.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        layer_idx: int = 0,
+        num_hidden_layers: int = 32,
+        dynamic: bool = False,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.base = base
+        self.max_position_embeddings = max_position_embeddings
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.scaling_factor = scaling_factor
+        self.layer_idx = layer_idx
+        self.N = num_hidden_layers
+        self.dynamic = dynamic
+
+        # ── Base inv_freq: θ_i = base^{-2i/d}, θ_0 = 1 ─────────────── #
+        inv_freq = 1.0 / (
+            base ** (torch.arange(0, dim, 2, device=device, dtype=torch.float32) / dim)
+        )
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        # ── Critical dimension i* and anchor 1/θ_{i*} ───────────────── #
+        # r_i = L_0 · θ_i / (2π);  i* = first index where r_i < 1
+        r = original_max_position_embeddings * inv_freq / (2.0 * math.pi)
+        i_star = int((r >= 1.0).sum().item())
+        self.i_star = max(1, min(i_star, dim // 2 - 1))
+
+        # 1/θ_{i*} = base^{2i*/d}  — the normalisation denominator anchor
+        # Store as Python float to avoid device issues in dynamic mode.
+        self.inv_theta_istar: float = float((base ** (2.0 * self.i_star / dim)))
+
+        if not dynamic:
+            block_sizes = self._compute_block_sizes(scaling_factor, device=device)
+            self.register_buffer("block_sizes", block_sizes, persistent=False)
+            self._set_cos_sin_cache(
+                seq_len=max_position_embeddings,
+                device=device or inv_freq.device,
+                dtype=torch.get_default_dtype(),
+            )
+
+    # ------------------------------------------------------------------ #
+
+    def _compute_block_sizes(self, S: float, device=None) -> torch.Tensor:
+        """
+        Per-dimension block sizes for extension ratio S.
+
+        Formula
+        -------
+        inv_θ_i  = 1 / θ_i = base^{2i/d}           (reciprocal frequency)
+        K        = (S − 1) / (inv_θ_{i*} − 1)       (normalisation constant)
+        b_i      = 1 + K · (inv_θ_i − 1)            (i < i*: linear in 1/θ_i)
+        b_i      = S                                  (i ≥ i*: exact, hard-set)
+        b_i      = clamp(b_i, 1, S)                  (numerical safety)
+
+        Rate properties
+        ---------------
+        db_i/di = K · (2·ln·base/d) · inv_θ_i  →  accelerating (∝ 1/θ_i)
+        db_i/di · |dθ_i/di| = K · (2·ln·base/d)²  →  constant for all i < i*
+
+        S = 1.0  →  K = 0  →  b_i = 1 for all i  (standard RoPE).
+        """
+        S = float(S)
+
+        # 1/θ_i = base^{2i/d}  — reciprocal of inv_freq
+        # inv_freq holds θ_i, so 1/inv_freq = 1/θ_i
+        inv_theta = 1.0 / self.inv_freq.to(device=device)  # [d//2], base^{2i/d}
+
+        # Normalisation constant K
+        denom = self.inv_theta_istar - 1.0  # base^{2i*/d} - 1
+        if abs(denom) < 1e-8:
+            # degenerate guard (only if i*=0, which is excluded by clamping)
+            return torch.ones(self.dim // 2, device=device, dtype=torch.float32) * S
+        K = (S - 1.0) / denom
+
+        # b_i = 1 + K · (1/θ_i − 1)
+        b = 1.0 + K * (inv_theta - 1.0)  # [d//2]
+
+        # Hard-set i ≥ i* to exactly S (avoids any floating-point residual)
+        b[self.i_star :] = S
+
+        return torch.clamp(b, min=1.0, max=S)
+
+    # ------------------------------------------------------------------ #
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        self.max_seq_len_cached = seq_len
+        b = self.block_sizes.to(device=device)  # [d//2]
+        inv_freq = self.inv_freq.to(device=device)  # [d//2]
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+
+        # t_eff[n, i] = floor(t[n] / b[i])
+        t_eff = torch.floor(t[:, None] / b[None, :])  # [N, d//2]
+        freqs = t_eff * inv_freq[None, :]  # [N, d//2]
+        emb = torch.cat((freqs, freqs), dim=-1)  # [N, d]
+
+        self.register_buffer("cos_cached", emb.cos().to(dtype), persistent=False)
+        self.register_buffer("sin_cached", emb.sin().to(dtype), persistent=False)
+
+    # ------------------------------------------------------------------ #
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        device, dtype = x.device, x.dtype
+        if seq_len is None:
+            seq_len = x.shape[2]
+
+        if self.dynamic:
+            S = max(1.0, seq_len / self.original_max_position_embeddings)
+            b = self._compute_block_sizes(S, device=device)
+            inv_freq = self.inv_freq.to(device=device)
+            t = torch.arange(seq_len, device=device, dtype=torch.float32)
+            t_eff = torch.floor(t[:, None] / b[None, :])
+            freqs = t_eff * inv_freq[None, :]
+            emb = torch.cat((freqs, freqs), dim=-1)
+            return emb.cos().to(dtype=dtype), emb.sin().to(dtype=dtype)
+        else:
+            if seq_len > self.max_seq_len_cached:
+                self._set_cos_sin_cache(seq_len=seq_len, device=device, dtype=dtype)
+            return (
+                self.cos_cached[:seq_len].to(dtype=dtype),
+                self.sin_cached[:seq_len].to(dtype=dtype),
+            )
+
+
+# ---------------------------------------------------------------------------- #
+
+
+class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbedding):
+    """
+    Freq-Reciprocal Block RoPE + attention temperature scaling.
+
+    Inherits all position-encoding logic from
+    ``LlamaFreqReciprocalRotaryEmbedding`` and multiplies the resulting cos/sin
+    values by the layer-dependent global scalar shared across the My RoPE /
+    Block-Layered / Freq-Smooth family:
+
+        scale       = 1 + layer_alpha · log(max(1, seq_len / L_0))
+        layer_alpha = 0.1 · (1 − u_norm)
+        u_norm      = 1 − layer_norm²
+        layer_norm  = 2 · layer_idx / (N − 1) − 1
+
+    The inverted-U profile gives stronger correction to the first and last
+    transformer layers (low attention entropy) and weaker correction to the
+    middle layers (high attention entropy).
 
     In static mode the scalar is baked into the cos/sin cache at construction.
     In dynamic mode it is recomputed on every forward pass.

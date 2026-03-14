@@ -20,6 +20,10 @@ _ROPE_TYPES_WITH_DYNAMIC_FLAG = {
     "my-rope2-scaled",
     "block-layered",
     "block-layered-scaled",
+    "freq-smooth",
+    "freq-smooth-scaled",
+    "freq-reciprocal",
+    "freq-reciprocal-scaled",
 }
 _ROPE_TYPE_NONE = "none"
 
@@ -40,7 +44,8 @@ def _build_rope_scaling(args) -> dict | None:
     -----
     * ``--rope-type none``  → returns ``None``  (standard RoPE, no scaling)
     * ``--rope-factor`` and ``--rope-dynamic`` are **mutually exclusive** for all
-      six scaling types (linear / ntk / part-ntk / yarn / my-rope / my-rope2):
+      six scaling types (linear / ntk / part-ntk / yarn / my-rope / my-rope2 /
+      block-layered / block-layered-scaled / freq-smooth / freq-smooth-scaled):
 
       - ``--rope-factor F``   (F > 1.0)  — static scaling with a fixed ratio.
       - ``--rope-dynamic``               — dynamic scaling; ratio derived at
@@ -328,6 +333,8 @@ def add_args_model(parser):
             "  my-rope2-scaled       — multi-scale subspace RoPE + attention temperature\n"
             "  block-layered         — Block-Layered RoPE (position only)\n"
             "  block-layered-scaled  — Block-Layered RoPE + attention temperature\n"
+            "  freq-smooth           — Freq-Smooth RoPE (position only)\n"
+            "  freq-smooth-scaled    — Freq-Smooth RoPE + attention temperature\n"
             "\n"
             "All types except 'none' require exactly ONE of:\n"
             "  --rope-factor F   static scaling with fixed ratio F > 1.0\n"

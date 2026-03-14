@@ -98,7 +98,7 @@ class PerformanceEvaluator:
         Returns:
             list: List of input lengths to test, e.g., [256, 512, 768, ...]
         """
-        if self.length_step is None:
+        if self.length_step is not None:
             length_list = [
                 x for x in range(self.min_length, self.max_length + 1, self.length_step)
             ]

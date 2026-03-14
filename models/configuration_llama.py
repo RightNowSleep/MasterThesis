@@ -47,7 +47,9 @@ class LlamaConfig(PretrainedConfig):
             Dictionary containing the scaling configuration for the RoPE embeddings.
 
             Supported types: ``"linear"``, ``"ntk"``, ``"part-ntk"``, ``"yarn"``,
-            ``"my-rope"``, ``"my-rope2"``, ``"block-layered"``.
+            ``"my-rope"``, ``"my-rope2"``, ``"block-layered"``,
+            ``"freq-smooth"``, ``"freq-smooth-scaled"``,
+            ``"freq-reciprocal"``, ``"freq-reciprocal-scaled"``.
 
             All six types support the same mutually exclusive ``"factor"`` /
             ``"dynamic"`` interface:
@@ -156,6 +158,10 @@ class LlamaConfig(PretrainedConfig):
         * ``"my-rope"``        — layer-aware custom RoPE
         * ``"my-rope2"``       — multi-scale custom RoPE
         * ``"block-layered"``  — Block-Layered RoPE
+        * ``"freq-smooth"``    — frequency smoothing RoPE
+        * ``"freq-smooth-scaled"`` — scaled frequency smoothing RoPE
+        * ``"freq-reciprocal"`` — reciprocal frequency RoPE
+        * ``"freq-reciprocal-scaled"`` — scaled reciprocal frequency RoPE
 
         All seven types share the same ``"factor"`` / ``"dynamic"`` interface:
 
@@ -169,7 +175,8 @@ class LlamaConfig(PretrainedConfig):
         -----------------------
         ``"dynamic-linear"``, ``"dynamic-ntk"``, ``"dynamic-part-ntk"``,
         ``"dynamic-yarn"``, ``"dynamic-my-rope"``, ``"dynamic-my-rope2"``,
-        ``"dynamic-block-layered"``
+        ``"dynamic-block-layered"``, ``"dynamic-freq-smooth"``,
+        ``"dynamic-freq-reciprocal"``,
         are remapped to their base type with ``"dynamic": True``.
         """
         if self.rope_scaling is None:
@@ -195,6 +202,10 @@ class LlamaConfig(PretrainedConfig):
             "dynamic-my-rope2-scaled": "my-rope2-scaled",
             "dynamic-block-layered": "block-layered",
             "dynamic-block-layered-scaled": "block-layered-scaled",
+            "dynamic-freq-smooth": "freq-smooth",
+            "dynamic-freq-smooth-scaled": "freq-smooth-scaled",
+            "dynamic-freq-reciprocal": "freq-reciprocal",
+            "dynamic-freq-reciprocal-scaled": "freq-reciprocal-scaled",
         }
         if rope_scaling_type in _deprecated_dynamic_map:
             new_type = _deprecated_dynamic_map[rope_scaling_type]
@@ -220,6 +231,10 @@ class LlamaConfig(PretrainedConfig):
             "my-rope2-scaled",
             "block-layered",
             "block-layered-scaled",
+            "freq-smooth",
+            "freq-smooth-scaled",
+            "freq-reciprocal",
+            "freq-reciprocal-scaled",
         ]
         if rope_scaling_type is None or rope_scaling_type not in valid_types:
             raise ValueError(

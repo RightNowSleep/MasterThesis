@@ -264,6 +264,14 @@ class LlamaAttention(nn.Module):
         {"type": "block-layered",        "dynamic": True} → dynamic Block-Layered (pos only)
         {"type": "block-layered-scaled", "factor": s}   → static Block-Layered + attn scale
         {"type": "block-layered-scaled", "dynamic": True} → dynamic Block-Layered + attn scale
+        {"type": "freq-smooth",          "factor": s}   → static Freq-Smooth (pos only)
+        {"type": "freq-smooth",          "dynamic": True} → dynamic Freq-Smooth (pos only)
+        {"type": "freq-smooth-scaled",   "factor": s}   → static Freq-Smooth + attn scale
+        {"type": "freq-smooth-scaled",   "dynamic": True} → dynamic Freq-Smooth + attn scale
+        {"type": "freq-reciprocal",      "factor": s}   → static Freq-Reciprocal (pos only)
+        {"type": "freq-reciprocal",      "dynamic": True} → dynamic Freq-Reciprocal (pos only)
+        {"type": "freq-reciprocal-scaled", "factor": s}   → static Freq-Reciprocal + attn scale
+        {"type": "freq-reciprocal-scaled", "dynamic": True} → dynamic Freq-Reciprocal + attn scale
 
         ``"factor"`` and ``"dynamic"`` are mutually exclusive.  If both reach
         this point (e.g. bypassing LlamaConfig validation), ``"factor"`` wins.
@@ -401,12 +409,62 @@ class LlamaAttention(nn.Module):
                 dynamic=dynamic,
             )
 
+        elif scaling_type == "freq-smooth":
+            self.rotary_emb = LlamaFreqSmoothRotaryEmbedding(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                layer_idx=self.layer_idx,
+                num_hidden_layers=self.config.num_hidden_layers,
+                dynamic=dynamic,
+            )
+        
+        elif scaling_type == "freq-smooth-scaled":
+            self.rotary_emb = LlamaFreqSmoothScaledRotaryEmbedding(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                layer_idx=self.layer_idx,
+                num_hidden_layers=self.config.num_hidden_layers,
+                dynamic=dynamic,
+            )
+
+        elif scaling_type == "freq-reciprocal":
+            self.rotary_emb = LlamaFreqReciprocalRotaryEmbedding(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                layer_idx=self.layer_idx,
+                num_hidden_layers=self.config.num_hidden_layers,
+                dynamic=dynamic,
+            )
+
+        elif scaling_type == "freq-reciprocal-scaled":
+            self.rotary_emb = LlamaFreqReciprocalScaledRotaryEmbedding(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                layer_idx=self.layer_idx,
+                num_hidden_layers=self.config.num_hidden_layers,
+                dynamic=dynamic,
+            )
+
         else:
             raise ValueError(
                 f"Unknown RoPE scaling type '{scaling_type}'. "
                 "Valid types: linear, ntk, part-ntk, yarn, "
                 "my-rope, my-rope-scaled, my-rope2, my-rope2-scaled, "
-                "block-layered, block-layered-scaled."
+                "block-layered, block-layered-scaled, "
+                "freq-smooth, freq-smooth-scaled, "
+                "freq-reciprocal, freq-reciprocal-scaled."
             )
 
     # ------------------------------------------------------------------ #
