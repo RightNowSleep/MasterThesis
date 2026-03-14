@@ -598,7 +598,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "--input",
         "-i",
         type=str,
-        required=True,
         default="results/entropy/llama-7b_none.json",
         help="Path to JSON file produced by eval/entropy.py.",
     )

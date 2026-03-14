@@ -58,6 +58,10 @@ JSON schema saved to disk
 import gc
 import math
 import os
+import sys
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import json
 import time
 import argparse
@@ -320,6 +324,7 @@ class EntropyEvaluator:
                         num_heads,
                         max_length - seq_len,
                         dtype=ent.dtype,
+                        device=ent.device,
                     )
                     ent = torch.cat([ent, pad], dim=1)  # [H, max_length]
                 acc_entropy[l_idx] += ent.cpu().double()
@@ -339,7 +344,11 @@ class EntropyEvaluator:
                 tkv = a.topk(k, dim=-1).values.sum(-1)  # [H, T_q]
                 tkv_mean = tkv.mean(dim=0)  # [T_q]
                 if seq_len < max_length:
-                    pad = torch.zeros(max_length - seq_len, dtype=tkv_mean.dtype)
+                    pad = torch.zeros(
+                        max_length - seq_len,
+                        dtype=tkv_mean.dtype,
+                        device=tkv_mean.device,
+                    )
                     tkv_mean = torch.cat([tkv_mean, pad])
                 topk_vals += tkv_mean.cpu().double()
             topk_vals /= num_layers
