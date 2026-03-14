@@ -3,65 +3,44 @@ eval/entropy.py
 ---------------
 Attention-entropy evaluator for LLaMA-style models.
 
-Interface mirrors PerplexityEvaluator so the two can be used interchangeably
-from test.py or standalone scripts.  All heavy imports follow the project
-convention: models.model_loader.{load_model, load_tokenizer, add_args_model}.
+Interface mirrors PerplexityEvaluator: same constructor style, same CLI
+argument helpers (add_args_entropy / add_args_model), same generate_save_filename.
 
 Measured quantity
 -----------------
-For every forward pass the model returns one attention-weight tensor per layer:
+For every forward pass the model returns one causal attention-weight matrix
+per layer (already softmax-ed, causally masked):
 
-    A  ∈ ℝ^{B × H × T × T}   (causal, already softmax-ed)
+    A[l]  ∈  ℝ^{B × H × T_q × T_k}
 
-Shannon entropy at query position t for head h in layer l:
+Two entropy variants are computed at every (layer l, head h, position t):
 
-    entropy(l, h, t) = -∑_{k=0}^{t} A[l, h, t, k] · log(A[l, h, t, k] + ε)
+    Raw Shannon entropy:
+        H(l,h,t) = -∑_{k=0}^{t} A[l,h,t,k] · log(A[l,h,t,k] + ε)   [nats]
 
-The evaluator computes, *per sequence length*:
+    Normalised entropy (position-adjusted, ∈ [0,1]):
+        H_norm(l,h,t) = H(l,h,t) / log(t + 1 + ε)
 
-    mean_entropy_by_layer      shape [num_layers]
-        mean over heads, tokens, samples
+    The normalised form corrects for the fact that position t can attend to
+    at most (t+1) tokens, so its theoretical maximum entropy grows with t.
+    H_norm = 1 ⟹ perfectly uniform; H_norm = 0 ⟹ delta-function attention.
 
-    mean_entropy_by_head       shape [num_layers, num_heads]
-        mean over tokens, samples
-
-    entropy_by_position        shape [num_layers, seq_len]
-        mean over heads, samples  (used for position-curve plot)
-
-    entropy_quartiles_by_layer shape [num_layers, 5]  (min, Q1, med, Q3, max)
-        distribution across heads × token positions × samples (for box plot)
-
-    top_k_concentration        shape [seq_len]
-        fraction of total attention mass in the top-k keys, mean over
-        layers, heads, samples  (measures attention sharpness)
-
-JSON schema saved to disk
--------------------------
-{
-    "lengths": [256, 512, 1024, 2048],
-    "model_name": "huggyllama/llama-7b",
-    "rope_type": "none",
-    "top_k": 10,
-    "results": {
-        "256": {
-            "mean_entropy_by_layer":       [...],          # list[float] len=num_layers
-            "mean_entropy_by_head":        [[...]],        # list[list[float]] num_layers×num_heads
-            "entropy_by_position":         [[...]],        # list[list[float]] num_layers×seq_len
-            "entropy_quartiles_by_layer":  [[...]],        # list[list[float]] num_layers×5
-            "top_k_concentration":         [...]           # list[float] len=seq_len
-        },
-        ...
-    }
-}
+Stored metrics (per evaluated sequence length)
+----------------------------------------------
+  entropy_layer_position          [L][T]      raw,  mean over H & samples
+  norm_entropy_layer_position     [L][T]      norm, mean over H & samples
+  entropy_head_layer              [L][H]      raw,  mean over all T & samples
+  norm_entropy_head_layer         [L][H]      norm, mean over all T & samples
+  entropy_head_layer_position     [L][H][T]   raw,  mean over samples only
+  head_norm_std_by_layer          [L]         std of per-head H_norm across H
+  raw_entropy_quartiles_by_layer  [L][5]      (min,Q1,med,Q3,max) of raw H
+  norm_entropy_quartiles_by_layer [L][5]      same for normalised H
+  top_k_concentration             [T]         top-k attn mass fraction
+  top_k_boundary                  int         first position with window > k
 """
 
 import gc
-import math
 import os
-import sys
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import json
 import time
 import argparse
@@ -73,27 +52,53 @@ from tqdm import tqdm
 
 from models.model_loader import load_model, load_tokenizer, add_args_model
 
-
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
-
 _EPS = 1e-9
+_PREC = 5  # decimal places written to JSON
+
+
+# ---------------------------------------------------------------------------
+# Functional helpers
+# ---------------------------------------------------------------------------
 
 
 def _shannon_entropy(attn: torch.Tensor) -> torch.Tensor:
     """
-    Compute Shannon entropy along the last (key) dimension.
+    Shannon entropy in nats along the last (key) axis.
 
     Parameters
     ----------
-    attn : Tensor  shape [..., T_q, T_k]   values in [0, 1], sum-to-1 on last dim
+    attn : Tensor  [..., T_q, T_k]   softmax weights, rows sum to 1
 
     Returns
     -------
-    Tensor  shape [..., T_q]   entropy in nats
+    Tensor  [..., T_q]
     """
     return -(attn * (attn + _EPS).log()).sum(dim=-1)
+
+
+def _position_normalise(ent: torch.Tensor) -> torch.Tensor:
+    """
+    Map raw entropy at position t to [0, 1] by dividing by log(t+1).
+
+        H_norm(t) = H(t) / log(t + 1 + ε)
+
+    The denominator is clamped to 1e-6 so position 0 never causes NaN.
+    Positions 0 .. top_k-1 will appear near H_norm ≈ 1 regardless of model
+    behaviour (tiny causal window); these are flagged in the JSON and
+    visually annotated in the plot script.
+
+    Parameters
+    ----------
+    ent : Tensor  [..., T]
+
+    Returns
+    -------
+    Tensor  [..., T]  ∈ [0, 1]
+    """
+    T = ent.shape[-1]
+    pos = torch.arange(T, dtype=ent.dtype, device=ent.device)
+    den = (pos + 1.0).log().clamp(min=1e-6)
+    return ent / den
 
 
 # ---------------------------------------------------------------------------
@@ -105,23 +110,26 @@ class EntropyEvaluator:
     r"""
     Attention-entropy evaluator for LLaMA models.
 
+    Constructor parameters mirror PerplexityEvaluator so the two can be
+    swapped in ``test.py`` with minimal changes.
+
     Attributes
     ----------
-    model            : LlamaForCausalLM  (eval mode)
-    tokenizer        : PreTrainedTokenizer
-    dataset_path     : str
-    split            : str
-    limit            : int | None
-    device           : str
-    add_start_token  : bool
-    max_length       : int   upper bound of length_list
-    min_length       : int   lower bound of length_list (first entry)
-    length_step      : int | None
-    top_k            : int   for concentration metric
-    aggressive_memory: bool
-    length_list      : list[int]
-    save_dir         : str
-    save_file        : str
+    model             : LlamaForCausalLM   (eval mode)
+    tokenizer         : PreTrainedTokenizer
+    dataset_path      : str
+    split             : str
+    limit             : int | None
+    device            : str
+    add_start_token   : bool
+    max_length        : int
+    min_length        : int
+    length_step       : int | None
+    top_k             : int
+    aggressive_memory : bool
+    length_list       : list[int]
+    save_dir          : str
+    save_file         : str
     """
 
     def __init__(
@@ -144,20 +152,20 @@ class EntropyEvaluator:
         r"""
         Parameters
         ----------
-        model            : pretrained LlamaForCausalLM
-        tokenizer        : matching tokenizer
-        dataset          : HuggingFace dataset path (must have 'input_ids' column)
-        split            : dataset split
-        limit            : number of samples; None → use all
-        device           : 'cuda' / 'cpu' / 'gpu' / None (auto)
-        add_start_token  : prepend BOS token (model must have bos_token when True)
-        max_length       : maximum sequence length to evaluate
-        min_length       : minimum sequence length (first point)
-        length_step      : fixed step between lengths; None → exponential ×2
-        top_k            : k for top-k concentration metric
-        aggressive_memory: free GPU cache after every sample
-        save_dir         : directory for JSON output
-        save_file        : JSON filename; auto-generated when None
+        model             : pretrained LlamaForCausalLM
+        tokenizer         : matching tokenizer
+        dataset           : HuggingFace dataset path (needs 'input_ids' column)
+        split             : dataset split
+        limit             : sample cap (None → all)
+        device            : 'cuda' | 'cpu' | 'gpu' | None (auto)
+        add_start_token   : prepend BOS; tokenizer must have bos_token
+        max_length        : upper bound of the evaluated length list
+        min_length        : lower bound / first entry
+        length_step       : fixed step; None → exponential ×2
+        top_k             : k for the top-k concentration metric
+        aggressive_memory : free GPU cache after every sample
+        save_dir          : directory for JSON output
+        save_file         : JSON filename (auto-generated when None)
         """
         self.model = model.eval()
         self.tokenizer = tokenizer
@@ -171,7 +179,7 @@ class EntropyEvaluator:
         self.top_k = top_k
         self.aggressive_memory = aggressive_memory
 
-        # ── device ────────────────────────────────────────────────────────
+        # device
         if device is not None:
             assert device in (
                 "gpu",
@@ -182,43 +190,38 @@ class EntropyEvaluator:
         else:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # ── BOS sanity check ───────────────────────────────────────────────
+        # BOS check
         if self.add_start_token:
             assert self.tokenizer.bos_token is not None, (
-                "add_start_token=True requires the model/tokenizer to have a BOS "
-                "token.  Pass add_start_token=False or use a different model."
+                "add_start_token=True requires a BOS token in the tokenizer. "
+                "Pass add_start_token=False or use a different model."
             )
 
-        # ── dataset ───────────────────────────────────────────────────────
+        # dataset
         self.dataset = load_dataset(self.dataset_path, split=self.split)
-        print(f"Dataset size: {len(self.dataset)}")
+        print(f"Dataset size (before limit): {len(self.dataset)}")
         if self.limit is not None:
             self.dataset = self.dataset[: self.limit]
+        n_loaded = len(self.dataset["input_ids"])
+        print(f"Effective samples          : {n_loaded}")
 
-        # ── length list ───────────────────────────────────────────────────
+        # length schedule
         self.length_list = self._generate_length_list()
-        print(f"Length list: {self.length_list}")
+        print(f"Lengths to evaluate        : {self.length_list}")
 
-        # ── output ────────────────────────────────────────────────────────
+        # output
         self.save_dir = save_dir
         os.makedirs(self.save_dir, exist_ok=True)
-        self.save_file = (
-            save_file if save_file else f"{time.strftime('%Y%m%d-%H%M%S')}.json"
-        )
+        self.save_file = save_file or f"{time.strftime('%Y%m%d-%H%M%S')}.json"
 
     # ------------------------------------------------------------------
     # helpers
     # ------------------------------------------------------------------
 
     def _generate_length_list(self) -> list:
-        """
-        Build the list of context lengths to evaluate.
-
-        Exponential (×2) when length_step is None; fixed step otherwise.
-        """
+        """Exponential doubling or fixed step."""
         if self.length_step is not None:
             return list(range(self.min_length, self.max_length + 1, self.length_step))
-
         lst = [self.min_length]
         while True:
             nxt = lst[-1] * 2
@@ -235,129 +238,100 @@ class EntropyEvaluator:
     @torch.no_grad()
     def _compute_entropy_at_length(self, max_length: int) -> dict:
         """
-        Run all samples at *max_length* and return aggregated entropy stats.
+        Accumulate attention-entropy statistics over all samples at one length.
 
-        Parameters
-        ----------
-        max_length : int   tokens per sample (BOS included when add_start_token)
+        Accumulation
+        ^^^^^^^^^^^^
+        All tensors are accumulated in float64 on CPU to prevent rounding
+        errors from compounding over many samples.  The 4-bit quantised model
+        produces bfloat16 attention weights; casting to float64 before any
+        log/sum operations is essential for numerical correctness.
 
-        Returns
-        -------
-        dict with keys:
-            mean_entropy_by_layer      list[float]             len=num_layers
-            mean_entropy_by_head       list[list[float]]       num_layers × num_heads
-            entropy_by_position        list[list[float]]       num_layers × max_length
-            entropy_quartiles_by_layer list[list[float]]       num_layers × 5
-            top_k_concentration        list[float]             len=max_length
+        Padding
+        ^^^^^^^
+        All samples are pre-truncated to ``max_tokenized_len`` tokens.  Samples
+        shorter than this are zero-padded in the accumulator (entropy = 0 at
+        padded positions), which is the neutral contribution.  The dataset used
+        (proofpile-tokenized) typically supplies sequences longer than 2048.
         """
-        encoded_texts = self.dataset["input_ids"]
-        attn_masks = self.dataset["attention_mask"]
+        encoded = self.dataset["input_ids"]
+        masks = self.dataset["attention_mask"]
 
-        max_tokenized_len = (max_length - 1) if self.add_start_token else max_length
+        max_tok = (max_length - 1) if self.add_start_token else max_length
+        encoded = [x[:max_tok] for x in encoded]
+        masks = [x[:max_tok] for x in masks]
 
-        # truncate every sample to max_tokenized_len
-        encoded_texts = [x[:max_tokenized_len] for x in encoded_texts]
-        attn_masks = [x[:max_tokenized_len] for x in attn_masks]
-
-        # accumulators — populated after the first sample when we know num_layers / num_heads
-        acc_entropy = None  # shape [num_layers, num_heads, max_length]
-        acc_topk = None  # shape [max_length]
-        n_samples = 0
-
-        # per-sample flat collections for quartile computation (layer-wise)
-        # head_token_entropy[l] = list of scalar entropy values
-        head_token_entropy: list[list] = []
+        # Running accumulators – lazily initialised after the first forward pass
+        acc_raw = None  # [L, H, max_length]  float64
+        acc_norm = None  # [L, H, max_length]  float64
+        acc_topk = None  # [max_length]         float64
+        n = 0
 
         pbar = tqdm(
-            total=len(encoded_texts),
-            desc=f"Entropy @ len={max_length}",
+            total=len(encoded),
+            desc=f"  seq_len={max_length}",
             leave=False,
         )
 
-        for idx in range(len(encoded_texts)):
-            # ── build input ────────────────────────────────────────────
-            labels = torch.tensor(encoded_texts[idx : idx + 1])  # [1, T]
-            attn_mask = torch.tensor(attn_masks[idx : idx + 1])  # [1, T]
+        for idx in range(len(encoded)):
+            # ── construct input tensors ───────────────────────────────
+            lbl = torch.tensor(encoded[idx : idx + 1])  # [1, T]
+            mask = torch.tensor(masks[idx : idx + 1])  # [1, T]
 
             if self.add_start_token:
                 bos = torch.tensor([[self.tokenizer.bos_token_id]])
-                labels = torch.cat([bos, labels], dim=1)
-                bos_mask = torch.ones((1, 1), dtype=attn_mask.dtype)
-                attn_mask = torch.cat([bos_mask, attn_mask], dim=1)
+                lbl = torch.cat([bos, lbl], dim=1)
+                mask = torch.cat([torch.ones((1, 1), dtype=mask.dtype), mask], dim=1)
 
-            input_ids = labels.to(self.device)
-            attn_mask = attn_mask.to(self.device)
-            seq_len = input_ids.size(1)
+            ids = lbl.to(self.device)
+            mask = mask.to(self.device)
+            T = ids.size(1)
 
-            # ── forward pass ────────────────────────────────────────────
-            outputs = self.model(
-                input_ids,
-                attention_mask=attn_mask,
-                output_attentions=True,
-            )
-            # outputs.attentions: tuple of num_layers tensors [1, H, T, T]
+            # ── forward pass ─────────────────────────────────────────
+            outputs = self.model(ids, attention_mask=mask, output_attentions=True)
+            attentions = outputs.attentions  # tuple len=L, each [1,H,T,T]
+            L = len(attentions)
+            H = attentions[0].size(1)
 
-            attentions = outputs.attentions  # tuple len=num_layers
-            num_layers = len(attentions)
-            num_heads = attentions[0].size(1)
-
-            # lazy initialisation
-            if acc_entropy is None:
-                acc_entropy = torch.zeros(
-                    num_layers,
-                    num_heads,
-                    max_length,
-                    dtype=torch.float64,
-                )
+            # ── lazy init ────────────────────────────────────────────
+            if acc_raw is None:
+                acc_raw = torch.zeros(L, H, max_length, dtype=torch.float64)
+                acc_norm = torch.zeros(L, H, max_length, dtype=torch.float64)
                 acc_topk = torch.zeros(max_length, dtype=torch.float64)
-                head_token_entropy = [[] for _ in range(num_layers)]
 
-            # ── entropy per (layer, head, position) ─────────────────────
-            # attn[l]: [1, H, T, T]  → entropy: [H, T]
+            topk_layer_sum = torch.zeros(max_length, dtype=torch.float64)
+
             for l_idx, attn in enumerate(attentions):
-                # cast to float32 for numerical stability even with 4-bit model
-                a = attn[0].float()  # [H, T_q, T_k]
-                ent = _shannon_entropy(a)  # [H, T_q]
-                # pad to max_length if seq_len < max_length
-                if seq_len < max_length:
-                    pad = torch.zeros(
-                        num_heads,
-                        max_length - seq_len,
-                        dtype=ent.dtype,
-                        device=ent.device,
-                    )
-                    ent = torch.cat([ent, pad], dim=1)  # [H, max_length]
-                acc_entropy[l_idx] += ent.cpu().double()
-                # collect all (head × token) entropy values for quartile
-                head_token_entropy[l_idx].extend(
-                    ent[:, :seq_len].cpu().numpy().ravel().tolist()
-                )
+                # cast to float64 – critical for 4-bit quantised models
+                a = attn[0].double()  # [H, T, T]
+                ent = _shannon_entropy(a)  # [H, T]
+                nrm = _position_normalise(ent)  # [H, T]
 
-            # ── top-k concentration ──────────────────────────────────────
-            # use layer 0 head 0 as representative (averaged below)
-            # aggregate over all layers & heads for robustness
-            topk_vals = torch.zeros(max_length, dtype=torch.float64)
-            for attn in attentions:
-                a = attn[0].float()  # [H, T_q, T_k]
-                # top-k mass at each query position
+                # right-pad with zeros when actual seq < max_length
+                if T < max_length:
+                    pad = torch.zeros(
+                        H, max_length - T, dtype=torch.float64, device=ent.device
+                    )
+                    ent = torch.cat([ent, pad], dim=1)
+                    nrm = torch.cat([nrm, pad], dim=1)
+
+                acc_raw[l_idx] += ent.cpu()
+                acc_norm[l_idx] += nrm.cpu()
+
+                # top-k concentration for this layer: mean over heads → [T]
                 k = min(self.top_k, a.size(-1))
-                tkv = a.topk(k, dim=-1).values.sum(-1)  # [H, T_q]
-                tkv_mean = tkv.mean(dim=0)  # [T_q]
-                if seq_len < max_length:
-                    pad = torch.zeros(
-                        max_length - seq_len,
-                        dtype=tkv_mean.dtype,
-                        device=tkv_mean.device,
+                tkv = a.topk(k, dim=-1).values.sum(-1).mean(0)  # [T]
+                if T < max_length:
+                    pad_tkv = torch.zeros(
+                        max_length - T, dtype=torch.float64, device=tkv.device
                     )
-                    tkv_mean = torch.cat([tkv_mean, pad])
-                topk_vals += tkv_mean.cpu().double()
-            topk_vals /= num_layers
-            acc_topk += topk_vals
+                    tkv = torch.cat([tkv.cpu(), pad_tkv])
+                topk_layer_sum += tkv.double().cpu()
 
-            n_samples += 1
+            acc_topk += topk_layer_sum / L
+            n += 1
 
-            # ── memory ──────────────────────────────────────────────────
-            del outputs, attentions, input_ids, attn_mask
+            del outputs, attentions, ids, mask
             if self.aggressive_memory:
                 gc.collect()
                 torch.cuda.empty_cache()
@@ -366,192 +340,170 @@ class EntropyEvaluator:
 
         pbar.close()
 
-        if n_samples == 0:
+        if n == 0:
             raise RuntimeError("No samples were processed.")
 
-        # ── aggregate ───────────────────────────────────────────────────
-        avg_entropy = acc_entropy / n_samples  # [num_layers, num_heads, max_length]
-        avg_topk = (acc_topk / n_samples).tolist()  # [max_length]
+        # ── average over samples ──────────────────────────────────────
+        avg_raw = (acc_raw / n).numpy()  # [L, H, max_length]
+        avg_norm = (acc_norm / n).numpy()  # [L, H, max_length]
+        avg_topk = (acc_topk / n).numpy()  # [max_length]
 
-        # mean_entropy_by_layer: mean over heads and token positions
-        mean_by_layer = avg_entropy.mean(dim=(1, 2)).tolist()  # [num_layers]
+        # ------------------------------------------------------------------
+        # Compute and package all output metrics
+        # ------------------------------------------------------------------
 
-        # mean_entropy_by_head: mean over token positions
-        mean_by_head = avg_entropy.mean(dim=2).tolist()  # [num_layers, num_heads]
+        # 1 & 2: [L, T]  – mean over H; every position preserved
+        elp = np.round(avg_raw.mean(axis=1), _PREC).tolist()
+        nelp = np.round(avg_norm.mean(axis=1), _PREC).tolist()
 
-        # entropy_by_position: mean over heads
-        by_position = avg_entropy.mean(dim=1).tolist()  # [num_layers, max_length]
+        # 3 & 4: [L, H]  – mean over T
+        #   raw version: averaging over T mixes different positional scales
+        #   norm version: all positions are in [0,1], mean is statistically valid
+        ehl = np.round(avg_raw.mean(axis=2), _PREC).tolist()
+        nehl = np.round(avg_norm.mean(axis=2), _PREC).tolist()
 
-        # quartiles per layer from raw head × token distributions
-        quartiles = []
-        for l_idx in range(num_layers):
-            vals = np.array(head_token_entropy[l_idx], dtype=np.float64)
-            q = np.quantile(vals, [0.0, 0.25, 0.5, 0.75, 1.0]).tolist()
-            quartiles.append(q)  # [5]
+        # 5: [L, H, T]  – full raw tensor (largest field, ~2 M floats at T=2048)
+        ehlp = np.round(avg_raw, _PREC).tolist()
+
+        # 6: [L]  – intra-layer head specialisation
+        #    step 1: per-head mean of H_norm over T  →  [L, H]
+        #    step 2: std across H                    →  [L]
+        hstd = np.round(avg_norm.mean(axis=2).std(axis=1), _PREC).tolist()
+
+        # 7 & 8: [L, 5]  – quartile distributions over H×T
+        raw_q, nrm_q = [], []
+        for l in range(avg_raw.shape[0]):
+            raw_q.append(
+                np.round(
+                    np.quantile(avg_raw[l].ravel(), [0.0, 0.25, 0.5, 0.75, 1.0]), _PREC
+                ).tolist()
+            )
+            nrm_q.append(
+                np.round(
+                    np.quantile(avg_norm[l].ravel(), [0.0, 0.25, 0.5, 0.75, 1.0]), _PREC
+                ).tolist()
+            )
 
         return {
-            "mean_entropy_by_layer": mean_by_layer,
-            "mean_entropy_by_head": mean_by_head,
-            "entropy_by_position": by_position,
-            "entropy_quartiles_by_layer": quartiles,
-            "top_k_concentration": avg_topk,
+            "entropy_layer_position": elp,
+            "norm_entropy_layer_position": nelp,
+            "entropy_head_layer": ehl,
+            "norm_entropy_head_layer": nehl,
+            "entropy_head_layer_position": ehlp,
+            "head_norm_std_by_layer": hstd,
+            "raw_entropy_quartiles_by_layer": raw_q,
+            "norm_entropy_quartiles_by_layer": nrm_q,
+            "top_k_concentration": np.round(avg_topk, _PREC).tolist(),
+            "top_k_boundary": int(min(self.top_k, max_length)) - 1,
         }
 
     # ------------------------------------------------------------------
-    # public API
+    # Public API
     # ------------------------------------------------------------------
 
     def evaluate(self) -> dict:
         r"""
-        Evaluate attention entropy at all lengths in ``self.length_list``.
+        Evaluate at every length in ``self.length_list`` and write JSON.
 
         Returns
         -------
-        dict  matching the JSON schema described in the module docstring.
+        dict   full output including metadata and per-length results
         """
         results = {}
 
-        outer = tqdm(self.length_list, desc="Entropy Evaluation")
+        outer = tqdm(self.length_list, desc="EntropyEvaluator")
         for seq_len in outer:
             outer.set_postfix(seq_len=seq_len)
             torch.cuda.empty_cache()
             results[str(seq_len)] = self._compute_entropy_at_length(seq_len)
 
+        first = results[str(self.length_list[0])]
+        num_layers = len(first["entropy_layer_position"])
+        num_heads = len(first["entropy_head_layer"][0])
+
         output = {
             "lengths": self.length_list,
             "model_name": getattr(self.model.config, "_name_or_path", "unknown"),
             "top_k": self.top_k,
+            "num_layers": num_layers,
+            "num_heads": num_heads,
             "results": results,
         }
 
         save_path = os.path.join(self.save_dir, self.save_file)
         with open(save_path, "w") as f:
-            json.dump(output, f, indent=2)
+            json.dump(output, f, separators=(",", ":"))
         print(f"\nResults saved → {save_path}")
+
+        # console summary
+        print("\n  seq_len │ mean H (nats) │ mean H_norm")
+        print("  ────────┼───────────────┼────────────")
+        for sl in self.length_list:
+            r = results[str(sl)]
+            mh = float(np.mean(r["entropy_layer_position"]))
+            mn = float(np.mean(r["norm_entropy_layer_position"]))
+            print(f"  {sl:>7} │ {mh:>13.4f} │ {mn:.4f}")
 
         return output
 
 
 # ---------------------------------------------------------------------------
-# argument helpers
+# Argument helpers  (mirror PerplexityEvaluator convention)
 # ---------------------------------------------------------------------------
 
 
 def add_args_entropy(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Register entropy-evaluation arguments with *parser*.
-
-    Follows the same pattern as add_args_perplexity so both can be combined
-    in test.py or called independently.
-    """
+    """Register entropy-evaluation CLI arguments."""
     parser.add_argument(
         "--dataset-name",
         type=str,
         default="emozilla/proofpile-test-tokenized",
-        help="HuggingFace dataset (must have 'input_ids' column).",
     )
-    parser.add_argument(
-        "--split",
-        type=str,
-        default="test",
-        help="Dataset split.",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=20,
-        help="Number of samples to evaluate (None → all).",
-    )
-    parser.add_argument(
-        "--add-start-token",
-        type=bool,
-        default=True,
-        help="Prepend BOS token to each sample.",
-    )
-    parser.add_argument(
-        "--length-step",
-        type=int,
-        default=None,
-        help="Fixed step between evaluated lengths; None → exponential ×2.",
-    )
-    parser.add_argument(
-        "--top-k",
-        type=int,
-        default=10,
-        help="k for top-k attention-concentration metric.",
-    )
-    parser.add_argument(
-        "--aggressive-memory",
-        type=bool,
-        default=True,
-        help="Free GPU cache after every sample.",
-    )
-    parser.add_argument(
-        "--save-dir",
-        type=str,
-        default="results/entropy",
-        help="Directory to write JSON results.",
-    )
-    parser.add_argument(
-        "--save-file",
-        type=str,
-        default=None,
-        help="JSON filename (auto-generated when omitted).",
-    )
+    parser.add_argument("--split", type=str, default="test")
+    parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--add-start-token", type=bool, default=True)
+    parser.add_argument("--length-step", type=int, default=None)
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--aggressive-memory", type=bool, default=True)
+    parser.add_argument("--save-dir", type=str, default="results/entropy")
+    parser.add_argument("--save-file", type=str, default=None)
     return parser
 
 
 def generate_save_filename(args) -> str:
-    """
-    Build a deterministic filename from model + RoPE config.
-
-    Examples
-    --------
-    --rope-type none                              → llama-7b_none.json
-    --rope-type linear --rope-dynamic             → llama-7b_linear_dynamic.json
-    --rope-type linear --rope-factor 4.0          → llama-7b_linear_factor4_0.json
-    """
+    """llama-7b_none.json  /  llama-7b_linear_dynamic.json  / …"""
     model_name = args.model_name.split("/")[-1]
     parts = [model_name, args.rope_type]
-
     if args.rope_type != "none":
         if args.rope_factor is not None:
-            factor_str = str(args.rope_factor).replace(".", "_")
-            parts.append(f"factor{factor_str}")
+            parts.append(f"factor{str(args.rope_factor).replace('.', '_')}")
         elif args.rope_dynamic:
             parts.append("dynamic")
-
     return "_".join(parts) + ".json"
 
 
 # ---------------------------------------------------------------------------
-# CLI entry point
+# CLI
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import os
 
-    os.environ.setdefault("USE_FLASH_ATTN", "0")  # flash-attn hides attn weights
+    os.environ.setdefault("USE_FLASH_ATTN", "0")
 
-    parser = argparse.ArgumentParser(
-        description="Attention-entropy evaluation for LLaMA models."
-    )
+    parser = argparse.ArgumentParser(description="Attention-entropy evaluation.")
     parser = add_args_model(parser)
     parser = add_args_entropy(parser)
     args = parser.parse_args()
 
-    # Fixed per experiment spec:
-    #   model  = huggyllama/llama-7b
-    #   rope   = none
-    #   lengths= 256 / 512 / 1024 / 2048
+    # experiment-spec defaults
     args.model_name = args.model_name or "huggyllama/llama-7b"
     args.rope_type = "none"
     args.min_length = 256
     args.max_length = 2048
 
-    model, config = load_model(args)
+    model, _ = load_model(args)
     tokenizer = load_tokenizer(args)
-
     args.save_file = args.save_file or generate_save_filename(args)
 
     evaluator = EntropyEvaluator(
@@ -570,9 +522,4 @@ if __name__ == "__main__":
         save_dir=args.save_dir,
         save_file=args.save_file,
     )
-
-    results = evaluator.evaluate()
-    for length in results["lengths"]:
-        r = results["results"][str(length)]
-        me = sum(r["mean_entropy_by_layer"]) / len(r["mean_entropy_by_layer"])
-        print(f"  seq_len={length:>5d}  global_mean_entropy={me:.4f} nats")
+    evaluator.evaluate()
