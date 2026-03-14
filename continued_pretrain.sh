@@ -8,20 +8,20 @@
 
 # ── Model ────────────────────────────────────────────────────────────────────
 MODEL_NAME="huggyllama/llama-7b"
-MAX_LENGTH=32768
+MAX_LENGTH=65536
 DTYPE="bfloat16"
 
 # ── Training hyperparameters ─────────────────────────────────────────────────
 BATCH_SIZE=1
-GRADIENT_ACCUMULATE_EVERY=8
-MAX_TRAIN_STEPS=600
-WARMUP_STEPS=60
+GRADIENT_ACCUMULATE_EVERY=2
+MAX_TRAIN_STEPS=400
+WARMUP_STEPS=40
 LEARNING_RATE=2e-4
 WEIGHT_DECAY=0.01
 GRAD_NORM=1.0
 LR_SCHEDULE="cosine"
-CHECKPOINTING_STEPS=20
-MAX_CHECKPOINTS=3
+CHECKPOINTING_STEPS=40
+MAX_CHECKPOINTS=2
 SEED=42
 
 # ── LoRA / quantization ───────────────────────────────────────────────────────
@@ -49,16 +49,6 @@ ROPE_METHODS=(
     "--rope-type ntk --rope-factor 4.0"
     "--rope-type part-ntk --rope-factor 4.0"
     "--rope-type yarn --rope-factor 4.0"
-    "--rope-type my-rope --rope-factor 4.0"
-    "--rope-type my-rope-scaled --rope-factor 4.0"
-    "--rope-type my-rope2 --rope-factor 4.0"
-    "--rope-type my-rope2-scaled --rope-factor 4.0"
-    "--rope-type block-layered --rope-factor 4.0"
-    "--rope-type block-layered-scaled --rope-factor 4.0"
-    "--rope-type freq-smooth --rope-factor 4.0"
-    "--rope-type freq-smooth-scaled --rope-factor 4.0"
-    "--rope-type freq-reciprocal --rope-factor 4.0"
-    "--rope-type freq-reciprocal-scaled --rope-factor 4.0"
 )
 
 # ── Build shared argument string ─────────────────────────────────────────────
