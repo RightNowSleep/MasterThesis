@@ -6,21 +6,6 @@
 # Usage: bash finetune.sh
 # =============================================================================
 
-# ── Attention type presets ────────────────────────────────────────────────────
-# NOTE: bash variable assignment must have NO spaces around '='.
-FULL="--attention-type full"
-BIGBIRD="--attention-type bigbird --num-random-blocks 1 --num-global-blocks 1 --num-local-blocks 3"
-LONGFORMER="--attention-type longformer --attention-window 512 --global-window 4"
-STREAMING="--attention-type streaming --attention-window 512 --global-window 4"
-AVG="--attention-type avg --num-global-blocks 1 --num-local-blocks 18 --num-top-k-blocks 4"
-AVG2="--attention-type avg2 --num-global-blocks 1 --num-local-blocks 18 --num-top-k-blocks 4"
-POWER="--attention-type power --num-global-blocks 1 --num-local-blocks 18 --num-top-k-blocks 4"
-POWER2="--attention-type power2 --num-global-blocks 1 --num-local-blocks 18 --num-top-k-blocks 4"
-AVG_POWER="--attention-type avg-power --num-global-blocks 1 --num-local-blocks 18 --num-top-k-blocks 4"
-AVG_POWER2="--attention-type avg-power2 --num-global-blocks 1 --num-local-blocks 18 --num-top-k-blocks 4"
-
-OTHER="--max-position-embeddings 65536 --truncate 65536"
-
 # ── Model ─────────────────────────────────────────────────────────────────────
 MODEL_NAME="huggyllama/llama-7b"
 MAX_LENGTH=32768
@@ -70,10 +55,11 @@ ROPE_METHODS=(
     "--rope-type my-rope2-scaled --rope-factor 4.0"
     "--rope-type block-layered --rope-factor 4.0"
     "--rope-type block-layered-scaled --rope-factor 4.0"
+    "--rope-type freq-smooth --rope-factor 4.0"
+    "--rope-type freq-smooth-scaled --rope-factor 4.0"
+    "--rope-type freq-reciprocal --rope-factor 4.0"
+    "--rope-type freq-reciprocal-scaled --rope-factor 4.0"
 )
-
-# ── Attention preset to use for this run (change as needed) ───────────────────
-ATTENTION_PRESET=$FULL
 
 # ── Build shared argument string ──────────────────────────────────────────────
 BASE_ARGS="--model-name $MODEL_NAME \
@@ -96,22 +82,20 @@ BASE_ARGS="--model-name $MODEL_NAME \
   --quantization $QUANTIZATION \
   --seed $SEED \
   --output-dir $OUTPUT_DIR \
-  --cuda-visible-devices $CUDA_DEVICES \
-  $ATTENTION_PRESET"
+  --cuda-visible-devices $CUDA_DEVICES"
 
 if [ -n "$WANDB" ]; then
     BASE_ARGS="$BASE_ARGS --wandb $WANDB"
 fi
 
-echo "=========================================="
+echo "==========================================
 echo "Running Fine-tuning"
-echo "=========================================="
+echo "==========================================
 echo "Model      : $MODEL_NAME"
 echo "Max length : $MAX_LENGTH"
 echo "Steps      : $MAX_TRAIN_STEPS  (warmup: $WARMUP_STEPS)"
 echo "LR         : $LEARNING_RATE  (schedule: $LR_SCHEDULE)"
 echo "Quantization: $QUANTIZATION  |  LoRA r=$LORA_R / alpha=$LORA_ALPHA"
-echo "Attention  : $ATTENTION_PRESET"
 echo "RoPE methods: ${#ROPE_METHODS[@]}"
 echo "Output dir : $OUTPUT_DIR"
 echo "=========================================="

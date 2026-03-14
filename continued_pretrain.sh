@@ -57,6 +57,8 @@ ROPE_METHODS=(
     "--rope-type block-layered-scaled --rope-factor 4.0"
     "--rope-type freq-smooth --rope-factor 4.0"
     "--rope-type freq-smooth-scaled --rope-factor 4.0"
+    "--rope-type freq-reciprocal --rope-factor 4.0"
+    "--rope-type freq-reciprocal-scaled --rope-factor 4.0"
 )
 
 # ── Build shared argument string ─────────────────────────────────────────────
