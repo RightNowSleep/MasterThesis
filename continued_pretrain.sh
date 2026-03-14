@@ -8,8 +8,9 @@
 
 # ── Model ────────────────────────────────────────────────────────────────────
 MODEL_NAME="huggyllama/llama-7b"
-MAX_LENGTH=65536
+MAX_LENGTH=16384
 DTYPE="bfloat16"
+ROPE_FACTOR=8.0
 
 # ── Training hyperparameters ─────────────────────────────────────────────────
 BATCH_SIZE=1
@@ -45,10 +46,10 @@ WANDB=""                # Set to a WandB project name to enable, e.g. "my-projec
 #   --rope-dynamic only  → runtime scaling, no fixed ratio
 ROPE_METHODS=(
     "--rope-type none"
-    "--rope-type linear --rope-factor 4.0"
-    "--rope-type ntk --rope-factor 4.0"
-    "--rope-type part-ntk --rope-factor 4.0"
-    "--rope-type yarn --rope-factor 4.0"
+    "--rope-type linear --rope-factor $ROPE_FACTOR"
+    "--rope-type ntk --rope-factor $ROPE_FACTOR"
+    "--rope-type part-ntk --rope-factor $ROPE_FACTOR"
+    "--rope-type yarn --rope-factor $ROPE_FACTOR"
 )
 
 # ── Build shared argument string ─────────────────────────────────────────────
