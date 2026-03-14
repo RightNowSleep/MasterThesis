@@ -41,6 +41,11 @@ Stored metrics (per evaluated sequence length)
 
 import gc
 import os
+import sys
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import json
 import time
 import argparse
@@ -310,7 +315,10 @@ class EntropyEvaluator:
                 # right-pad with zeros when actual seq < max_length
                 if T < max_length:
                     pad = torch.zeros(
-                        H, max_length - T, dtype=torch.float64, device=ent.device
+                        H,
+                        max_length - T,
+                        dtype=torch.float64,
+                        device=ent.device,
                     )
                     ent = torch.cat([ent, pad], dim=1)
                     nrm = torch.cat([nrm, pad], dim=1)
@@ -323,10 +331,12 @@ class EntropyEvaluator:
                 tkv = a.topk(k, dim=-1).values.sum(-1).mean(0)  # [T]
                 if T < max_length:
                     pad_tkv = torch.zeros(
-                        max_length - T, dtype=torch.float64, device=tkv.device
+                        max_length - T,
+                        dtype=torch.float64,
+                        device=tkv.device,
                     )
-                    tkv = torch.cat([tkv.cpu(), pad_tkv])
-                topk_layer_sum += tkv.double().cpu()
+                    tkv = torch.cat([tkv, pad_tkv])
+                topk_layer_sum += tkv.cpu().double()
 
             acc_topk += topk_layer_sum / L
             n += 1
@@ -375,12 +385,14 @@ class EntropyEvaluator:
         for l in range(avg_raw.shape[0]):
             raw_q.append(
                 np.round(
-                    np.quantile(avg_raw[l].ravel(), [0.0, 0.25, 0.5, 0.75, 1.0]), _PREC
+                    np.quantile(avg_raw[l].ravel(), [0.0, 0.25, 0.5, 0.75, 1.0]),
+                    _PREC,
                 ).tolist()
             )
             nrm_q.append(
                 np.round(
-                    np.quantile(avg_norm[l].ravel(), [0.0, 0.25, 0.5, 0.75, 1.0]), _PREC
+                    np.quantile(avg_norm[l].ravel(), [0.0, 0.25, 0.5, 0.75, 1.0]),
+                    _PREC,
                 ).tolist()
             )
 
