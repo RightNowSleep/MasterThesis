@@ -87,7 +87,7 @@ _FS_HEAT = (32, 26)  # 2×2 heatmap
 _FS_SINGLE = (22, 13)  # single panel
 _FS_DELTA = (18, 22)  # delta heatmap (tall)
 
-_DPI = 200
+_DPI = 300
 _TITLE_FS = 20
 _SUPTITLE_FS = 24
 _LABEL_FS = 17
@@ -97,7 +97,7 @@ _ANNOT_FS = 12
 _ENDLABEL_FS = 12
 
 # Number of violin sample points for KDE rendering
-_VIOLIN_POINTS = 200
+_VIOLIN_POINTS = 300
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +113,14 @@ def _get_color(seq_len: int, lengths: Sequence[int]) -> str:
     return _FALLBACK_CMAP(idx / max(len(lengths) - 1, 1))
 
 
-def _savefig(fig: plt.Figure, path: str, dpi: int = _DPI) -> None:
-    fig.tight_layout()
+def _savefig(
+    fig: plt.Figure,
+    path: str,
+    dpi: int = _DPI,
+    constrained_layout: bool = False,
+) -> None:
+    if not constrained_layout:
+        fig.tight_layout()
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     print(f"  saved → {path}")
@@ -313,13 +319,24 @@ def _plot_head_layer_heatmap_one(
     mats = [np.array(data["results"][str(sl)][key]) for sl in lengths]
     vmin, vmax = vrange_fixed or _common_vrange(mats)
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=_FS_HEAT, squeeze=False)
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=_FS_HEAT,
+        squeeze=False,
+        constrained_layout=True,
+    )
 
     for i, (sl, mat) in enumerate(zip(lengths, mats)):
         r, c = divmod(i, ncols)
         ax = axes[r][c]
         im = ax.imshow(
-            mat, aspect="auto", origin="upper", cmap=cmap, vmin=vmin, vmax=vmax
+            mat,
+            aspect="auto",
+            origin="upper",
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
         )
         ax.set_title(f"seq_len = {sl}", fontsize=_LABEL_FS, pad=6)
         ax.set_xlabel("Head index", fontsize=_TICK_FS)
@@ -331,7 +348,7 @@ def _plot_head_layer_heatmap_one(
         r, c = divmod(i, ncols)
         axes[r][c].set_visible(False)
 
-    cbar = fig.colorbar(im, ax=axes, fraction=0.018, pad=0.03, shrink=0.85)
+    cbar = fig.colorbar(im, ax=axes, fraction=0.022, pad=0.06, shrink=0.82, aspect=40)
     cbar.set_label(ylabel, fontsize=_LABEL_FS)
     cbar.ax.tick_params(labelsize=_TICK_FS)
 
@@ -341,7 +358,7 @@ def _plot_head_layer_heatmap_one(
         fontsize=_SUPTITLE_FS,
         y=1.02,
     )
-    _savefig(fig, os.path.join(out_dir, fname), dpi)
+    _savefig(fig, os.path.join(out_dir, fname), dpi, constrained_layout=True)
 
 
 def plot_head_layer_heatmap(data: dict, out_dir: str, fmt: str, dpi: int) -> None:
@@ -405,7 +422,12 @@ def _plot_entropy_vs_position_one(
             curve = matrix[layer_idx]  # [T]
             pos_x = np.arange(T)
             ax.plot(
-                pos_x, curve, color=col, linewidth=1.8, alpha=0.9, label=f"len={sl}"
+                pos_x,
+                curve,
+                color=col,
+                linewidth=1.8,
+                alpha=0.9,
+                label=f"len={sl}",
             )
             _end_label(ax, pos_x, curve, str(sl), col)
 
@@ -554,19 +576,34 @@ def _plot_position_head_heatmap_one(
     if is_norm:
         vmin, vmax = 0.0, 1.0  # fixed scale for norm
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=_FS_HEAT, squeeze=False)
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=_FS_HEAT,
+        squeeze=False,
+        constrained_layout=True,
+    )
 
     for i, (sl, mat) in enumerate(zip(lengths, all_mats)):
         r, c = divmod(i, ncols)
         ax = axes[r][c]
 
         im = ax.imshow(
-            mat, aspect="auto", origin="upper", cmap="viridis", vmin=vmin, vmax=vmax
+            mat,
+            aspect="auto",
+            origin="upper",
+            cmap="viridis",
+            vmin=vmin,
+            vmax=vmax,
         )
         # vertical line at top_k boundary
         if top_k_bnd > 0:
             ax.axvline(
-                top_k_bnd, color="white", linestyle="--", linewidth=1.2, alpha=0.7
+                top_k_bnd,
+                color="white",
+                linestyle="--",
+                linewidth=1.2,
+                alpha=0.7,
             )
         ax.set_title(f"seq_len = {sl}", fontsize=_LABEL_FS, pad=6)
         ax.set_xlabel("Token position", fontsize=_TICK_FS)
@@ -577,7 +614,7 @@ def _plot_position_head_heatmap_one(
         r, c = divmod(i, ncols)
         axes[r][c].set_visible(False)
 
-    cbar = fig.colorbar(im, ax=axes, fraction=0.018, pad=0.03, shrink=0.85)
+    cbar = fig.colorbar(im, ax=axes, fraction=0.022, pad=0.06, shrink=0.82, aspect=40)
     cbar.set_label(ylabel, fontsize=_LABEL_FS)
     cbar.ax.tick_params(labelsize=_TICK_FS)
 
@@ -588,7 +625,7 @@ def _plot_position_head_heatmap_one(
         fontsize=_SUPTITLE_FS,
         y=1.02,
     )
-    _savefig(fig, os.path.join(out_dir, fname), dpi)
+    _savefig(fig, os.path.join(out_dir, fname), dpi, constrained_layout=True)
 
 
 def plot_position_head_heatmap(
@@ -775,7 +812,12 @@ def _violin_from_data(ax, positions, datasets, color, width=0.7, alpha=0.45):
             if max_d > 0:
                 dens = dens / max_d * width
             ax.fill_betweenx(
-                ys, pos - dens, pos + dens, color=color, alpha=alpha, linewidth=0
+                ys,
+                pos - dens,
+                pos + dens,
+                color=color,
+                alpha=alpha,
+                linewidth=0,
             )
         except Exception:
             pass  # skip gracefully if KDE fails (e.g. constant data)
@@ -888,7 +930,9 @@ def plot_entropy_boxplot_violin(
         y=1.02,
     )
     _savefig(
-        fig, os.path.join(out_dir, f"fig07_entropy_boxplot_violin_norm.{fmt}"), dpi
+        fig,
+        os.path.join(out_dir, f"fig07_entropy_boxplot_violin_norm.{fmt}"),
+        dpi,
     )
 
 
