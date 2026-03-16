@@ -30,10 +30,11 @@ import torch
 from torch import nn
 from transformers.models.qwen3.modeling_qwen3 import rotate_half
 
+
 class PatentRotaryEmbedding(nn.Module):
     """
-    输入：query/key 向量 [batch, heads, seq_len, dim]
-    输出：旋转后的 query/key
+    Input: query/key vectors [batch, heads, seq_len, dim]
+    Output: rotated query/key
     """
 
     inv_freq: torch.Tensor
@@ -51,7 +52,7 @@ class PatentRotaryEmbedding(nn.Module):
         self.alpha = 0.2
         self.max_seq_len = self.L * 16
 
-        # 预计算 inv_freq [dim/2]
+        # Pre-compute inv_freq [dim/2]
         inv_freq = 1.0 / (
             self.base
             ** (
@@ -61,7 +62,7 @@ class PatentRotaryEmbedding(nn.Module):
         )
         self.register_buffer("inv_freq", inv_freq)
 
-        # 预计算层-频权重表 [N, dim/2]
+        # Pre-compute layer-frequency weight table [N, dim/2]
         self.register_buffer("w_ext", self._build_w_ext(device))
         self.register_buffer("w_int", 1.0 - self.w_ext)
 
@@ -84,15 +85,15 @@ class PatentRotaryEmbedding(nn.Module):
         device = x.device
         dtype = x.dtype
 
-        # 长度缩放因子 S(l)
+        # Length scaling factor S(l)
         S = max(seq_len, self.L) / self.L
 
-        # 基础角度 [seq_len, dim/2]
+        # Base angles [seq_len, dim/2]
         t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
         freqs = torch.outer(t, self.inv_freq)  # [seq_len, dim/2]
         # freqs4d = torch.repeat_interleave(freqs, 2, dim=1)       # [seq_len, dim]
 
-        # 层-频耦合角度 [dim]
+        # Layer-frequency coupled angles [dim]
         w_ext = self.w_ext[layer_idx]  # [dim]
         w_int = self.w_int[layer_idx]
         angles = w_ext * freqs + w_int * freqs / S  # [seq_len, dim]
@@ -109,6 +110,8 @@ class PatentRotaryEmbedding(nn.Module):
             torch.maximum(m, torch.tensor(self.L)) / self.L
         )
         return t.sqrt().view(-1, 1)  # [seq_len,1]
+
+
 # Copied from transformers.models.llama.modeling_llama.rotate_half
 
 
@@ -146,9 +149,14 @@ class Qwen3Model(Qwen3PreTrainedModel):
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
-        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
+        self.embed_tokens = nn.Embedding(
+            config.vocab_size, config.hidden_size, self.padding_idx
+        )
         self.layers = nn.ModuleList(
-            [Qwen3DecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
+            [
+                Qwen3DecoderLayer(config, layer_idx)
+                for layer_idx in range(config.num_hidden_layers)
+            ]
         )
         self.norm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = Qwen3RotaryEmbedding(config=config)
@@ -172,7 +180,9 @@ class Qwen3Model(Qwen3PreTrainedModel):
         **kwargs: Unpack[TransformersKwargs],
     ) -> BaseModelOutputWithPast:
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+            raise ValueError(
+                "You must specify exactly one of input_ids or inputs_embeds"
+            )
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
@@ -181,9 +191,13 @@ class Qwen3Model(Qwen3PreTrainedModel):
             past_key_values = DynamicCache(config=self.config)
 
         if cache_position is None:
-            past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
+            past_seen_tokens = (
+                past_key_values.get_seq_length() if past_key_values is not None else 0
+            )
             cache_position = torch.arange(
-                past_seen_tokens, past_seen_tokens + inputs_embeds.shape[1], device=inputs_embeds.device
+                past_seen_tokens,
+                past_seen_tokens + inputs_embeds.shape[1],
+                device=inputs_embeds.device,
             )
 
         if position_ids is None:
@@ -206,7 +220,9 @@ class Qwen3Model(Qwen3PreTrainedModel):
             }
             # The sliding window alternating layers are not always activated depending on the config
             if self.has_sliding_layers:
-                causal_mask_mapping["sliding_attention"] = create_sliding_window_causal_mask(**mask_kwargs)
+                causal_mask_mapping["sliding_attention"] = (
+                    create_sliding_window_causal_mask(**mask_kwargs)
+                )
 
         hidden_states = inputs_embeds
 
@@ -297,12 +313,21 @@ class Qwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
 
         hidden_states = outputs.last_hidden_state
         # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
-        slice_indices = slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
+        slice_indices = (
+            slice(-logits_to_keep, None)
+            if isinstance(logits_to_keep, int)
+            else logits_to_keep
+        )
         logits = self.lm_head(hidden_states[:, slice_indices, :])
 
         loss = None
         if labels is not None:
-            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
+            loss = self.loss_function(
+                logits=logits,
+                labels=labels,
+                vocab_size=self.config.vocab_size,
+                **kwargs,
+            )
 
         return CausalLMOutputWithPast(
             loss=loss,
@@ -313,7 +338,10 @@ class Qwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
         )
 
 
-class Qwen3ForSequenceClassification(GenericForSequenceClassification, Qwen3PreTrainedModel):
+class Qwen3ForSequenceClassification(
+    GenericForSequenceClassification,
+    Qwen3PreTrainedModel,
+):
     pass
 
 
@@ -322,7 +350,9 @@ class Qwen3ForTokenClassification(GenericForTokenClassification, Qwen3PreTrained
 
 
 class Qwen3ForQuestionAnswering(GenericForQuestionAnswering, Qwen3PreTrainedModel):
-    base_model_prefix = "transformer"  # For BC, where `transformer` was used instead of `model`
+    base_model_prefix = (
+        "transformer"  # For BC, where `transformer` was used instead of `model`
+    )
 
 
 __all__ = [

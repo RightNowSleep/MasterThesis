@@ -6,23 +6,23 @@ from src.visualizer import plot_heatmaps_with_bertviz, plot_static_heatmap
 import yaml
 import torch
 
-# 1. 加载配置
+# 1. Load configuration
 config_path = "../config/model_config.yaml"
 with open(config_path, 'r') as f:
     config = yaml.safe_load(f)
 
-# 2. 准备输入数据
+# 2. Prepare input data
 with open("../data/your_dataset.txt", 'r') as f:
     input_text = f.read().strip()
 
-# 3. 遍历所有RoPE配置
+# 3. Iterate through all RoPE configurations
 for rope_cfg in config['rope_configs']:
     print(f"\n--- Analyzing {rope_cfg['name']} ---")
 
-    # 加载模型
+    # Load model
     model, tokenizer = load_model_with_rope(config_path, rope_cfg['name'])
 
-    # 提取注意力
+    # Extract attention
     tokens, attentions = extract_attention_from_model(
         model,
         tokenizer,
@@ -30,7 +30,7 @@ for rope_cfg in config['rope_configs']:
         max_length=config['visualization']['max_seq_length']
     )
 
-    # 保存热力图
+    # Save heatmaps
     save_dir = f"../results/{rope_cfg['name']}"
     plot_heatmaps_with_bertviz(
         tokens,
@@ -41,6 +41,6 @@ for rope_cfg in config['rope_configs']:
         rope_cfg['name']
     )
 
-    # 清理显存
+    # Clear GPU memory
     del model
     torch.cuda.empty_cache()
