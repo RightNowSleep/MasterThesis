@@ -32,7 +32,11 @@ def add_args_finetune(parser: argparse.ArgumentParser):
         --dataset: HuggingFace dataset ID for SFT.
         --dataset-split: Dataset split to use for training.
     """
-    parser.add_argument("--output-dir", type=str, default="finetunes")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="/home/linzhen/workspace/finetunes/finetune",
+    )
     parser.add_argument("--num-train-epochs", type=int, default=1)
     parser.add_argument("--per-device-train-batch-size", type=int, default=4)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=2)
