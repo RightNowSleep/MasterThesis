@@ -277,7 +277,7 @@ class LlamaAttention(nn.Module):
         this point (e.g. bypassing LlamaConfig validation), ``"factor"`` wins.
         """
         if self.layer_idx == 0:
-            print(f"初始化RoPE, 配置类型: {self.config.rope_scaling}")
+            print(f"Initializing RoPE, config type: {self.config.rope_scaling}")
 
         if self.config.rope_scaling is None:
             self.rotary_emb = LlamaRotaryEmbedding(
@@ -420,7 +420,7 @@ class LlamaAttention(nn.Module):
                 num_hidden_layers=self.config.num_hidden_layers,
                 dynamic=dynamic,
             )
-        
+
         elif scaling_type == "freq-smooth-scaled":
             self.rotary_emb = LlamaFreqSmoothScaledRotaryEmbedding(
                 dim=self.head_dim,
@@ -497,7 +497,8 @@ class LlamaAttention(nn.Module):
                 self.num_key_value_heads * self.head_dim
             ) // self.config.pretraining_tp
             query_slices = self.q_proj.weight.split(
-                (self.num_heads * self.head_dim) // self.config.pretraining_tp, dim=0
+                (self.num_heads * self.head_dim) // self.config.pretraining_tp,
+                dim=0,
             )
             key_slices = self.k_proj.weight.split(key_value_slicing, dim=0)
             value_slices = self.v_proj.weight.split(key_value_slicing, dim=0)
@@ -1572,7 +1573,8 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
             elif self.config.problem_type == "single_label_classification":
                 loss_fct = CrossEntropyLoss()
                 loss = loss_fct(
-                    pooled_logits.view(-1, self.num_labels), labels.view(-1)
+                    pooled_logits.view(-1, self.num_labels),
+                    labels.view(-1),
                 )
             elif self.config.problem_type == "multi_label_classification":
                 loss_fct = BCEWithLogitsLoss()

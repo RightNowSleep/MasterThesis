@@ -649,14 +649,19 @@ def generate_save_filename(args):
 
 
 def add_args_passkey(parser):
-    parser.add_argument("--num-keys", type=int, default=5, help="pass key数量")
-    parser.add_argument("--iterations", type=int, default=20, help="测试迭代次数")
+    parser.add_argument("--num-keys", type=int, default=5, help="Number of pass keys")
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=20,
+        help="Number of test iterations",
+    )
     parser.add_argument(
         "--data-mode",
         type=str,
         default="real",
         choices=["synthetic", "real"],
-        help="数据模式",
+        help="Data mode",
     )
     parser.add_argument(
         "--dataset-name",
