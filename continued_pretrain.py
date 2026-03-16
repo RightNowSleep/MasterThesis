@@ -527,7 +527,7 @@ def add_args_continued_pretrain(parser):
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="finetunes",
+        default="/home/linzhen/workspace/finetunes/continued_pretrain",
         help="Root directory for saving models and checkpoints.",
     )
 

@@ -35,7 +35,7 @@ DATASET="emozilla/pg_books-tokenized-bos-eos-chunked-65536"
 
 # ── Infrastructure ────────────────────────────────────────────────────────────
 CUDA_DEVICES="1,2,3"
-OUTPUT_DIR="finetunes/finetune"
+OUTPUT_DIR="/home/linzhen/workspace/finetunes/finetune"
 WANDB=""                # Set to a WandB project name to enable, e.g. "my-project"
 
 # ── RoPE methods ──────────────────────────────────────────────────────────────

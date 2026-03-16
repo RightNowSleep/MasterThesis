@@ -36,7 +36,7 @@ DATASET="emozilla/pg_books-tokenized-bos-eos-chunked-65536"
 
 # ── Infrastructure ────────────────────────────────────────────────────────────
 CUDA_DEVICES="1,2,3"
-OUTPUT_DIR="finetunes/continued_pretrain"
+OUTPUT_DIR="/home/linzhen/workspace/finetunes/continued_pretrain"
 WANDB=""                # Set to a WandB project name to enable, e.g. "my-project"
 
 # ── RoPE methods ─────────────────────────────────────────────────────────────
