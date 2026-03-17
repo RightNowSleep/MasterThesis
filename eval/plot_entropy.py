@@ -72,7 +72,7 @@ from scipy.stats import gaussian_kde  # for smooth violin approximation
 
 # Fixed colours for the four experiment sequence lengths
 _LENGTH_COLORS: dict[int, str] = {
-    256: "#1565C0",  # dark blue
+    # 256: "#1565C0",  # dark blue
     512: "#E65100",  # deep orange
     1024: "#2E7D32",  # dark green
     2048: "#B71C1C",  # dark red
@@ -872,7 +872,7 @@ def _plot_boxplot_violin_one(
         positions=layer_pos,
         widths=0.28,
         showfliers=False,
-        boxprops=dict(color=col, linewidth=1.8),
+        boxprops=dict(edgecolor=col, linewidth=1.8),
         whiskerprops=dict(color=col, linewidth=1.5, linestyle="--"),
         medianprops=dict(color="white", linewidth=2.5),
         capprops=dict(color=col, linewidth=1.8),
