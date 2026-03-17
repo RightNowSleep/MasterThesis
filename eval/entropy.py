@@ -446,7 +446,7 @@ class EntropyEvaluator:
 
         save_path = os.path.join(self.save_dir, self.save_file)
         with open(save_path, "w") as f:
-            json.dump(output, f, indent=4)
+            json.dump(output, f, separators=(",", ":"))
         print(f"\nResults saved → {save_path}")
 
         # console summary
