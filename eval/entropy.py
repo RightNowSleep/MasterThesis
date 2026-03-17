@@ -43,7 +43,7 @@ import gc
 import os
 import sys
 
-# s.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import json
@@ -446,7 +446,7 @@ class EntropyEvaluator:
 
         save_path = os.path.join(self.save_dir, self.save_file)
         with open(save_path, "w") as f:
-            json.dump(output, f, indent=4)
+            json.dump(output, f, separators=(",", ":"))
         print(f"\nResults saved → {save_path}")
 
         # console summary
@@ -513,7 +513,7 @@ if __name__ == "__main__":
     # experiment-spec defaults
     args.model_name = args.model_name or "huggyllama/llama-7b"
     args.rope_type = "none"
-    args.min_length = 256
+    args.min_length = 512
     args.max_length = 3072
 
     model, _ = load_model(args)
