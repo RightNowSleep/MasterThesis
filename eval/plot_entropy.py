@@ -76,6 +76,7 @@ _LENGTH_COLORS: dict[int, str] = {
     512: "#E65100",  # deep orange
     1024: "#2E7D32",  # dark green
     2048: "#B71C1C",  # dark red
+    3072: "#6A1B9A",  # deep purple
 }
 _FALLBACK_CMAP = plt.cm.tab10  # for unexpected lengths
 
