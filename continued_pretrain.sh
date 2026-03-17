@@ -45,11 +45,12 @@ WANDB=""                # Set to a WandB project name to enable, e.g. "my-projec
 #                          pretraining targets a known max length, static is preferred)
 #   --rope-dynamic only  → runtime scaling, no fixed ratio
 ROPE_METHODS=(
-    "--rope-type none"
-    "--rope-type linear --rope-factor $ROPE_FACTOR"
-    "--rope-type ntk --rope-factor $ROPE_FACTOR"
-    "--rope-type part-ntk --rope-factor $ROPE_FACTOR"
-    "--rope-type yarn --rope-factor $ROPE_FACTOR"
+    # "--rope-type none"
+    # "--rope-type linear --rope-factor $ROPE_FACTOR"
+    # "--rope-type ntk --rope-factor $ROPE_FACTOR"
+    # "--rope-type part-ntk --rope-factor $ROPE_FACTOR"
+    # "--rope-type yarn --rope-factor $ROPE_FACTOR"
+    "--rope-type freq-reciprocal --rope-factor $ROPE_FACTOR"
 )
 
 # ── Build shared argument string ─────────────────────────────────────────────
