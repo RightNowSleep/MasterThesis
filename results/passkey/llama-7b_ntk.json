@@ -1,14 +1,3 @@
-{
-    "lengths": [
-        2048,
-        4096,
-        6144,
-        8192
-    ],
-    "success_rates": [
-        0.95,
-        0.0,
-        0.0,
-        0.0
-    ]
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:8537c43d015497d43f36fde855e4e2b009ffce15109421cf8ecc99c1d2d49767
+size 163
