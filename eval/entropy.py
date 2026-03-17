@@ -43,7 +43,7 @@ import gc
 import os
 import sys
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+# s.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import json
@@ -234,6 +234,8 @@ class EntropyEvaluator:
                 lst.append(nxt)
             else:
                 break
+        if self.max_length not in lst:
+            lst.append(self.max_length)
         return lst
 
     # ------------------------------------------------------------------
@@ -308,7 +310,7 @@ class EntropyEvaluator:
 
             for l_idx, attn in enumerate(attentions):
                 # cast to float64 – critical for 4-bit quantised models
-                a = attn[0].double()  # [H, T, T]
+                a = attn[0].double().cpu()  # [H, T, T]
                 ent = _shannon_entropy(a)  # [H, T]
                 nrm = _position_normalise(ent)  # [H, T]
 
@@ -512,7 +514,7 @@ if __name__ == "__main__":
     args.model_name = args.model_name or "huggyllama/llama-7b"
     args.rope_type = "none"
     args.min_length = 256
-    args.max_length = 2048
+    args.max_length = 3072
 
     model, _ = load_model(args)
     tokenizer = load_tokenizer(args)
