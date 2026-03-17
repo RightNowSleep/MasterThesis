@@ -20,7 +20,7 @@ ROPE_METHODS=(
     # "--rope-type block-layered-scaled --rope-dynamic"
     # "--rope-type freq-smooth --rope-dynamic"
     # "--rope-type freq-smooth-scaled --rope-dynamic"
-    "--rope-type freq-reciprocal --rope-dynamic"
+    # "--rope-type freq-reciprocal --rope-dynamic"
     "--rope-type freq-reciprocal-scaled --rope-dynamic"
     # "--rope-type linear --rope-factor 4.0"
     # "--rope-type ntk --rope-factor 4.0"
@@ -34,7 +34,7 @@ ROPE_METHODS=(
     # "--rope-type block-layered-scaled --rope-factor 4.0"
     # "--rope-type freq-smooth --rope-factor 4.0"
     # "--rope-type freq-smooth-scaled --rope-factor 4.0"
-    "--rope-type freq-reciprocal --rope-factor 4.0"
+    # "--rope-type freq-reciprocal --rope-factor 4.0"
     "--rope-type freq-reciprocal-scaled --rope-factor 4.0"
 )
 

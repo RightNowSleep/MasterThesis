@@ -474,6 +474,49 @@ def _layer_aware_attn_scale(
     )
 
 
+def _power_layer_attn_scale(
+    head_dim: int,
+    scaling_factor: float,
+    alpha: float,
+    beta: float,
+    layer_idx: int,
+    num_hidden_layers: int,
+) -> float:
+    """
+    Power-law attention temperature scaling.
+
+    Formula
+    -------
+    scale = √(head_dim) × S^α × (1 + β × (layer_idx / N))
+
+    Parameters
+    ----------
+    head_dim : int
+        Dimension of each attention head.
+    scaling_factor : float
+        Sequence length extension ratio S.
+    alpha : float
+        Exponent for the scaling factor S.
+    beta : float
+        Layer-dependent scaling coefficient.
+    layer_idx : int
+        0-based index of this attention layer.
+    num_hidden_layers : int
+        Total number of transformer layers.
+
+    Returns
+    -------
+    float
+        The attention temperature scaling factor.
+    """
+    S = max(1.0, scaling_factor)
+    return (
+        math.sqrt(head_dim)
+        * (S**alpha)
+        * (1.0 + beta * (layer_idx / num_hidden_layers))
+    )
+
+
 # ============================================================================ #
 #  My RoPE  (unified static / dynamic)                                         #
 #                                                                              #
@@ -1610,33 +1653,64 @@ class LlamaFreqReciprocalRotaryEmbedding(nn.Module):
 
 class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbedding):
     """
-    Freq-Reciprocal Block RoPE + attention temperature scaling.
+    Freq-Reciprocal Block RoPE + power-law attention temperature scaling.
 
     Inherits all position-encoding logic from
     ``LlamaFreqReciprocalRotaryEmbedding`` and multiplies the resulting cos/sin
-    values by the layer-dependent global scalar shared across the My RoPE /
-    Block-Layered / Freq-Smooth family:
+    values by a power-law attention temperature:
 
-        scale       = 1 + layer_alpha · log(max(1, seq_len / L_0))
-        layer_alpha = 0.1 · (1 − u_norm)
-        u_norm      = 1 − layer_norm²
-        layer_norm  = 2 · layer_idx / (N − 1) − 1
+        scale = √(head_dim) × S^α × (1 + β × (layer_idx / N))
 
-    The inverted-U profile gives stronger correction to the first and last
-    transformer layers (low attention entropy) and weaker correction to the
-    middle layers (high attention entropy).
+    where:
+        - head_dim: dimension of each attention head
+        - S: sequence length extension ratio = max(1, seq_len / L_0)
+        - α (alpha): exponent for scaling factor S
+        - β (beta): layer-dependent scaling coefficient
+        - layer_idx: 0-based index of this attention layer
+        - N: total number of transformer layers
 
     In static mode the scalar is baked into the cos/sin cache at construction.
     In dynamic mode it is recomputed on every forward pass.
     """
 
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        layer_idx: int = 0,
+        num_hidden_layers: int = 32,
+        dynamic: bool = False,
+        alpha: float = 0.25,
+        beta: float = 0.05,
+    ):
+        super().__init__(
+            dim=dim,
+            max_position_embeddings=max_position_embeddings,
+            base=base,
+            device=device,
+            scaling_factor=scaling_factor,
+            original_max_position_embeddings=original_max_position_embeddings,
+            layer_idx=layer_idx,
+            num_hidden_layers=num_hidden_layers,
+            dynamic=dynamic,
+        )
+        self.alpha = alpha
+        self.beta = beta
+
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
         super()._set_cos_sin_cache(seq_len, device, dtype)
-        attn_scale = _layer_aware_attn_scale(
+        S = max(1.0, seq_len / self.original_max_position_embeddings)
+        attn_scale = _power_layer_attn_scale(
+            self.dim,
+            S,
+            self.alpha,
+            self.beta,
             self.layer_idx,
             self.N,
-            seq_len,
-            self.original_max_position_embeddings,
         )
         self.register_buffer(
             "cos_cached",
@@ -1654,11 +1728,14 @@ class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbeddin
             if seq_len is None:
                 seq_len = x.shape[2]
             cos, sin = super().forward(x, seq_len)
-            attn_scale = _layer_aware_attn_scale(
+            S = max(1.0, seq_len / self.original_max_position_embeddings)
+            attn_scale = _power_layer_attn_scale(
+                self.dim,
+                S,
+                self.alpha,
+                self.beta,
                 self.layer_idx,
                 self.N,
-                seq_len,
-                self.original_max_position_embeddings,
             )
             return (cos * attn_scale).to(x.dtype), (sin * attn_scale).to(x.dtype)
         return super().forward(x, seq_len)
