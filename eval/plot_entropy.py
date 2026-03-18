@@ -230,7 +230,13 @@ def _common_vrange(matrices: List[np.ndarray]):
 # ---------------------------------------------------------------------------
 
 
-def plot_layer_depth_curve(data: dict, out_dir: str, fmt: str, dpi: int) -> None:
+def plot_layer_depth_curve(
+    data: dict,
+    out_dir: str,
+    fmt: str,
+    dpi: int,
+    method_name: str = "",
+) -> None:
     """
     Fig 1 — x=layer index, y=mean entropy, one line per seq-length.
 
@@ -293,7 +299,11 @@ def plot_layer_depth_curve(data: dict, out_dir: str, fmt: str, dpi: int) -> None
         fontsize=_SUPTITLE_FS,
         y=1.01,
     )
-    _savefig(fig, os.path.join(out_dir, f"fig01_layer_depth_curve.{fmt}"), dpi)
+    _savefig(
+        fig,
+        os.path.join(out_dir, f"{method_name}_fig01_layer_depth_curve.{fmt}"),
+        dpi,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +372,13 @@ def _plot_head_layer_heatmap_one(
     _savefig(fig, os.path.join(out_dir, fname), dpi, constrained_layout=True)
 
 
-def plot_head_layer_heatmap(data: dict, out_dir: str, fmt: str, dpi: int) -> None:
+def plot_head_layer_heatmap(
+    data: dict,
+    out_dir: str,
+    fmt: str,
+    dpi: int,
+    method_name: str = "",
+) -> None:
     """Fig 2 — two files: raw entropy and normalised entropy."""
     _plot_head_layer_heatmap_one(
         data,
@@ -370,7 +386,7 @@ def plot_head_layer_heatmap(data: dict, out_dir: str, fmt: str, dpi: int) -> Non
         title_prefix="Raw entropy",
         ylabel="Mean H (nats)",
         out_dir=out_dir,
-        fname=f"fig02_head_layer_heatmap_raw.{fmt}",
+        fname=f"{method_name}_fig02_head_layer_heatmap_raw.{fmt}",
         fmt=fmt,
         dpi=dpi,
     )
@@ -380,7 +396,7 @@ def plot_head_layer_heatmap(data: dict, out_dir: str, fmt: str, dpi: int) -> Non
         title_prefix="Normalised entropy",
         ylabel="Mean H_norm ∈ [0,1]",
         out_dir=out_dir,
-        fname=f"fig02_head_layer_heatmap_norm.{fmt}",
+        fname=f"{method_name}_fig02_head_layer_heatmap_norm.{fmt}",
         fmt=fmt,
         dpi=dpi,
         vrange_fixed=(0.0, 1.0),
@@ -459,6 +475,7 @@ def plot_entropy_vs_position(
     fmt: str,
     dpi: int,
     selected_layers: List[int] | None = None,
+    method_name: str = "",
 ) -> None:
     """Fig 3 — two files: raw and normalised."""
     layers = selected_layers or _auto_select_layers(data, n=4)
@@ -471,18 +488,18 @@ def plot_entropy_vs_position(
         title_prefix="Raw entropy",
         selected_layers=layers,
         out_dir=out_dir,
-        fname=f"fig03_entropy_vs_position_raw.{fmt}",
+        fname=f"{method_name}_fig03_entropy_vs_position_raw.{fmt}",
         fmt=fmt,
         dpi=dpi,
     )
     _plot_entropy_vs_position_one(
         data,
         "norm_entropy_layer_position",
-        ylabel="H_norm ∈ [0,1]",
+        ylabel="Mean normalised entropy  H_norm ∈ [0,1]",
         title_prefix="Normalised entropy",
         selected_layers=layers,
         out_dir=out_dir,
-        fname=f"fig03_entropy_vs_position_norm.{fmt}",
+        fname=f"{method_name}_fig03_entropy_vs_position_norm.{fmt}",
         fmt=fmt,
         dpi=dpi,
     )
@@ -498,6 +515,7 @@ def plot_head_norm_std_by_layer(
     out_dir: str,
     fmt: str,
     dpi: int,
+    method_name: str = "",
 ) -> None:
     """
     Fig 4 — x=layer, y=std of per-head normalised entropy across heads,
@@ -540,7 +558,11 @@ def plot_head_norm_std_by_layer(
     ax.grid(axis="y", linestyle="--", linewidth=0.6, alpha=0.55)
     ax.legend(fontsize=_LEGEND_FS, framealpha=0.8)
 
-    _savefig(fig, os.path.join(out_dir, f"fig04_head_norm_std_by_layer.{fmt}"), dpi)
+    _savefig(
+        fig,
+        os.path.join(out_dir, f"{method_name}_fig04_head_norm_std_by_layer.{fmt}"),
+        dpi,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -635,6 +657,7 @@ def plot_position_head_heatmap(
     fmt: str,
     dpi: int,
     selected_layers: List[int] | None = None,
+    method_name: str = "",
 ) -> None:
     """
     Fig 5 — two files: raw and normalised.
@@ -652,7 +675,7 @@ def plot_position_head_heatmap(
         title_prefix="Raw entropy",
         is_norm=False,
         out_dir=out_dir,
-        fname=f"fig05_position_head_heatmap_raw.{fmt}",
+        fname=f"{method_name}_fig05_position_head_heatmap_raw.{fmt}",
         fmt=fmt,
         dpi=dpi,
     )
@@ -663,7 +686,7 @@ def plot_position_head_heatmap(
         title_prefix="Normalised entropy",
         is_norm=True,
         out_dir=out_dir,
-        fname=f"fig05_position_head_heatmap_norm.{fmt}",
+        fname=f"{method_name}_fig05_position_head_heatmap_norm.{fmt}",
         fmt=fmt,
         dpi=dpi,
     )
@@ -753,6 +776,7 @@ def plot_delta_entropy_heatmap(
     out_dir: str,
     fmt: str,
     dpi: int,
+    method_name: str = "",
 ) -> None:
     """Fig 6 — two files: raw and normalised."""
     if len(data["lengths"]) < 2:
@@ -765,7 +789,7 @@ def plot_delta_entropy_heatmap(
         ylabel="H (nats)",
         title_prefix="Raw entropy",
         out_dir=out_dir,
-        fname=f"fig06_delta_entropy_heatmap_raw.{fmt}",
+        fname=f"{method_name}_fig06_delta_entropy_heatmap_raw.{fmt}",
         fmt=fmt,
         dpi=dpi,
     )
@@ -775,7 +799,7 @@ def plot_delta_entropy_heatmap(
         ylabel="H_norm",
         title_prefix="Normalised entropy",
         out_dir=out_dir,
-        fname=f"fig06_delta_entropy_heatmap_norm.{fmt}",
+        fname=f"{method_name}_fig06_delta_entropy_heatmap_norm.{fmt}",
         fmt=fmt,
         dpi=dpi,
     )
@@ -898,6 +922,7 @@ def plot_entropy_boxplot_violin(
     out_dir: str,
     fmt: str,
     dpi: int,
+    method_name: str = "",
 ) -> None:
     """
     Fig 7 — normalised entropy distribution (box + violin) per layer.
@@ -932,7 +957,7 @@ def plot_entropy_boxplot_violin(
     )
     _savefig(
         fig,
-        os.path.join(out_dir, f"fig07_entropy_boxplot_violin_norm.{fmt}"),
+        os.path.join(out_dir, f"{method_name}_fig07_entropy_boxplot_violin_norm.{fmt}"),
         dpi,
     )
 
@@ -952,7 +977,13 @@ _FIG_FUNCTIONS = [
 ]
 
 
-def plot_all(data: dict, out_dir: str, fmt: str = "png", dpi: int = _DPI) -> None:
+def plot_all(
+    data: dict,
+    out_dir: str,
+    fmt: str = "png",
+    dpi: int = _DPI,
+    method_name: str = "",
+) -> None:
     """
     Generate all seven figures.
 
@@ -962,6 +993,7 @@ def plot_all(data: dict, out_dir: str, fmt: str = "png", dpi: int = _DPI) -> Non
     out_dir : str    destination directory (created if absent)
     fmt     : str    'png' | 'pdf' | 'svg'
     dpi     : int    resolution (raster formats)
+    method_name : str  prefix for output filenames
     """
     os.makedirs(out_dir, exist_ok=True)
 
@@ -974,11 +1006,25 @@ def plot_all(data: dict, out_dir: str, fmt: str = "png", dpi: int = _DPI) -> Non
         print(f"\n[Fig {fig_num}] {fn.__name__}")
         try:
             if fn is plot_entropy_vs_position:
-                fn(data, out_dir, fmt, dpi, selected_layers=selected)
+                fn(
+                    data,
+                    out_dir,
+                    fmt,
+                    dpi,
+                    selected_layers=selected,
+                    method_name=method_name,
+                )
             elif fn is plot_position_head_heatmap:
-                fn(data, out_dir, fmt, dpi, selected_layers=selected)
+                fn(
+                    data,
+                    out_dir,
+                    fmt,
+                    dpi,
+                    selected_layers=selected,
+                    method_name=method_name,
+                )
             else:
-                fn(data, out_dir, fmt, dpi)
+                fn(data, out_dir, fmt, dpi, method_name=method_name)
         except Exception as exc:
             print(f"  [ERROR] {exc}")
 
@@ -1038,6 +1084,9 @@ def main() -> None:
     if not input_path.exists():
         raise FileNotFoundError(f"Input not found: {input_path}")
 
+    stem = input_path.stem
+    method_name = stem.split("_", 1)[1] if "_" in stem else stem
+
     print(f"Loading {input_path} …")
     with open(input_path, "r") as f:
         data = json.load(f)
@@ -1055,15 +1104,29 @@ def main() -> None:
         selected = _auto_select_layers(data, n=4)
         try:
             if fn is plot_entropy_vs_position:
-                fn(data, out_dir, args.fmt, args.dpi, selected_layers=selected)
+                fn(
+                    data,
+                    out_dir,
+                    args.fmt,
+                    args.dpi,
+                    selected_layers=selected,
+                    method_name=method_name,
+                )
             elif fn is plot_position_head_heatmap:
-                fn(data, out_dir, args.fmt, args.dpi, selected_layers=selected)
+                fn(
+                    data,
+                    out_dir,
+                    args.fmt,
+                    args.dpi,
+                    selected_layers=selected,
+                    method_name=method_name,
+                )
             else:
-                fn(data, out_dir, args.fmt, args.dpi)
+                fn(data, out_dir, args.fmt, args.dpi, method_name=method_name)
         except Exception as exc:
             print(f"[ERROR] {exc}")
     else:
-        plot_all(data, out_dir, fmt=args.fmt, dpi=args.dpi)
+        plot_all(data, out_dir, fmt=args.fmt, dpi=args.dpi, method_name=method_name)
 
 
 if __name__ == "__main__":

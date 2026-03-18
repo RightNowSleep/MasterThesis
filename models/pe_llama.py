@@ -475,46 +475,27 @@ def _layer_aware_attn_scale(
 
 
 def _power_layer_attn_scale(
-    head_dim: int,
-    scaling_factor: float,
     alpha: float,
-    beta: float,
     layer_idx: int,
     num_hidden_layers: int,
+    seq_len: int,
+    original_max_position_embeddings: int,
+    block_sizes: torch.Tensor,
+    device=None,
 ) -> float:
-    """
-    Power-law attention temperature scaling.
-
-    Formula
-    -------
-    scale = √(head_dim) × S^α × (1 + β × (layer_idx / N))
-
-    Parameters
-    ----------
-    head_dim : int
-        Dimension of each attention head.
-    scaling_factor : float
-        Sequence length extension ratio S.
-    alpha : float
-        Exponent for the scaling factor S.
-    beta : float
-        Layer-dependent scaling coefficient.
-    layer_idx : int
-        0-based index of this attention layer.
-    num_hidden_layers : int
-        Total number of transformer layers.
-
-    Returns
-    -------
-    float
-        The attention temperature scaling factor.
-    """
-    S = max(1.0, scaling_factor)
-    return (
-        math.sqrt(head_dim)
-        * (S**alpha)
-        * (1.0 + beta * (layer_idx / num_hidden_layers))
+    t = (
+        torch.arange(seq_len, device=device, dtype=torch.float32)
+        / original_max_position_embeddings
     )
+    S_t = (
+        1.0
+        + 0.1
+        * torch.maximum(
+            torch.tensor(1.0, device=device),
+            t,
+        ).log()
+    )
+    return S_t.unsqueeze(-1)
 
 
 # ============================================================================ #
@@ -1705,12 +1686,13 @@ class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbeddin
         super()._set_cos_sin_cache(seq_len, device, dtype)
         S = max(1.0, seq_len / self.original_max_position_embeddings)
         attn_scale = _power_layer_attn_scale(
-            self.dim,
-            S,
-            self.alpha,
-            self.beta,
-            self.layer_idx,
-            self.N,
+            alpha=0.1,
+            layer_idx=self.layer_idx,
+            num_hidden_layers=self.N,
+            seq_len=seq_len,
+            original_max_position_embeddings=self.original_max_position_embeddings,
+            block_sizes=self.block_sizes,
+            device=device,
         )
         self.register_buffer(
             "cos_cached",
@@ -1730,12 +1712,13 @@ class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbeddin
             cos, sin = super().forward(x, seq_len)
             S = max(1.0, seq_len / self.original_max_position_embeddings)
             attn_scale = _power_layer_attn_scale(
-                self.dim,
-                S,
-                self.alpha,
-                self.beta,
-                self.layer_idx,
-                self.N,
+                alpha=0.1,
+                layer_idx=self.layer_idx,
+                num_hidden_layers=self.N,
+                seq_len=seq_len,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                block_sizes=self._compute_block_sizes(S, device=x.device),
+                device=x.device,
             )
             return (cos * attn_scale).to(x.dtype), (sin * attn_scale).to(x.dtype)
         return super().forward(x, seq_len)

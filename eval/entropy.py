@@ -512,7 +512,8 @@ if __name__ == "__main__":
 
     # experiment-spec defaults
     args.model_name = args.model_name or "huggyllama/llama-7b"
-    args.rope_type = "none"
+    args.rope_type = "freq-reciprocal"
+    args.rope_dynamic = True
     args.min_length = 512
     args.max_length = 3072
 
