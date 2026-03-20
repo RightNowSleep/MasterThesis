@@ -51,6 +51,7 @@ ROPE_METHODS=(
     # "--rope-type part-ntk --rope-factor $ROPE_FACTOR"
     # "--rope-type yarn --rope-factor $ROPE_FACTOR"
     "--rope-type freq-reciprocal --rope-factor $ROPE_FACTOR"
+    "--rope-type freq-reciprocal-scaled --rope-factor $ROPE_FACTOR"
 )
 
 # ── Build shared argument string ─────────────────────────────────────────────
