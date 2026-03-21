@@ -124,28 +124,28 @@ def load_model(args, quantization_config=None):
     config : LlamaConfig
         Final model configuration used for loading.
     """
+    print(f"Loading model : {args.model_name}")
+    if args.adapter_path:
+        print(f"  adapter: {args.adapter_path}")
+        config = LlamaConfig.from_pretrained(
+            args.adapter_path,
+            trust_remote_code=True,
+        )
+    else:
+        config = LlamaConfig.from_pretrained(
+            args.model_name,
+            trust_remote_code=True,
+        )
+        config.original_max_position_embeddings = config.max_position_embeddings
+        config.max_position_embeddings = args.max_length
+        config.use_cache = args.use_cache
+        rope_scaling = _build_rope_scaling(args)
+        config.rope_scaling = rope_scaling
+        config._rope_scaling_validation()
+
     print(
-        f"Loading model : {args.model_name}\n"
-        f"  rope-type   : {args.rope_type}\n"
-        f"  rope-factor : {args.rope_factor}\n"
-        f"  rope-dynamic: {args.rope_dynamic}\n"
-        f"  max-length  : {args.max_length}"
-    )
-
-    config = LlamaConfig.from_pretrained(
-        args.model_name,
-        trust_remote_code=True,
-    )
-
-    config.original_max_position_embeddings = config.max_position_embeddings
-    config.max_position_embeddings = args.max_length
-    config.use_cache = args.use_cache
-    rope_scaling = _build_rope_scaling(args)
-    config.rope_scaling = rope_scaling
-    config._rope_scaling_validation()
-
-    print(f"  rope_scaling resolved: {config.rope_scaling}")
-    print(
+        f"  rope-scaling   : {config.rope_scaling}\n"
+        f"  max-length  : {config.max_position_embeddings}\n"
         f"  original_max_position_embeddings: {config.original_max_position_embeddings}"
     )
 

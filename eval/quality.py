@@ -2,16 +2,21 @@ import gc
 import os
 import re
 import torch
+import numpy as np
 from datasets import load_dataset
 from tqdm import tqdm
 from transformers import pipeline
 import argparse
 import json
 import time
+
 from models.model_loader import load_model, load_tokenizer, add_args_model
 
 
-# (1) Basic template
+# ---------------------------------------------------------------------------
+# Prompt templates — text (legacy) mode
+# ---------------------------------------------------------------------------
+
 PROMPT_0SHOT = """Please read the following text and answer the question below.
 
 <text>
@@ -27,7 +32,6 @@ Choices:
 
 Format your response as follows: "The correct answer is (insert answer here)"."""
 
-# (2) No context template
 PROMPT_0SHOT_NO_CONTEXT = """What is the correct answer to this question: $Q$
 Choices:
 (A) $C_A$
@@ -37,7 +41,6 @@ Choices:
 
 What is the single, most likely answer choice? Format your response as follows: "The correct answer is (insert answer here)"."""
 
-# (3) RAG template
 PROMPT_0SHOT_RAG = """Please read the following retrieved text chunks and answer the question below.
 
 <text>
@@ -53,7 +56,6 @@ Choices:
 
 Format your response as follows: "The correct answer is (insert answer here)"."""
 
-# (4) COT reasoning template
 PROMPT_0SHOT_COT = """Please read the following text and answer the questions below.
 
 <text>
@@ -69,7 +71,6 @@ Choices:
 
 Let's think step by step:"""
 
-# (5) COT answer template
 PROMPT_0SHOT_COT_ANS = """Please read the following text and answer the questions below.
 
 The text is too long and omitted here.
@@ -85,36 +86,96 @@ Let's think step by step: $COT$
 
 Based on the above, what is the single, most likely answer choice? Format your response as follows: "The correct answer is (insert answer here)"."""
 
+# QuALITY dataset prompt for text mode
+PROMPT_QUALITY_TEXT = """You are provided a story and a multiple-choice question with 4 possible answers (marked by A, B, C, D). Choose the best answer by writing its corresponding letter (either A, B, C, or D).
+
+Story:
+$DOC$
+
+Question and Possible Answers:
+$Q$
+ (A) $C_A$
+ (B) $C_B$
+ (C) $C_C$
+ (D) $C_D$
+
+Format your response as follows: "The correct answer is (insert answer here)"."""
+
 PROMPT_MAP = {
     "0shot": PROMPT_0SHOT,
     "0shot_no_context": PROMPT_0SHOT_NO_CONTEXT,
     "0shot_rag": PROMPT_0SHOT_RAG,
     "0shot_cot": PROMPT_0SHOT_COT,
     "0shot_cot_ans": PROMPT_0SHOT_COT_ANS,
+    "quality": PROMPT_QUALITY_TEXT,
 }
+
+# ---------------------------------------------------------------------------
+# Prompt templates — logit mode (prompt ends with "(" so model predicts A/B/C/D)
+# ---------------------------------------------------------------------------
+
+PROMPT_LOGIT_LONGBENCH_V2 = """Please read the following text and answer the question below.
+
+<text>
+{context}
+</text>
+
+What is the correct answer to this question: {question}
+Choices:
+(A) {choice_A}
+(B) {choice_B}
+(C) {choice_C}
+(D) {choice_D}
+
+The correct answer is ("""
+
+PROMPT_LOGIT_QUALITY = """You are provided a story and a multiple-choice question with 4 possible answers (marked by A, B, C, D). Choose the best answer by writing its corresponding letter (either A, B, C, or D).
+
+Story:
+{story}
+
+Question and Possible Answers:
+{question}
+ (A) {a}
+ (B) {b}
+ (C) {c}
+ (D) {d}
+
+Answer: ("""
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
 CHOICES = ["A", "B", "C", "D"]
 ANSWER_PREFIX = "The correct answer is ("
 
+# ---------------------------------------------------------------------------
+# Evaluator
+# ---------------------------------------------------------------------------
+
 
 class QualityEvaluator:
     r"""
-    QualityEvaluator for computing QA accuracy of long-context models on the LongBench v2 dataset.
+    MCQ quality evaluator for long-context models.
 
-    Attributes:
-        model: Language model for computing logits
-        tokenizer: Tokenizer for processing text
-        dataset_name: Dataset name
-        subset: Dataset subset name
-        split: Dataset split
-        limit: Limit on number of samples to evaluate
-        max_length: Maximum context token length
-        aggressive_memory: Whether to enable aggressive memory management
-        cot: Whether to use Chain of Thought
-        no_context: Whether to not use context
-        rag: Number of retrieval chunks to use in RAG mode
-        save_dir: Directory to save results
-        save_file: Filename to save results
+    Supports two datasets
+    ---------------------
+    * **LongBench-v2** (``zai-org/LongBench-v2``) — default dataset, single split "train".
+    * **QuALITY** (``emozilla/quality``) — SCROLLS/QuALITY benchmark, splits "train"/"validation".
+
+    Scoring modes
+    -------------
+    * ``"logit"`` *(default)* — reads the raw next-token logit for each of the four
+      choice letters.  Robust against instruction-following failures; never produces
+      a parse error.  Not compatible with COT/RAG (those require text generation).
+    * ``"text"`` — generates up to 128 tokens and extracts the answer via regex.
+      Required for COT / RAG modes; prone to high parse-failure rates on base models.
+
+    Attributes
+    ----------
+    model, tokenizer, dataset_name, subset, split, limit, max_length,
+    aggressive_memory, cot, no_context, rag, scoring_mode, save_dir, save_file
     """
 
     def __init__(
@@ -130,27 +191,41 @@ class QualityEvaluator:
         cot: bool = False,
         no_context: bool = False,
         rag: int = 0,
+        scoring_mode: str = "logit",
         save_dir: str = "results/quality",
         save_file: str = None,
     ):
         r"""
-        Initialize the QualityEvaluator.
+        Initialize the quality evaluator.
 
         Args:
-            model: Language model (required), pretrained model for evaluation
-            tokenizer: Tokenizer (required), tokenizer for processing text
-            dataset_name (str, optional): Dataset name, default is "zai-org/LongBench-v2"
-            subset (str, optional): Dataset subset/config name, e.g., "narrativeqa", "hotpotqa", etc.
-            split (str, optional): Dataset split, default is "train"
-            limit (int, optional): Limit on number of samples to evaluate
-            max_length (int, optional): Maximum context token length
-            aggressive_memory (bool, optional): Whether to enable aggressive memory management, default is True
-            cot (bool, optional): Whether to use Chain of Thought, default is False
-            no_context (bool, optional): Whether to not use context, default is False
-            rag (int, optional): Number of retrieval chunks to use in RAG mode, default is 0
-            save_dir (str, optional): Directory to save results, default is "results/quality"
-            save_file (str, optional): Filename to save results, default is None
+            model: The model to evaluate.
+            tokenizer: The tokenizer to use for the model.
+            dataset_name: The name of the dataset to use.
+            subset: The subset of the dataset to use.
+            split: The split of the dataset to use.
+            limit: The number of examples to evaluate.
+            max_length: The maximum length of the input sequence.
+            aggressive_memory: Whether to use aggressive memory.
+            cot: Whether to use COT mode.
+            no_context: Whether to evaluate without the long context.
+            rag: The number of retrieved chunks to use.
+            scoring_mode: The scoring mode to use.
+            save_dir: The directory to save the results.
+            save_file: The filename to save the results to.
         """
+        # ── Validate scoring_mode / mode combinations ─────────────────── #
+        assert scoring_mode in (
+            "logit",
+            "text",
+        ), "scoring_mode must be 'logit' or 'text'"
+        if scoring_mode == "logit" and (cot or rag > 0):
+            print(
+                "[WARNING] COT and RAG modes require text generation; "
+                "overriding scoring_mode to 'text'."
+            )
+            scoring_mode = "text"
+
         self.model = model.eval()
         self.config = model.config
         self.tokenizer = tokenizer
@@ -163,23 +238,38 @@ class QualityEvaluator:
         self.cot = cot
         self.no_context = no_context
         self.rag = rag
+        self.scoring_mode = scoring_mode
 
-        # Determine prompt type based on running mode
-        if self.rag > 0:
-            self.prompt_type = "0shot_rag"
-        elif self.cot:
-            self.prompt_type = "0shot_cot"
-        elif self.no_context:
-            self.prompt_type = "0shot_no_context"
+        # Infer dataset type from name
+        self.dataset_type = self._infer_dataset_type(dataset_name)
+
+        # Determine prompt type for text mode
+        if scoring_mode == "text":
+            if self.rag > 0:
+                self.prompt_type = "0shot_rag"
+            elif self.cot:
+                self.prompt_type = "0shot_cot"
+            elif self.no_context:
+                self.prompt_type = "0shot_no_context"
+            elif self.dataset_type == "quality":
+                self.prompt_type = "quality"
+            else:
+                self.prompt_type = "0shot"
         else:
-            self.prompt_type = "0shot"
+            self.prompt_type = None
 
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
+        # Choice token IDs (A / B / C / D)
+        self.choice_tokens = self._get_choice_tokens()
+
+        # Load dataset
         self.dataset = self._load_and_preprocess_dataset()
-        self.pipe = self._setup_pipeline()
+
+        # Set up generation pipeline only for text mode
+        self.pipe = self._setup_pipeline() if scoring_mode == "text" else None
 
         self.save_dir = save_dir
         os.makedirs(self.save_dir, exist_ok=True)
@@ -187,12 +277,39 @@ class QualityEvaluator:
             save_file if save_file else f"{time.strftime('%Y%m%d-%H%M%S')}.json"
         )
 
-    def _setup_pipeline(self):
-        r"""
-        Set up text generation pipeline
+    # ------------------------------------------------------------------ #
+    # Private helpers
+    # ------------------------------------------------------------------ #
+
+    def _infer_dataset_type(self, dataset_name: str) -> str:
+        """
+        Infer the dataset type from the name.
+
+        Args:
+            dataset_name: The name of the dataset to use.
 
         Returns:
-            pipeline: Text generation pipeline object
+            dataset_type: The dataset type, either 'quality' or 'longbench_v2'.
+        """
+        if "quality" in dataset_name.lower():
+            return "quality"
+        return "longbench_v2"
+
+    def _get_choice_tokens(self) -> list:
+        """
+        Get the choice letters ('A choice letters ('A'/'B'/'C'/'D').
+
+        Returns:
+            choice_tokens: The token IDs for the choice letters ('A'/'B'/'C'/'D').
+        """
+        return [self.tokenizer.encode(c, add_special_tokens=False)[0] for c in CHOICES]
+
+    def _setup_pipeline(self) -> pipeline:
+        """
+        Set up the text-generation pipeline.
+
+        Returns:
+            pipe: The text-generation pipeline.
         """
         return pipeline(
             "text-generation",
@@ -201,56 +318,174 @@ class QualityEvaluator:
         )
 
     def _load_and_preprocess_dataset(self):
-        """Load dataset"""
-        print(
-            f"Loading dataset {self.dataset_name} (Subset: {self.subset}, Split: {self.split})..."
-        )
-        dataset = load_dataset(self.dataset_name, self.subset, split=self.split)
-
-        if self.limit:
-            dataset = dataset.select(range(min(self.limit, len(dataset))))
-
-        return dataset
-
-    def _prepare_prompt(self, sample, cot_response: str = None):
-        r"""
-        Prepare the model prompt with truncation strategy.
-
-        Strategy:
-        1. Build prompt from template
-        2. Calculate prompt token length
-        3. Truncate prompt by removing half from front and half from back
-        4. Concatenate final prompt
-
-        Args:
-            sample: Data sample
-            cot_response (str, optional): COT response, used for COT_ANS mode
+        """
+        Load and optionally limit the dataset.
 
         Returns:
-            str: Prepared prompt text
+            dataset: The loaded dataset.
         """
-        prompt_type = "0shot_cot_ans" if cot_response else self.prompt_type
-        prompt_template = PROMPT_MAP.get(prompt_type, PROMPT_0SHOT)
+        print(
+            f"Loading dataset {self.dataset_name} "
+            f"(subset: {self.subset}, split: {self.split})..."
+        )
+        dataset = load_dataset(self.dataset_name, self.subset, split=self.split)
+        if self.limit:
+            dataset = dataset.select(range(min(self.limit, len(dataset))))
+        return dataset
 
-        context = sample.get("context", "")
+    def _get_answer_label(self, sample) -> str:
+        """
+        Get the correct answer letter ('A'/'B'/'C'/'D') for a sample.
 
-        if prompt_type == "0shot_rag" and self.rag > 0:
-            retrieved = sample["retrieved_context"][: self.rag]
-            retrieved = sorted(retrieved, key=lambda x: x["c_idx"])
-            context = "\n\n".join(
-                [
-                    f"Retrieved chunk {idx + 1}: {x['content']}"
-                    for idx, x in enumerate(retrieved)
-                ]
+        Args:
+            sample: The sample from the dataset.
+
+        Returns:
+            answer_label: The correct answer letter ('A'/'B'/'C'/'D').
+        LongBench-v2 stores the answer as a letter string already.
+        QuALITY stores the answer as an integer index 0-3.
+        """
+        if self.dataset_type == "quality":
+            return CHOICES[int(sample["answer"])]
+        return sample["answer"]  # already 'A'/'B'/'C'/'D'
+
+    # ------------------------------------------------------------------ #
+    # Logit scoring
+    # ------------------------------------------------------------------ #
+
+    def _prepare_logit_prompt(self, sample) -> str:
+        """Build the prompt for logit scoring (ends with '(' for the model to complete)."""
+        if self.dataset_type == "quality":
+            options = sample.get("options", ["", "", "", ""])
+            context = sample.get("article", "")
+            raw = PROMPT_LOGIT_QUALITY.format(
+                story=context.strip(),
+                question=sample["question"].strip(),
+                a=options[0].strip(),
+                b=options[1].strip(),
+                c=options[2].strip(),
+                d=options[3].strip(),
+            )
+        else:  # longbench_v2
+            raw = PROMPT_LOGIT_LONGBENCH_V2.format(
+                context=sample.get("context", "").strip(),
+                question=sample["question"].strip(),
+                choice_A=sample["choice_A"].strip(),
+                choice_B=sample["choice_B"].strip(),
+                choice_C=sample["choice_C"].strip(),
+                choice_D=sample["choice_D"].strip(),
             )
 
+        if self.max_length is not None:
+            input_ids = self.tokenizer.encode(raw)
+            if len(input_ids) > self.max_length:
+                half = self.max_length // 2
+                input_ids = input_ids[:half] + input_ids[-half:]
+                raw = self.tokenizer.decode(input_ids, skip_special_tokens=True)
+
+        return raw
+
+    @torch.no_grad()
+    def _evaluate_logit(self, sample) -> dict:
+        """
+        Score a sample via first-token logits.
+
+        Args:
+            sample: The sample from the dataset.
+
+        Returns:
+            dict: A dictionary with the model's prediction, correctness, and response.
+                - prediction: The model's prediction ('A'/'B'/'C'/'D').
+                - correct: Whether the model's prediction is correct.
+                - parse_failed: Whether the model's response failed to be parsed.
+                - response: The model's response, formatted as "[logit] A={v:.2f} B={v:.2f} C={v:.2f} D={v:.2f}]"
+                    - False otherwise.
+        """
+        prompt = self._prepare_logit_prompt(sample)
+
+        inputs = self.tokenizer(prompt, return_tensors="pt")
+        input_ids = inputs.input_ids
+        attention_mask = inputs.attention_mask
+
+        output = self.model.generate(
+            input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=1,
+            return_dict_in_generate=True,
+            output_scores=True,
+            pad_token_id=self.tokenizer.eos_token_id,
+        )
+
+        # output.scores is a tuple of length 1 (one generated token);
+        # scores[0] has shape [batch=1, vocab_size]
+        scores = output.scores[0][0]
+        choice_logits = [scores[t].float().cpu().item() for t in self.choice_tokens]
+        prediction_idx = int(np.argmax(choice_logits))
+        prediction = CHOICES[prediction_idx]
+
+        answer = self._get_answer_label(sample)
+        correct = prediction == answer
+
+        logit_str = " ".join(f"{c}={v:.2f}" for c, v in zip(CHOICES, choice_logits))
+        return {
+            "prediction": prediction,
+            "correct": correct,
+            "parse_failed": False,
+            "response": f"[logit] {logit_str}",
+        }
+
+    # ------------------------------------------------------------------ #
+    # Text scoring (legacy)
+    # ------------------------------------------------------------------ #
+
+    def _prepare_text_prompt(self, sample, cot_response: str = None) -> str:
+        """
+        Build the prompt for text-generation scoring.
+
+        Args:
+            sample: The sample from the dataset.
+            cot_response: The COT response to use for the prompt, if None otherwise.
+
+        Returns:
+            str: The prompt prompt string.
+        """
+        prompt_type = "0shot_cot_ans" if cot_response else self.prompt_type
+
+        # For QuALITY dataset, normalise field names to the shared template variables
+        if self.dataset_type == "quality":
+            options = sample.get("options", ["", "", "", ""])
+            context = sample.get("article", "")
+            choice_a, choice_b, choice_c, choice_d = (
+                options[0],
+                options[1],
+                options[2],
+                options[3],
+            )
+            prompt_type_actual = "quality" if prompt_type == "0shot" else prompt_type
+        else:
+            context = sample.get("context", "")
+            choice_a = sample.get("choice_A", "")
+            choice_b = sample.get("choice_B", "")
+            choice_c = sample.get("choice_C", "")
+            choice_d = sample.get("choice_D", "")
+            prompt_type_actual = prompt_type
+
+        if prompt_type_actual == "0shot_rag" and self.rag > 0:
+            retrieved = sample.get("retrieved_context", [])[: self.rag]
+            retrieved = sorted(retrieved, key=lambda x: x["c_idx"])
+            context = "\n\n".join(
+                f"Retrieved chunk {idx + 1}: {x['content']}"
+                for idx, x in enumerate(retrieved)
+            )
+
+        prompt_template = PROMPT_MAP.get(prompt_type_actual, PROMPT_0SHOT)
         prompt = (
             prompt_template.replace("$DOC$", context.strip())
             .replace("$Q$", sample["question"].strip())
-            .replace("$C_A$", sample["choice_A"].strip())
-            .replace("$C_B$", sample["choice_B"].strip())
-            .replace("$C_C$", sample["choice_C"].strip())
-            .replace("$C_D$", sample["choice_D"].strip())
+            .replace("$C_A$", choice_a.strip())
+            .replace("$C_B$", choice_b.strip())
+            .replace("$C_C$", choice_c.strip())
+            .replace("$C_D$", choice_d.strip())
         )
 
         if cot_response:
@@ -259,49 +494,49 @@ class QualityEvaluator:
         if self.max_length is not None:
             input_ids = self.tokenizer.encode(prompt)
             if len(input_ids) > self.max_length:
-                input_ids = (
-                    input_ids[: self.max_length // 2]
-                    + input_ids[-self.max_length // 2 :]
-                )
+                half = self.max_length // 2
+                input_ids = input_ids[:half] + input_ids[-half:]
                 prompt = self.tokenizer.decode(input_ids, skip_special_tokens=True)
 
         return prompt
 
-    def _extract_answer(self, response: str):
-        r"""
-        Extract answer from model response
+    def _extract_answer(self, response: str) -> Optional[str]:
+        """
+        Extract the answer from the model's response.
 
         Args:
-            response (str): Full response text from the model
+            response: The model's response, formatted as "The correct answer is (A-D)" or "The correct answer is A-D".
 
         Returns:
-            Optional[str]: Extracted answer (A/B/C/D), or None if extraction fails
+            Optional[str]: The extracted answer ('A'/'B'/'C'/'D').
         """
         response = response.replace("*", "")
-        match = re.search(r"The correct answer is \(([A-D])\)", response)
-        if match:
-            return match.group(1)
-        match = re.search(r"The correct answer is ([A-D])", response)
-        if match:
-            return match.group(1)
+        m = re.search(r"The correct answer is \(([A-D])\)", response)
+        if m:
+            return m.group(1)
+        m = re.search(r"The correct answer is ([A-D])", response)
+        if m:
+            return m.group(1)
         return None
 
     @torch.no_grad()
-    def evaluate_sample(self, sample):
-        r"""
-        Evaluate a single sample
+    def _evaluate_text(self, sample) -> dict:
+        """
+        Score a sample via text generation + regex parsing.
 
         Args:
-            sample: Data sample
+            sample: The sample from the dataset.
 
         Returns:
-            dict: Evaluation result containing prediction, correct, response, etc.;
-                  returns None if prompt preparation fails
+            dict: A dictionary with the model's prediction, correctness, and response.
+                - prediction: The model's prediction ('A'/'B'/'C'/'D').
+                - correct: Whether the model's prediction is correct.
+                - parse_failed: Whether the model's response failed to be parsed.
+                - response: The model's response, formatted as "The correct answer is (A-D)".
+                - response_cot: The model's response, formatted as "The correct answer is (A-D)".
+                    - None otherwise.
         """
-        prompt = self._prepare_prompt(sample)
-        if prompt is None:
-            return None
-
+        prompt = self._prepare_text_prompt(sample)
         cot_response = None
 
         if self.cot:
@@ -311,12 +546,8 @@ class QualityEvaluator:
                 max_new_tokens=1024,
                 do_sample=False,
             )[0]["generated_text"][len(prompt) :]
-
             cot_response = cot_output.strip()
-
-            prompt = self._prepare_prompt(sample, cot_response=cot_response)
-            if prompt is None:
-                return None
+            prompt = self._prepare_text_prompt(sample, cot_response=cot_response)
 
         output = self.pipe(
             prompt,
@@ -327,8 +558,7 @@ class QualityEvaluator:
 
         response = output.strip()
         prediction = self._extract_answer(response)
-
-        answer = sample["answer"]
+        answer = self._get_answer_label(sample)
         correct = prediction is not None and answer == prediction
 
         result = {
@@ -337,36 +567,55 @@ class QualityEvaluator:
             "parse_failed": prediction is None,
             "response": response,
         }
-
         if cot_response is not None:
             result["response_cot"] = cot_response
-
         return result
 
-    def evaluate(self):
-        r"""
-        Execute evaluation
+    # ------------------------------------------------------------------ #
+    # Public API
+    # ------------------------------------------------------------------ #
+
+    @torch.no_grad()
+    def evaluate_sample(self, sample) -> dict:
+        """
+        Dispatch to logit or text scoring based on self.scoring_mode.
+
+        Args:
+            sample: The sample from the dataset.
 
         Returns:
-            dict: Evaluation results containing accuracy, correct count, total count, etc.
-                - accuracy (float): Accuracy, range [0, 100]
-                - correct_count (int): Number of correctly predicted samples
-                - total_samples (int): Total number of samples
-                - wrong_count (int): Number of samples with wrong answers
-                - parse_fail_count (int): Number of samples where answer could not be parsed
-                - skip_count (int): Number of samples skipped due to prompt preparation failure
+            dict: A dictionary with the model's prediction, correctness, and response.
+                - prediction: The model's prediction ('A'/'B'/'C'/'D').
+                - correct: Whether the model's prediction is correct.
+                - parse_failed: Whether the model's response failed to be parsed.
+                - response: The model's response, formatted as "The correct answer is (A-D)".
+                - response_cot: The model's response, formatted as "The correct answer is (A-D)".
+                    - None otherwise.
+        """
+        if self.scoring_mode == "logit":
+            return self._evaluate_logit(sample)
+        else:
+            return self._evaluate_text(sample)
+
+    def evaluate(self) -> dict:
+        r"""
+        Run the full evaluation over the loaded dataset.
+
+        Returns
+        -------
+        dict
+            summary dict with keys: accuracy, correct_count, total_samples,
+            wrong_count, parse_fail_count, skip_count.
         """
         correct_count = 0
         total_samples = 0
         wrong_count = 0
         parse_fail_count = 0
-        skip_count = 0  # Skip count due to prompt preparation failure
+        skip_count = 0
         sample_records = []
 
-        pbar = tqdm(
-            total=len(self.dataset),
-            desc=f"Quality Evaluation ({self.prompt_type})",
-        )
+        desc = f"Quality Evaluation [{self.scoring_mode}] ({self.dataset_type})"
+        pbar = tqdm(total=len(self.dataset), desc=desc)
 
         for sample in self.dataset:
             eval_result = self.evaluate_sample(sample)
@@ -384,15 +633,28 @@ class QualityEvaluator:
             else:
                 wrong_count += 1
 
-            record = {
-                "question": sample.get("question", ""),
-                "answer": sample.get("answer", ""),
-                "pred": eval_result["prediction"],
-                "judge": eval_result["correct"],
-                "parse_failed": eval_result["parse_failed"],
-                "response": eval_result["response"],
-                "context_preview": sample.get("context", "")[:1000],
-            }
+            # Build per-sample record
+            if self.dataset_type == "quality":
+                options = sample.get("options", ["", "", "", ""])
+                record = {
+                    "question": sample.get("question", ""),
+                    "answer": self._get_answer_label(sample),
+                    "pred": eval_result["prediction"],
+                    "judge": eval_result["correct"],
+                    "parse_failed": eval_result["parse_failed"],
+                    "response": eval_result["response"],
+                    "context_preview": sample.get("article", "")[:1000],
+                }
+            else:
+                record = {
+                    "question": sample.get("question", ""),
+                    "answer": self._get_answer_label(sample),
+                    "pred": eval_result["prediction"],
+                    "judge": eval_result["correct"],
+                    "parse_failed": eval_result["parse_failed"],
+                    "response": eval_result["response"],
+                    "context_preview": sample.get("context", "")[:1000],
+                }
             if "response_cot" in eval_result:
                 record["response_cot"] = eval_result["response_cot"]
             sample_records.append(record)
@@ -407,10 +669,9 @@ class QualityEvaluator:
 
         pbar.close()
 
+        accuracy = correct_count / total_samples * 100 if total_samples > 0 else 0.0
         summary = {
-            "accuracy": (
-                correct_count / total_samples * 100 if total_samples > 0 else 0.0
-            ),
+            "accuracy": accuracy,
             "correct_count": correct_count,
             "total_samples": total_samples,
             "wrong_count": wrong_count,
@@ -430,27 +691,31 @@ class QualityEvaluator:
         return summary
 
 
-def generate_save_filename(args):
-    """
-    Generate filename based on model and RoPE configuration.
+# ---------------------------------------------------------------------------
+# CLI helpers
+# ---------------------------------------------------------------------------
 
-    Examples:
-        --rope-type none                              → llama-7b_none.json
-        --rope-type linear --rope-dynamic             → llama-7b_linear_dynamic.json
-        --rope-type linear --rope-factor 4.0          → llama-7b_linear_factor4_0.json
-        --rope-type ntk --rope-factor 2.5             → llama-7b_ntk_factor2_5.json
+
+def generate_save_filename(args) -> str:
+    """
+    Generate the filename filename for saving the evaluation results.
+
+    Args:
+        args: The argparse.Namespace object containing the command-line arguments.
+
+    Returns:
+        str: The filename.
     """
     model_name = args.model_name.split("/")[-1]
-
     parts = [model_name, args.rope_type]
-
     if args.rope_type != "none":
         if args.rope_factor is not None:
             factor_str = str(args.rope_factor).replace(".", "_")
             parts.append(f"factor{factor_str}")
         elif args.rope_dynamic:
             parts.append("dynamic")
-
+    parts.append(args.dataset_name)
+    parts.append(args.scoring_mode)
     return "_".join(parts) + ".json"
 
 
@@ -459,27 +724,56 @@ def add_args_quality(parser):
         "--dataset-name",
         type=str,
         default="zai-org/LongBench-v2",
-        help="Dataset name",
+        choices=["zai-org/LongBench-v2", "emozilla/quality"],
+        help=(
+            "Dataset name. Supported: "
+            "'zai-org/LongBench-v2' (default), 'emozilla/quality' (QuALITY/SCROLLS)."
+        ),
     )
     parser.add_argument("--subset", type=str, default=None, help="Dataset subset")
-    parser.add_argument("--split", type=str, default="train", help="Dataset split")
-    parser.add_argument("--limit", type=int, default=10, help="Dataset limit")
-    parser.add_argument("--cot", action="store_true", help="Whether to use COT")
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="train",
+        help="Dataset split. LongBench-v2: 'train'. QuALITY: 'train' or 'validation'.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Number of samples to evaluate",
+    )
+    parser.add_argument(
+        "--cot",
+        action="store_true",
+        help="Use Chain-of-Thought (text mode only)",
+    )
     parser.add_argument(
         "--no-context",
         action="store_true",
-        help="Whether to not use context",
+        help="Evaluate without context (text mode only)",
     )
     parser.add_argument(
         "--rag",
         type=int,
         default=0,
-        help="Whether to use RAG, 0 means not using",
+        help="Number of RAG chunks to use (text mode only, LongBench-v2 only)",
     )
     parser.add_argument(
         "--aggressive-memory",
         action="store_true",
-        help="Aggressive memory management",
+        help="Clear GPU cache after each sample",
+    )
+    parser.add_argument(
+        "--scoring-mode",
+        type=str,
+        default="logit",
+        choices=["logit", "text"],
+        help=(
+            "Scoring mode. "
+            "'logit' (default): reads first-token logits for A/B/C/D — robust, no parse failures. "
+            "'text' (legacy): generates text and parses with regex — required for COT/RAG."
+        ),
     )
     parser.add_argument(
         "--save-dir",
@@ -514,12 +808,15 @@ if __name__ == "__main__":
         no_context=args.no_context,
         rag=args.rag,
         aggressive_memory=args.aggressive_memory,
+        scoring_mode=args.scoring_mode,
         save_dir=args.save_dir,
         save_file=args.save_file,
     )
 
     results = evaluator.evaluate()
     print(f"\n=== Evaluation Complete ===")
+    print(f"Dataset       : {args.dataset_name}")
+    print(f"Scoring mode  : {args.scoring_mode}")
     print(f"Accuracy      : {results['accuracy']:.2f}%")
     print(f"Correct       : {results['correct_count']} / {results['total_samples']}")
     print(f"Wrong         : {results['wrong_count']}")

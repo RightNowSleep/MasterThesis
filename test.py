@@ -22,24 +22,19 @@ def generate_save_filename(args):
         --rope-type ntk --rope-factor 2.5             → llama-7b_ntk_factor2_5.json
     """
     model_name = args.model_name.split("/")[-1]
-
     parts = [model_name, args.rope_type]
-
     if args.rope_type != "none":
         if args.rope_factor is not None:
             factor_str = str(args.rope_factor).replace(".", "_")
             parts.append(f"factor{factor_str}")
         elif args.rope_dynamic:
             parts.append("dynamic")
-
     return "_".join(parts) + ".json"
 
 
 def test_perplexity(args):
     (model, config), tokenizer = load_model(args), load_tokenizer(args)
-
     args.save_file = args.save_file or generate_save_filename(args)
-
     evaluator = PerplexityEvaluator(
         model=model,
         tokenizer=tokenizer,
@@ -63,7 +58,6 @@ def test_perplexity(args):
 
 def test_passkey(args):
     (model, config), tokenizer = load_model(args), load_tokenizer(args)
-
     args.save_file = args.save_file or generate_save_filename(args)
     evaluator = PasskeyEvaluator(
         model=model,
@@ -87,7 +81,6 @@ def test_passkey(args):
 
 def test_quality(args):
     (model, config), tokenizer = load_model(args), load_tokenizer(args)
-
     args.save_file = args.save_file or generate_save_filename(args)
     evaluator = QualityEvaluator(
         model=model,
@@ -101,6 +94,7 @@ def test_quality(args):
         no_context=args.no_context,
         rag=args.rag,
         aggressive_memory=args.aggressive_memory,
+        scoring_mode=args.scoring_mode,
         save_dir=args.save_dir,
         save_file=args.save_file,
     )
@@ -110,7 +104,6 @@ def test_quality(args):
 
 def test_performance(args):
     (model, config), tokenizer = load_model(args), load_tokenizer(args)
-
     args.save_file = args.save_file or generate_save_filename(args)
     evaluator = PerformanceEvaluator(
         model=model,
@@ -133,28 +126,25 @@ def test_performance(args):
 
 
 if __name__ == "__main__":
-    # Create main argument parser
     parser = argparse.ArgumentParser(description="Run different evaluation tests")
-
-    # Create subcommand parser
     subparsers = parser.add_subparsers(dest="test", help="Type of test to run")
 
-    # ---------------------- Perplexity test subcommand ----------------------
+    # ── Perplexity ────────────────────────────────────────────────────── #
     parser_perplexity = subparsers.add_parser("perplexity", help="Run perplexity test")
     parser_perplexity = add_args_model(parser_perplexity)
     parser_perplexity = add_args_perplexity(parser_perplexity)
 
-    # ---------------------- Passkey test subcommand ----------------------
+    # ── Passkey ───────────────────────────────────────────────────────── #
     parser_passkey = subparsers.add_parser("passkey", help="Run passkey test")
     parser_passkey = add_args_model(parser_passkey)
     parser_passkey = add_args_passkey(parser_passkey)
 
-    # ---------------------- Quality test subcommand ----------------------
+    # ── Quality ───────────────────────────────────────────────────────── #
     parser_quality = subparsers.add_parser("quality", help="Run quality test")
     parser_quality = add_args_model(parser_quality)
     parser_quality = add_args_quality(parser_quality)
 
-    # ---------------------- Performance test subcommand ----------------------
+    # ── Performance ───────────────────────────────────────────────────── #
     parser_performance = subparsers.add_parser(
         "performance",
         help="Run performance test",
@@ -164,7 +154,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Run the corresponding test function based on the selected test type
     if args.test == "perplexity":
         test_perplexity(args)
     elif args.test == "passkey":

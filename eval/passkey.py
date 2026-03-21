@@ -87,11 +87,7 @@ class BaseDataLoader(ABC):
 
 
 class SyntheticDataLoader(BaseDataLoader):
-    """
-    Synthetic data loader
-
-    Generates synthetic corpus using repeated garbage text for passkey testing
-    """
+    """Generates synthetic corpus using repeated garbage text for passkey testing"""
 
     def __init__(self, tokenizer, length: int):
         """
@@ -153,8 +149,6 @@ class SyntheticDataLoader(BaseDataLoader):
         ]
 
         lines = [self.task_description]
-        # FIX Bug 1: prev_pos is always relative to the start of current garbage_tokens subarray,
-        # reset to 0 after each slice to avoid absolute offset causing subsequent pass keys to stack
         prev_pos = 0
 
         for i, info_line in enumerate(information_lines):
@@ -175,7 +169,7 @@ class SyntheticDataLoader(BaseDataLoader):
                 lines.append(garbage_segment)
                 lines.append(info_line)
                 garbage_tokens = garbage_tokens[insert_pos + info_token_count :]
-                prev_pos = 0  # FIX Bug 1: Reset to 0 after slice
+                prev_pos = 0
             else:
                 lines.append(info_line)
 
@@ -184,18 +178,13 @@ class SyntheticDataLoader(BaseDataLoader):
             lines.append(final_garbage)
 
         lines.append(final_question)
-
         prompt_text = "".join(lines)
 
         return prompt_text, pass_keys, target_key
 
 
 class RealDataLoader(BaseDataLoader):
-    """
-    Real data loader
-
-    Loads text from real datasets for passkey testing
-    """
+    """Loads text from real datasets for passkey testing"""
 
     def __init__(
         self,
@@ -297,8 +286,6 @@ class RealDataLoader(BaseDataLoader):
         ]
 
         lines = [self.task_description]
-        # FIX Bug 1: prev_pos is always relative to the start of current garbage_docs subarray,
-        # reset to 0 after each slice to avoid absolute offset causing subsequent pass keys to stack
         prev_pos = 0
 
         for i, info_line in enumerate(information_lines):
@@ -317,7 +304,7 @@ class RealDataLoader(BaseDataLoader):
                 lines.append(garbage_segment)
                 lines.append(info_line)
                 garbage_docs = garbage_docs[insert_pos + info_token_count :]
-                prev_pos = 0  # FIX Bug 1: Reset to 0 after slice
+                prev_pos = 0
             else:
                 lines.append(info_line)
 
@@ -326,7 +313,6 @@ class RealDataLoader(BaseDataLoader):
             lines.append(final_garbage)
 
         lines.append(final_question)
-
         prompt_text = "".join(lines)
 
         return prompt_text, pass_keys, target_key
@@ -334,9 +320,7 @@ class RealDataLoader(BaseDataLoader):
 
 class PasskeyEvaluator:
     """
-    Passkey evaluator
-
-    Responsible for loading model, setting token limits, executing passkey tests and evaluating results
+    Passkey evaluator for needle-in-a-haystack retrieval testing.
 
     Args:
         model: Loaded model object
@@ -436,7 +420,7 @@ class PasskeyEvaluator:
             ]
         else:
             tokens = [self.min_length]
-            while self.min_length < self.max_length:
+            while tokens[-1] < self.max_length:
                 point = tokens[-1] * 2
                 if point <= self.max_length:
                     tokens.append(point)
@@ -477,13 +461,8 @@ class PasskeyEvaluator:
         If restrict_tokens is True, restrict model to only output digit tokens
         """
         if self.restrict_tokens:
-            # FIX Bug 4a: Use standard interface get_vocab() instead of .vocab attribute,
-            # for compatibility with fast tokenizers like PreTrainedTokenizerFast
             vocab = self.tokenizer.get_vocab()
 
-            # FIX Bug 4b: Compatible with multiple tokenizer whitespace prefix characters:
-            # SentencePiece uses "▁", BPE (GPT series) uses "Ġ",
-            # WordPiece uses "##" (suffix not prefix, lstrip doesn't affect)
             escape_chars = "▁Ġ"
 
             digit_tokens = [
@@ -526,8 +505,6 @@ class PasskeyEvaluator:
         """
         prompt_text, pass_keys, target = self.data_loader.generate_prompt(self.num_keys)
 
-        # FIX Bug 2: Remove temperature=None, transformers >=4.38 forbids passing temperature
-        # parameter when do_sample=False, otherwise raises ValueError
         response = self.pipe(
             prompt_text,
             num_return_sequences=1,
@@ -557,7 +534,7 @@ class PasskeyEvaluator:
 
     def evaluate(self):
         """
-        Batch evaluate model, perform needle in haystack test at multiple lengths
+        Run needle-in-a-haystack evaluation across all configured lengths.
 
         Returns:
             dict: Evaluation result dictionary containing:
@@ -580,29 +557,17 @@ class PasskeyEvaluator:
 
             for _ in trange(self.iterations, desc=f"Length {length}", leave=False):
                 result = self.evaluate_sample()
-
                 success_count += result["correct"]
                 results.append(result)
 
-            length_result = {
-                "results": results,
-                "success_count": success_count,
-                "total_iterations": self.iterations,
-                "success_rate": (
-                    success_count / self.iterations if self.iterations > 0 else 0
-                ),
-            }
-
-            success_rates.append(length_result["success_rate"])
+            success_rate = success_count / self.iterations if self.iterations > 0 else 0
+            success_rates.append(success_rate)
 
             if self.aggressive_memory:
                 gc.collect()
                 torch.cuda.empty_cache()
 
-            pbar.set_postfix(
-                length=length,
-                success_rate=length_result["success_rate"],
-            )
+            pbar.set_postfix(length=length, success_rate=f"{success_rate:.4f}")
             pbar.update(1)
 
         pbar.close()
@@ -649,51 +614,51 @@ def generate_save_filename(args):
 
 
 def add_args_passkey(parser):
-    parser.add_argument("--num-keys", type=int, default=5, help="Number of pass keys")
+    parser.add_argument("--num-keys", type=int, default=5, help="Number of pass keys.")
     parser.add_argument(
         "--iterations",
         type=int,
         default=20,
-        help="Number of test iterations",
+        help="Number of test iterations.",
     )
     parser.add_argument(
         "--data-mode",
         type=str,
         default="real",
         choices=["synthetic", "real"],
-        help="Data mode",
+        help="Data mode.",
     )
     parser.add_argument(
         "--dataset-name",
         type=str,
         default="konwoo/RedPajama-Data-1T-Sample-subset1000",
-        help="Dataset name",
+        help="Dataset name.",
     )
-    parser.add_argument("--split", type=str, default="train", help="Dataset split")
-    parser.add_argument("--length-step", type=int, default=None, help="Length step")
+    parser.add_argument("--split", type=str, default="train", help="Dataset split.")
+    parser.add_argument("--length-step", type=int, default=None, help="Length step.")
     parser.add_argument(
         "--aggressive-memory",
         type=bool,
         default=True,
-        help="Whether to use aggressive memory",
+        help="Whether to use aggressive memory.",
     )
     parser.add_argument(
         "--restrict-tokens",
         type=bool,
         default=True,
-        help="Whether to restrict output tokens",
+        help="Whether to restrict output tokens to digits only.",
     )
     parser.add_argument(
         "--save-dir",
         type=str,
         default="results/passkey",
-        help="Save directory",
+        help="Save directory.",
     )
     parser.add_argument(
         "--save-file",
         type=str,
         default=None,
-        help="Save filename",
+        help="Save filename.",
     )
     return parser
 
