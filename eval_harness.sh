@@ -17,10 +17,6 @@ ROPE_METHODS=(
     "--rope-type ntk --rope-dynamic"
     "--rope-type part-ntk --rope-dynamic"
     "--rope-type yarn --rope-dynamic"
-    "--rope-type block-layered --rope-dynamic"
-    "--rope-type block-layered-scaled --rope-dynamic"
-    "--rope-type freq-smooth --rope-dynamic"
-    "--rope-type freq-smooth-scaled --rope-dynamic"
     "--rope-type freq-reciprocal --rope-dynamic"
     "--rope-type freq-reciprocal-scaled --rope-dynamic"
 )

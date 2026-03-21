@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 import sys
+import lm_eval
+from lm_eval.models.huggingface import HFLM
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -48,19 +50,18 @@ def _warn_unknown_tasks(task_list: list[str]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _build_output_path(args, output_dir: str) -> str:
+def _build_output_path(output_dir: str, model_name: str, config) -> str:
     """Build a descriptive output JSON filename from model + RoPE config."""
-    model_label = args.model_name.rstrip("/").split("/")[-1]
-    rope_label = args.rope_type
-    if args.rope_type != "none":
-        if args.rope_factor is not None:
-            rope_label += f"_factor{str(args.rope_factor).replace('.', '_')}"
-        elif args.rope_dynamic:
+    model_label = model_name.rstrip("/").split("/")[-1]
+    rope_label = config.rope_scaling["type"]
+    if rope_label != "none":
+        if config.rope_scaling["factor"] is not None:
+            rope_label += (
+                f"_factor{str(config.rope_scaling['factor']).replace('.', '_')}"
+            )
+        elif config.rope_scaling["dynamic"]:
             rope_label += "_dynamic"
-    adapter_label = ""
-    if getattr(args, "adapter_path", None):
-        adapter_label = "_" + os.path.basename(args.adapter_path.rstrip("/"))
-    filename = f"{model_label}_{rope_label}{adapter_label}.json"
+    filename = f"{model_label}_{rope_label}.json"
     return os.path.join(output_dir, filename)
 
 
@@ -78,34 +79,25 @@ def main(args):
     # Training scripts set use_cache=False; here we want it True for
     # lm-eval's generation tasks (generate_until).  add_args_model already
     # defaults use_cache=True.
+    model, config = load_model(args)
+    tokenizer = load_tokenizer(args)
     print(f"\n{'='*60}")
     print(f"Loading model: {args.model_name}")
-    print(f"RoPE type    : {args.rope_type}")
+    print(f"RoPE type    : {config.rope_scaling['type']}")
     print(f"Max length   : {args.max_length}")
     print(f"Tasks        : {', '.join(task_list)}")
     print(f"{'='*60}\n")
-
-    model, config = load_model(args)
-    tokenizer = load_tokenizer(args)
 
     # ── 2. Wrap in lm-eval's HFLM ─────────────────────────────────────── #
     # HFLM accepts a pre-loaded model when pretrained is a PreTrainedModel
     # instance.  This bypasses AutoModelForCausalLM entirely, so our custom
     # RoPE classes (registered in models/pe_llama.py) are used as-is.
-    try:
-        from lm_eval.models.huggingface import HFLM
-    except ImportError:
-        print("[ERROR] lm-eval is not installed.  Run: pip install lm-eval")
-        sys.exit(1)
-
     lm = HFLM(
         pretrained=model,
         tokenizer=tokenizer,
         max_length=args.max_length,
         batch_size=args.batch_size,
         trust_remote_code=True,
-        # dtype is already applied during model loading; no need to cast again
-        # add_bos_token: let HFLM decide from tokenizer config
     )
 
     # ── 3. Build per-task few-shot counts ─────────────────────────────── #
@@ -117,12 +109,6 @@ def main(args):
         num_fewshot = {t: _DEFAULT_FEWSHOT.get(t, 0) for t in task_list}
 
     # ── 4. Run evaluation ─────────────────────────────────────────────── #
-    try:
-        import lm_eval
-    except ImportError:
-        print("[ERROR] lm-eval is not installed.  Run: pip install lm-eval")
-        sys.exit(1)
-
     results = lm_eval.simple_evaluate(
         model=lm,
         tasks=task_list,
@@ -133,21 +119,21 @@ def main(args):
 
     # ── 5. Save results ───────────────────────────────────────────────── #
     os.makedirs(args.output_dir, exist_ok=True)
-    out_path = _build_output_path(args, args.output_dir)
+    out_path = _build_output_path(args.output_dir, args.model_name, config)
 
     # Attach metadata to results for traceability
     results["metadata"] = {
         "model_name": args.model_name,
-        "adapter_path": getattr(args, "adapter_path", None),
-        "rope_type": args.rope_type,
-        "rope_factor": args.rope_factor,
-        "rope_dynamic": args.rope_dynamic,
+        "adapter_path": args.adapter_path,
+        "rope_type": config.rope_scaling["type"],
+        "rope_factor": getattr(config.rope_scaling, "factor", None),
+        "rope_dynamic": getattr(config.rope_scaling, "dynamic", None),
         "max_length": args.max_length,
         "tasks": task_list,
     }
 
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False, default=str)
+        json.dump(results, f, indent=4, ensure_ascii=False, default=str)
     print(f"\nResults saved → {out_path}")
 
     # ── 6. Print summary ──────────────────────────────────────────────── #
