@@ -150,7 +150,7 @@ class PerplexityEvaluator:
             ]
         else:
             length_list = [self.min_length]
-            while self.min_length < self.max_length:
+            while length_list[-1] < self.max_length:
                 point = length_list[-1] * 2
                 if point <= self.max_length:
                     length_list.append(point)
@@ -311,9 +311,16 @@ class PerplexityEvaluator:
         }
 
 
-def generate_save_filename(args):
+def generate_save_filename(model_name, config):
     """
     Generate filename based on model and RoPE configuration.
+
+    Args:
+        model_name: The name of the model.
+        config: The configuration object.
+
+    Returns:
+        str: The filename.
 
     Examples:
         --rope-type none                              → llama-7b_none.json
@@ -321,17 +328,14 @@ def generate_save_filename(args):
         --rope-type linear --rope-factor 4.0          → llama-7b_linear_factor4_0.json
         --rope-type ntk --rope-factor 2.5             → llama-7b_ntk_factor2_5.json
     """
-    model_name = args.model_name.split("/")[-1]
-
-    parts = [model_name, args.rope_type]
-
-    if args.rope_type != "none":
-        if args.rope_factor is not None:
-            factor_str = str(args.rope_factor).replace(".", "_")
+    model_name = model_name.split("/")[-1]
+    parts = [model_name, config.rope_scaling["type"]]
+    if config.rope_scaling["type"] != "none":
+        if config.rope_scaling["factor"] is not None:
+            factor_str = str(config.rope_scaling["factor"]).replace(".", "_")
             parts.append(f"factor{factor_str}")
-        elif args.rope_dynamic:
+        elif config.rope_scaling["dynamic"]:
             parts.append("dynamic")
-
     return "_".join(parts) + ".json"
 
 
@@ -397,7 +401,7 @@ if __name__ == "__main__":
     model, config = load_model(args)
     tokenizer = load_tokenizer(args)
 
-    args.save_file = args.save_file or generate_save_filename(args)
+    args.save_file = args.save_file or generate_save_filename(args.model_name, config)
 
     evaluator = PerplexityEvaluator(
         model=model,

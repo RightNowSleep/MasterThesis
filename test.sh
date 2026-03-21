@@ -1,5 +1,5 @@
 # Model
-MODEL="--model-name huggyllama/llama-7b --load-in-4bit --min-length 2048 --max-length 65536 --load-in-4bit"
+MODEL="--model-name huggyllama/llama-7b --load-in-4bit --min-length 2048 --max-length 65536"
 
 # RoPE method
 # NOTE: --rope-factor and --rope-dynamic are mutually exclusive.

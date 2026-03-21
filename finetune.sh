@@ -88,9 +88,9 @@ if [ -n "$WANDB" ]; then
     BASE_ARGS="$BASE_ARGS --wandb $WANDB"
 fi
 
-echo "==========================================
+echo "=========================================="
 echo "Running Fine-tuning"
-echo "==========================================
+echo "=========================================="
 echo "Model      : $MODEL_NAME"
 echo "Max length : $MAX_LENGTH"
 echo "Steps      : $MAX_TRAIN_STEPS  (warmup: $WARMUP_STEPS)"

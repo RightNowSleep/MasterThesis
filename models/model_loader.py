@@ -1,6 +1,7 @@
 import torch
 from transformers import AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
+from typing import Optional, Dict
 
 from .configuration_llama import LlamaConfig
 from .modeling_llama import LlamaForCausalLM
@@ -35,7 +36,7 @@ _ALL_ROPE_TYPES = [_ROPE_TYPE_NONE] + sorted(_ROPE_TYPES_WITH_DYNAMIC_FLAG)
 # ============================================================================ #
 
 
-def _build_rope_scaling(args) -> dict | None:
+def _build_rope_scaling(args) -> Optional[Dict]:
     r"""
     Translate flat CLI arguments into the ``rope_scaling`` dict expected by
     ``LlamaConfig``.
@@ -131,17 +132,22 @@ def load_model(args, quantization_config=None):
             args.adapter_path,
             trust_remote_code=True,
         )
+        config.original_max_position_embeddings = getattr(
+            config,
+            "original_max_position_embeddings",
+            config.max_position_embeddings,
+        )
     else:
         config = LlamaConfig.from_pretrained(
             args.model_name,
             trust_remote_code=True,
         )
         config.original_max_position_embeddings = config.max_position_embeddings
-        config.max_position_embeddings = args.max_length
-        config.use_cache = args.use_cache
         rope_scaling = _build_rope_scaling(args)
         config.rope_scaling = rope_scaling
         config._rope_scaling_validation()
+    config.max_position_embeddings = args.max_length
+    config.use_cache = args.use_cache
 
     print(
         f"  rope-scaling   : {config.rope_scaling}\n"

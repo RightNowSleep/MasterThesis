@@ -9,6 +9,7 @@ from transformers import pipeline
 import argparse
 import json
 import time
+from typing import Optional
 
 from models.model_loader import load_model, load_tokenizer, add_args_model
 
@@ -276,6 +277,7 @@ class QualityEvaluator:
         self.save_file = (
             save_file if save_file else f"{time.strftime('%Y%m%d-%H%M%S')}.json"
         )
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # ------------------------------------------------------------------ #
     # Private helpers
@@ -404,8 +406,8 @@ class QualityEvaluator:
         prompt = self._prepare_logit_prompt(sample)
 
         inputs = self.tokenizer(prompt, return_tensors="pt")
-        input_ids = inputs.input_ids
-        attention_mask = inputs.attention_mask
+        input_ids = inputs.input_ids.to(self.device)
+        attention_mask = inputs.attention_mask.to(self.device)
 
         output = self.model.generate(
             input_ids,
@@ -696,26 +698,25 @@ class QualityEvaluator:
 # ---------------------------------------------------------------------------
 
 
-def generate_save_filename(args) -> str:
+def generate_save_filename(model_name, config) -> str:
     """
     Generate the filename filename for saving the evaluation results.
 
     Args:
-        args: The argparse.Namespace object containing the command-line arguments.
+        model_name: The name of the model.
+        config: The configuration object.
 
     Returns:
         str: The filename.
     """
-    model_name = args.model_name.split("/")[-1]
-    parts = [model_name, args.rope_type]
-    if args.rope_type != "none":
-        if args.rope_factor is not None:
-            factor_str = str(args.rope_factor).replace(".", "_")
+    model_name = model_name.split("/")[-1]
+    parts = [model_name, config.rope_scaling["type"]]
+    if config.rope_scaling["type"] != "none":
+        if config.rope_scaling["factor"] is not None:
+            factor_str = str(config.rope_scaling["factor"]).replace(".", "_")
             parts.append(f"factor{factor_str}")
-        elif args.rope_dynamic:
+        elif config.rope_scaling["dynamic"]:
             parts.append("dynamic")
-    parts.append(args.dataset_name)
-    parts.append(args.scoring_mode)
     return "_".join(parts) + ".json"
 
 
@@ -794,7 +795,7 @@ if __name__ == "__main__":
     model, config = load_model(args)
     tokenizer = load_tokenizer(args)
 
-    args.save_file = args.save_file or generate_save_filename(args)
+    args.save_file = args.save_file or generate_save_filename(args.model_name, config)
 
     evaluator = QualityEvaluator(
         model=model,

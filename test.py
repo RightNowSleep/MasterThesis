@@ -11,9 +11,16 @@ from eval.quality import QualityEvaluator, add_args_quality
 from eval.performance import PerformanceEvaluator, add_args_performance
 
 
-def generate_save_filename(args):
+def generate_save_filename(model_name, config):
     """
     Generate filename based on model and RoPE configuration.
+
+    Args:
+        model_name: The name of the model.
+        config: The configuration object.
+
+    Returns:
+        str: The filename.
 
     Examples:
         --rope-type none                              → llama-7b_none.json
@@ -21,20 +28,21 @@ def generate_save_filename(args):
         --rope-type linear --rope-factor 4.0          → llama-7b_linear_factor4_0.json
         --rope-type ntk --rope-factor 2.5             → llama-7b_ntk_factor2_5.json
     """
-    model_name = args.model_name.split("/")[-1]
-    parts = [model_name, args.rope_type]
-    if args.rope_type != "none":
-        if args.rope_factor is not None:
-            factor_str = str(args.rope_factor).replace(".", "_")
+    model_name = model_name.split("/")[-1]
+    parts = [model_name, config.rope_scaling["type"]]
+    if config.rope_scaling["type"] != "none":
+        if config.rope_scaling["factor"] is not None:
+            factor_str = str(config.rope_scaling["factor"]).replace(".", "_")
             parts.append(f"factor{factor_str}")
-        elif args.rope_dynamic:
+        elif config.rope_scaling["dynamic"]:
             parts.append("dynamic")
     return "_".join(parts) + ".json"
 
 
 def test_perplexity(args):
-    (model, config), tokenizer = load_model(args), load_tokenizer(args)
-    args.save_file = args.save_file or generate_save_filename(args)
+    model, config = load_model(args)
+    tokenizer = load_tokenizer(args)
+    args.save_file = args.save_file or generate_save_filename(args.model_name, config)
     evaluator = PerplexityEvaluator(
         model=model,
         tokenizer=tokenizer,
@@ -57,8 +65,9 @@ def test_perplexity(args):
 
 
 def test_passkey(args):
-    (model, config), tokenizer = load_model(args), load_tokenizer(args)
-    args.save_file = args.save_file or generate_save_filename(args)
+    model, config = load_model(args)
+    tokenizer = load_tokenizer(args)
+    args.save_file = args.save_file or generate_save_filename(args.model_name, config)
     evaluator = PasskeyEvaluator(
         model=model,
         tokenizer=tokenizer,
@@ -80,8 +89,9 @@ def test_passkey(args):
 
 
 def test_quality(args):
-    (model, config), tokenizer = load_model(args), load_tokenizer(args)
-    args.save_file = args.save_file or generate_save_filename(args)
+    model, config = load_model(args)
+    tokenizer = load_tokenizer(args)
+    args.save_file = args.save_file or generate_save_filename(args.model_name, config)
     evaluator = QualityEvaluator(
         model=model,
         tokenizer=tokenizer,
@@ -103,8 +113,9 @@ def test_quality(args):
 
 
 def test_performance(args):
-    (model, config), tokenizer = load_model(args), load_tokenizer(args)
-    args.save_file = args.save_file or generate_save_filename(args)
+    model, config = load_model(args)
+    tokenizer = load_tokenizer(args)
+    args.save_file = args.save_file or generate_save_filename(args.model_name, config)
     evaluator = PerformanceEvaluator(
         model=model,
         tokenizer=tokenizer,

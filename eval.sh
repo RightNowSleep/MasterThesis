@@ -66,11 +66,10 @@ echo "=========================================="
 run_eval() {
     local eval_type=$1
     local rope_type=$2
-    local rope_factor=$3
     
     echo ""
     echo "------------------------------------------"
-    echo "Eval: $eval_type | RoPE: $rope_type | Factor: $rope_factor"
+    echo "Eval: $eval_type | RoPE: $rope_type"
     echo "------------------------------------------"
     
     local cmd="python $SCRIPT_DIR/eval/${eval_type}.py \
@@ -79,19 +78,6 @@ run_eval() {
         --max-length $MAX_LENGTH \
         --min-length $MIN_LENGTH \
         --dtype $DTYPE"
-    
-    if [ "$rope_type" != "none" ] && [ "$rope_factor" != "none" ]; then
-        cmd="$cmd --rope-factor $rope_factor"
-    fi 
-    
-    if [ -n "$DEVICE" ]; then
-        cmd="$cmd --device $DEVICE"
-    fi
-    
-    if [ "$rope_type" = "linear" ] || [ "$rope_type" = "ntk" ] || \
-       [ "$rope_type" = "part-ntk" ] || [ "$rope_type" = "yarn" ]; then
-        cmd="$cmd --rope-dynamic"
-    fi
     
     echo "Executing: $cmd"
     eval $cmd
