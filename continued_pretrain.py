@@ -86,6 +86,7 @@ def get_optimizer_param_groups(model, weight_decay: float):
 def save_checkpoint(
     accelerator,
     model,
+    model_config,
     output_dir: str,
     step: int,
     epoch: int,
@@ -107,6 +108,8 @@ def save_checkpoint(
         os.path.join(checkpoint_path, "adapter_model"),
         safe_serialization=True,
     )
+
+    model_config.save_pretrained(checkpoint_path)
 
     if tokenizer is not None:
         tokenizer.save_pretrained(checkpoint_path)
@@ -432,6 +435,7 @@ def main(args):
                         save_checkpoint(
                             accelerator=accelerator,
                             model=model,
+                            model_config=model_config,
                             output_dir=checkpoint_dir,
                             step=completed_steps,
                             epoch=epoch,

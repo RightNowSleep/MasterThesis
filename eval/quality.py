@@ -277,7 +277,6 @@ class QualityEvaluator:
         self.save_file = (
             save_file if save_file else f"{time.strftime('%Y%m%d-%H%M%S')}.json"
         )
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # ------------------------------------------------------------------ #
     # Private helpers
@@ -406,8 +405,9 @@ class QualityEvaluator:
         prompt = self._prepare_logit_prompt(sample)
 
         inputs = self.tokenizer(prompt, return_tensors="pt")
-        input_ids = inputs.input_ids.to(self.device)
-        attention_mask = inputs.attention_mask.to(self.device)
+        first_device = next(self.model.parameters()).device
+        input_ids = inputs.input_ids.to(first_device)
+        attention_mask = inputs.attention_mask.to(first_device)
 
         output = self.model.generate(
             input_ids,
@@ -710,12 +710,15 @@ def generate_save_filename(model_name, config) -> str:
         str: The filename.
     """
     model_name = model_name.split("/")[-1]
-    parts = [model_name, config.rope_scaling["type"]]
-    if config.rope_scaling["type"] != "none":
-        if config.rope_scaling["factor"] is not None:
-            factor_str = str(config.rope_scaling["factor"]).replace(".", "_")
-            parts.append(f"factor{factor_str}")
-        elif config.rope_scaling["dynamic"]:
+    rope_scaling = config.rope_scaling
+    rope_type = rope_scaling["type"] if rope_scaling else "none"
+    parts = [model_name, rope_type]
+    if rope_type != "none":
+        factor = getattr(config, "factor", None)
+        dynamic = getattr(config, "dynamic", False)
+        if factor is not None:
+            parts.append(f"factor{str(factor).replace('.', '_')}")
+        elif dynamic:
             parts.append("dynamic")
     return "_".join(parts) + ".json"
 

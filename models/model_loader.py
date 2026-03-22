@@ -137,6 +137,11 @@ def load_model(args, quantization_config=None):
             "original_max_position_embeddings",
             config.max_position_embeddings,
         )
+        if args.rope_type != "none" or args.rope_factor is not None:
+            print(
+                "[WARNING] --rope-type/--rope-factor are ignored when --adapter-path is set;"
+                " RoPE config is loaded from the adapter's config.json."
+            )
     else:
         config = LlamaConfig.from_pretrained(
             args.model_name,
@@ -262,7 +267,7 @@ def add_args_model(parser):
         default=None,
         help="Local path to a LoRA adapter directory.  "
         "If provided, the adapter is loaded via PEFT and merged into the "
-        "base model before returning.",
+        "base model before returning. Remember not to checkpoint the adapter.",
     )
 
     # ── Hardware ────────────────────────────────────────────────────── #

@@ -97,7 +97,6 @@ def main(args):
         tokenizer=tokenizer,
         max_length=args.max_length,
         batch_size=args.batch_size,
-        trust_remote_code=True,
     )
 
     # ── 3. Build per-task few-shot counts ─────────────────────────────── #

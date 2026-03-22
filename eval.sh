@@ -6,6 +6,10 @@ export USE_FLASH_ATTN=0
 
 # Model
 MODEL="--model-name huggyllama/llama-7b --load-in-4bit --min-length 2048 --max-length 65536 --load-in-4bit"
+MODEL_NAME="huggyllama/llama-7b"
+MAX_LENGTH=65536
+MIN_LENGTH=2048
+DTYPE="auto"
 
 # RoPE method
 # NOTE: --rope-factor and --rope-dynamic are mutually exclusive.
@@ -77,7 +81,8 @@ run_eval() {
         --rope-type $rope_type \
         --max-length $MAX_LENGTH \
         --min-length $MIN_LENGTH \
-        --dtype $DTYPE"
+        --dtype $DTYPE \
+        --load-in-4bit"
     
     echo "Executing: $cmd"
     eval $cmd
@@ -96,7 +101,7 @@ for rope_method in "${ROPE_METHODS[@]}"; do
     echo "=========================================="
     
     for test_type in "${TEST_TYPES[@]}"; do
-        run_test "$test_type" "$rope_method"
+        run_eval "$test_type" "$rope_method"
     done
 done
 

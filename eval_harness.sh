@@ -49,7 +49,7 @@ run_eval() {
     echo "Evaluating: ${label}"
     echo "------------------------------------------"
 
-    local cmd="python eval/run_harness.py \
+    local cmd="python eval/eval_harness.py \
         --model-name ${MODEL_NAME} \
         --max-length ${MAX_LENGTH} \
         --dtype ${DTYPE} \
