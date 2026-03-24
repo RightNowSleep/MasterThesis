@@ -46,6 +46,14 @@ Fig 6  fig06_delta_entropy_heatmap_{raw|norm}.png
 Fig 7  fig07_entropy_boxplot_violin_norm.png
        Box + violin hybrid – x=layer, y=normalised entropy distribution.
        2×2 sub-plots (4 seq-lengths).  Violin shows full distribution shape.
+
+Fig 8  fig08_entropy_boxplot_violin_raw.png
+       Box + violin hybrid – x=layer, y=raw entropy distribution.
+       2×2 sub-plots (4 seq-lengths).  Violin shows full distribution shape.
+
+Fig 9  fig09_entropy_boxplot_violin_norm.png
+       Box + violin hybrid – x=layer, y=normalised entropy distribution.
+       2×2 sub-plots (4 seq-lengths).  Violin shows full distribution shape.
 """
 
 from __future__ import annotations
@@ -89,6 +97,7 @@ _FS_SINGLE = (22, 13)  # single panel
 _FS_DELTA = (18, 22)  # delta heatmap (tall)
 
 _DPI = 300
+_PREC = 5
 _TITLE_FS = 20
 _SUPTITLE_FS = 24
 _LABEL_FS = 17
@@ -165,6 +174,9 @@ def _shade_boundary(ax: plt.Axes, boundary: int, alpha: float = 0.10) -> None:
     )
 
 
+_TARGET_LENGTHS = [512, 1024, 1536, 2048, 2560, 3072]
+
+
 def _norm_from_raw_np(arr: np.ndarray) -> np.ndarray:
     """
     Compute H_norm = H / log(t+1) along the last axis of a numpy array.
@@ -197,13 +209,85 @@ def _normalize_data(data: dict) -> dict:
 
     If the data already uses the legacy format (has a "lengths" key) it is
     returned unchanged so this function is safe to call unconditionally.
+
+    For single-length data, shorter lengths are derived by truncating the
+    primary [L, H, T] arrays and recomputing derived metrics.
     """
     if "lengths" in data:
-        return data  # already legacy format, nothing to do
+        return data
 
-    sl = data["max_length"]
-    data["lengths"] = [sl]
-    data["results"] = {str(sl): data["results"]}
+    max_len = data["max_length"]
+    res = data["results"]
+    target_lengths = [sl for sl in _TARGET_LENGTHS if sl <= max_len]
+
+    if not target_lengths:
+        target_lengths = [max_len]
+
+    primary_raw = np.array(res["entropy_head_layer_position"])  # [L, H, T]
+    primary_norm = np.array(res["norm_entropy_head_layer_position"])  # [L, H, T]
+    L, H, _ = primary_raw.shape
+
+    new_results = {}
+
+    for sl in target_lengths:
+        sl_res = {}
+
+        sl_res["entropy_head_layer_position"] = (
+            primary_raw[:, :, :sl].round(_PREC).tolist()
+        )
+        sl_res["norm_entropy_head_layer_position"] = (
+            primary_norm[:, :, :sl].round(_PREC).tolist()
+        )
+
+        sl_res["entropy_layer_position"] = (
+            primary_raw[:, :, :sl].mean(axis=1).round(_PREC).tolist()
+        )
+        sl_res["norm_entropy_layer_position"] = (
+            primary_norm[:, :, :sl].mean(axis=1).round(_PREC).tolist()
+        )
+
+        sl_res["entropy_head_layer"] = (
+            primary_raw[:, :, :sl].mean(axis=2).round(_PREC).tolist()
+        )
+        sl_res["norm_entropy_head_layer"] = (
+            primary_norm[:, :, :sl].mean(axis=2).round(_PREC).tolist()
+        )
+
+        norm_per_head_mean = primary_norm[:, :, :sl].mean(axis=2)  # [L, H]
+        sl_res["head_norm_std_by_layer"] = np.round(
+            norm_per_head_mean.std(axis=1),
+            _PREC,
+        ).tolist()
+
+        raw_flat = primary_raw[:, :, :sl].reshape(L, -1)  # [L, H*sl]
+        norm_flat = primary_norm[:, :, :sl].reshape(L, -1)
+        raw_q, nrm_q = [], []
+        for l in range(L):
+            raw_q.append(
+                np.round(
+                    np.quantile(raw_flat[l], [0.0, 0.25, 0.5, 0.75, 1.0]),
+                    _PREC,
+                ).tolist()
+            )
+            nrm_q.append(
+                np.round(
+                    np.quantile(norm_flat[l], [0.0, 0.25, 0.5, 0.75, 1.0]),
+                    _PREC,
+                ).tolist()
+            )
+        sl_res["raw_entropy_quartiles_by_layer"] = raw_q
+        sl_res["norm_entropy_quartiles_by_layer"] = nrm_q
+
+        sl_res["top_k_concentration"] = np.round(
+            np.array(res["top_k_concentration"])[:sl],
+            _PREC,
+        ).tolist()
+        sl_res["top_k_boundary"] = min(res["top_k_boundary"], sl - 1)
+
+        new_results[str(sl)] = sl_res
+
+    data["lengths"] = target_lengths
+    data["results"] = new_results
     return data
 
 
