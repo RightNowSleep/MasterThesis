@@ -89,12 +89,12 @@ _LENGTH_COLORS: dict[int, str] = {
 _FALLBACK_CMAP = plt.cm.tab10  # for unexpected lengths
 
 # Figure sizes  (width, height) in inches – intentionally large for clarity
-_FS_12 = (32, 14)  # 1×2 layout
-_FS_22 = (30, 26)  # 2×2 layout
-_FS_22SM = (28, 22)  # 2×2 for violin/box (slightly smaller per-panel)
-_FS_HEAT = (32, 26)  # 2×2 heatmap
-_FS_SINGLE = (22, 13)  # single panel
-_FS_DELTA = (18, 22)  # delta heatmap (tall)
+_FS_12 = (64, 28)
+_FS_22 = (60, 52)
+_FS_22SM = (56, 44)
+_FS_HEAT = (64, 52)
+_FS_SINGLE = (44, 26)
+_FS_DELTA = (36, 44)
 
 _DPI = 300
 _PREC = 5
@@ -1203,7 +1203,7 @@ def plot_pos_layer_head_heatmap(
     is absent (backward-compatible with older JSON files).
     """
     lengths = data["lengths"]
-    sl = lengths[0]  # single-length evaluator → first (and usually only) length
+    sl = lengths[-1]  # single-length evaluator → last (and usually only) length
 
     res = data["results"][str(sl)]
     has_norm_3d = "norm_entropy_head_layer_position" in res
@@ -1276,6 +1276,7 @@ def _plot_entropy_by_pos_head0_one(
     dpi: int,
     top_k_boundary: int = 0,
     cmap_name: str = "coolwarm",
+    xlim_range: tuple[int, int] | None = None,
 ) -> None:
     """
     Internal worker for Fig 9.
@@ -1284,6 +1285,7 @@ def _plot_entropy_by_pos_head0_one(
     Draws one line per layer, coloured by layer index using a diverging
     colormap so early / late layers are visually distinct.
     A thin colorbar replaces the legend.
+    xlim_range : (xmin, xmax)  optional range to limit x-axis display
     """
     L, T = arr.shape
     pos_x = np.arange(T)
@@ -1344,7 +1346,7 @@ def _plot_entropy_by_pos_head0_one(
     ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.45)
     ax.grid(axis="x", linestyle=":", linewidth=0.4, alpha=0.30)
 
-    if top_k_boundary > 0:
+    if top_k_boundary > 0 and (xlim_range is None or top_k_boundary >= xlim_range[0]):
         ax.axvline(
             top_k_boundary,
             color="dimgray",
@@ -1354,8 +1356,15 @@ def _plot_entropy_by_pos_head0_one(
         )
         ax.legend(fontsize=_LEGEND_FS - 1, framealpha=0.75)
 
+    if xlim_range is not None:
+        ax.set_xlim(xlim_range[0], xlim_range[1])
+
+    range_str = (
+        f" (pos {xlim_range[0]}-{xlim_range[1]})" if xlim_range is not None else ""
+    )
+    fig_num = "9-1" if xlim_range is not None else "9"
     ax.set_title(
-        f"Fig 9 — {title_prefix}  ·  Head 0, all {L} layers  |  seq_len = {seq_len}\n"
+        f"Fig {fig_num} — {title_prefix}{range_str}  ·  Head 0, all {L} layers  |  seq_len = {seq_len}\n"
         "Each line = one layer  ·  Colour encodes layer depth  "
         "(cool = early, warm = deep)",
         fontsize=_TITLE_FS,
@@ -1381,7 +1390,7 @@ def plot_entropy_by_pos_head0(
     L-layer stack is legible without a cluttered legend.
     """
     lengths = data["lengths"]
-    sl = lengths[0]
+    sl = lengths[-1]
 
     res = data["results"][str(sl)]
     top_k_bnd = res.get("top_k_boundary", 0)
@@ -1424,6 +1433,40 @@ def plot_entropy_by_pos_head0(
         top_k_boundary=top_k_bnd,
         cmap_name="coolwarm",
     )
+
+    # ── Fig 9-1: zoom into x-axis range 2048-3072 ───────────────────────────
+    if sl >= 3072:
+        xlim_range = (2048, 3072)
+
+        _plot_entropy_by_pos_head0_one(
+            data,
+            sl,
+            arr=raw_head0,
+            title_prefix="Raw entropy  H(layer, head=0, position)",
+            ylabel="H (nats)",
+            out_dir=out_dir,
+            fname=f"{method_name}_fig09-1_entropy_vs_pos_head0_raw.{fmt}",
+            fmt=fmt,
+            dpi=dpi,
+            top_k_boundary=top_k_bnd,
+            cmap_name="coolwarm",
+            xlim_range=xlim_range,
+        )
+
+        _plot_entropy_by_pos_head0_one(
+            data,
+            sl,
+            arr=norm_head0,
+            title_prefix="Normalised entropy  H_norm(layer, head=0, position)",
+            ylabel="H_norm ∈ [0, 1]",
+            out_dir=out_dir,
+            fname=f"{method_name}_fig09-1_entropy_vs_pos_head0_norm.{fmt}",
+            fmt=fmt,
+            dpi=dpi,
+            top_k_boundary=top_k_bnd,
+            cmap_name="coolwarm",
+            xlim_range=xlim_range,
+        )
 
 
 # ---------------------------------------------------------------------------
