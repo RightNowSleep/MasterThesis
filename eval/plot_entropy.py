@@ -183,6 +183,30 @@ def _norm_from_raw_np(arr: np.ndarray) -> np.ndarray:
     return arr / den
 
 
+def _normalize_data(data: dict) -> dict:
+    """
+    Convert the new single-length JSON format produced by the updated
+    EntropyEvaluator into the legacy multi-length format expected by all
+    plotting functions.
+
+    New format  →  data["max_length"] = int,
+                   data["results"]    = {metric_key: value, ...}
+
+    Legacy format → data["lengths"]   = [int, ...]
+                    data["results"]   = {str(seq_len): {metric_key: value, ...}}
+
+    If the data already uses the legacy format (has a "lengths" key) it is
+    returned unchanged so this function is safe to call unconditionally.
+    """
+    if "lengths" in data:
+        return data  # already legacy format, nothing to do
+
+    sl = data["max_length"]
+    data["lengths"] = [sl]
+    data["results"] = {str(sl): data["results"]}
+    return data
+
+
 def _auto_select_layers(data: dict, n: int = 4) -> List[int]:
     """
     Return the indices of the *n* layers with the highest average
@@ -963,6 +987,362 @@ def plot_entropy_boxplot_violin(
 
 
 # ---------------------------------------------------------------------------
+# Figure 8 – Per-position  Head × Layer  heatmap  (3×3 grid)
+# ---------------------------------------------------------------------------
+
+_N_POS_PANELS = 9
+
+
+def _select_positions(
+    T: int,
+    n: int = _N_POS_PANELS,
+    mode: str = "center",
+) -> List[int]:
+    """
+    Return *n* evenly-spaced token positions within [0, T-1].
+
+    mode = 'center'  →  positions sit at the centre of each equal-width bin
+                        e.g. T=900, n=9  → [50, 150, …, 850]
+    mode = 'end'     →  positions sit at the right edge of each bin
+                        e.g. T=900, n=9  → [100, 200, …, 900-1]
+    """
+    if mode == "center":
+        return [int((T / n) * (i + 0.5)) for i in range(n)]
+    else:  # 'end'
+        return [int((T / n) * (i + 1)) - 1 for i in range(n)]
+
+
+def _plot_pos_layer_head_one(
+    data: dict,
+    seq_len: int,
+    key_3d: str,
+    title_prefix: str,
+    ylabel_cbar: str,
+    out_dir: str,
+    fname: str,
+    fmt: str,
+    dpi: int,
+    vrange_fixed: tuple | None = None,
+    cmap: str = "magma",
+) -> None:
+    """
+    Internal worker for Fig 8.
+
+    For each of the 9 selected positions, draw a heat-map:
+        x-axis = layer index  (0 … L-1)
+        y-axis = head  index  (0 … H-1)
+        colour = entropy at that (layer, head, position)
+    """
+    res = data["results"][str(seq_len)]
+    arr = np.array(res[key_3d])  # [L, H, T]
+    L, H, T = arr.shape
+
+    positions = _select_positions(T, n=_N_POS_PANELS, mode="center")
+    nrows, ncols = _grid(_N_POS_PANELS)
+
+    # shared colour range across all panels
+    panels = [arr[:, :, p].T for p in positions]  # each [H, L]
+    vmin, vmax = vrange_fixed or _common_vrange(panels)
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(ncols * 7.5, nrows * 6.0),
+        squeeze=False,
+        constrained_layout=True,
+    )
+
+    im = None
+    for idx, pos in enumerate(positions):
+        r, c = divmod(idx, ncols)
+        ax = axes[r][c]
+        mat = arr[:, :, pos].T  # [H, L]  → imshow(y=head, x=layer)
+        im = ax.imshow(
+            mat,
+            aspect="auto",
+            origin="upper",
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+        )
+        ax.set_title(f"position = {pos}", fontsize=_LABEL_FS, pad=8, fontweight="bold")
+        ax.set_xlabel("Layer index", fontsize=_TICK_FS)
+        ax.set_ylabel("Head index", fontsize=_TICK_FS)
+
+        # sparse ticks for readability
+        ax.xaxis.set_major_locator(mticker.MultipleLocator(max(1, L // 8)))
+        ax.yaxis.set_major_locator(mticker.MultipleLocator(max(1, H // 8)))
+        ax.tick_params(labelsize=_TICK_FS)
+
+    # hide any unused cells
+    for idx in range(_N_POS_PANELS, nrows * ncols):
+        r, c = divmod(idx, ncols)
+        axes[r][c].set_visible(False)
+
+    if im is not None:
+        cbar = fig.colorbar(
+            im,
+            ax=axes,
+            fraction=0.018,
+            pad=0.04,
+            shrink=0.85,
+            aspect=35,
+        )
+        cbar.set_label(ylabel_cbar, fontsize=_LABEL_FS)
+        cbar.ax.tick_params(labelsize=_TICK_FS)
+
+    fig.suptitle(
+        f"Fig 8 — {title_prefix}  ·  Head × Layer heatmap at selected positions\n"
+        f"seq_len = {seq_len}  |  Each panel: colour = entropy(layer, head) at that token position",
+        fontsize=_SUPTITLE_FS,
+        y=1.02,
+        fontweight="bold",
+    )
+    _savefig(fig, os.path.join(out_dir, fname), dpi, constrained_layout=True)
+
+
+def plot_pos_layer_head_heatmap(
+    data: dict,
+    out_dir: str,
+    fmt: str,
+    dpi: int,
+    method_name: str = "",
+) -> None:
+    """
+    Fig 8 — Head × Layer heatmap at 9 evenly-spaced token positions.
+
+    Two output files: raw entropy and normalised entropy.
+    Uses 'entropy_head_layer_position' (raw) and
+         'norm_entropy_head_layer_position' (norm) from the JSON.
+    Falls back to computing norm on-the-fly from raw if the norm key
+    is absent (backward-compatible with older JSON files).
+    """
+    lengths = data["lengths"]
+    sl = lengths[0]  # single-length evaluator → first (and usually only) length
+
+    res = data["results"][str(sl)]
+    has_norm_3d = "norm_entropy_head_layer_position" in res
+
+    # ── raw ─────────────────────────────────────────────────────────────
+    _plot_pos_layer_head_one(
+        data,
+        sl,
+        key_3d="entropy_head_layer_position",
+        title_prefix="Raw entropy  H(layer, head, position)",
+        ylabel_cbar="H (nats)",
+        out_dir=out_dir,
+        fname=f"{method_name}_fig08_pos_layer_head_heatmap_raw.{fmt}",
+        fmt=fmt,
+        dpi=dpi,
+        cmap="magma",
+    )
+
+    # ── normalised ───────────────────────────────────────────────────────
+    if has_norm_3d:
+        _plot_pos_layer_head_one(
+            data,
+            sl,
+            key_3d="norm_entropy_head_layer_position",
+            title_prefix="Normalised entropy  H_norm(layer, head, position)",
+            ylabel_cbar="H_norm ∈ [0, 1]",
+            out_dir=out_dir,
+            fname=f"{method_name}_fig08_pos_layer_head_heatmap_norm.{fmt}",
+            fmt=fmt,
+            dpi=dpi,
+            vrange_fixed=(0.0, 1.0),
+            cmap="magma",
+        )
+    else:
+        # compute norm on-the-fly: clone raw array and normalise along T axis
+        arr_raw = np.array(res["entropy_head_layer_position"])  # [L, H, T]
+        norm_3d = _norm_from_raw_np(arr_raw)
+        # temporarily inject the key so the worker can read it
+        res["norm_entropy_head_layer_position"] = norm_3d.tolist()
+        _plot_pos_layer_head_one(
+            data,
+            sl,
+            key_3d="norm_entropy_head_layer_position",
+            title_prefix="Normalised entropy  H_norm(layer, head, position)",
+            ylabel_cbar="H_norm ∈ [0, 1]",
+            out_dir=out_dir,
+            fname=f"{method_name}_fig08_pos_layer_head_heatmap_norm.{fmt}",
+            fmt=fmt,
+            dpi=dpi,
+            vrange_fixed=(0.0, 1.0),
+            cmap="magma",
+        )
+        del res["norm_entropy_head_layer_position"]
+
+
+# ---------------------------------------------------------------------------
+# Figure 9 – Entropy vs position, head-0 fixed, one line per layer
+# ---------------------------------------------------------------------------
+
+
+def _plot_entropy_by_pos_head0_one(
+    data: dict,
+    seq_len: int,
+    arr: np.ndarray,
+    title_prefix: str,
+    ylabel: str,
+    out_dir: str,
+    fname: str,
+    fmt: str,
+    dpi: int,
+    top_k_boundary: int = 0,
+    cmap_name: str = "coolwarm",
+) -> None:
+    """
+    Internal worker for Fig 9.
+
+    arr  : [L, T]  entropy at head=0 for every (layer, position)
+    Draws one line per layer, coloured by layer index using a diverging
+    colormap so early / late layers are visually distinct.
+    A thin colorbar replaces the legend.
+    """
+    L, T = arr.shape
+    pos_x = np.arange(T)
+
+    cmap = plt.get_cmap(cmap_name, L)
+    colors = [cmap(l / max(L - 1, 1)) for l in range(L)]
+
+    fig, ax = plt.subplots(figsize=(18, 8))
+
+    # gray band for forced top-k region
+    _shade_boundary(ax, top_k_boundary, alpha=0.08)
+
+    # --- draw lines: distinguish layer groups by line-width + alpha ---
+    lw_base, lw_hi = 1.0, 2.2
+    alpha_base, alpha_hi = 0.55, 0.92
+    highlight_every = max(1, L // 8)  # every ~1/8 of layers gets a thicker line
+
+    for l_idx in range(L):
+        is_highlight = (l_idx % highlight_every == 0) or (l_idx == L - 1)
+        lw = lw_hi if is_highlight else lw_base
+        alpha = alpha_hi if is_highlight else alpha_base
+        ax.plot(
+            pos_x,
+            arr[l_idx],
+            color=colors[l_idx],
+            linewidth=lw,
+            alpha=alpha,
+            rasterized=True,  # keeps file size small for many lines
+        )
+        # end-label for highlighted lines only
+        if is_highlight:
+            ax.annotate(
+                f"L{l_idx}",
+                xy=(T - 1, arr[l_idx, -1]),
+                xytext=(6, 0),
+                textcoords="offset points",
+                color=colors[l_idx],
+                fontsize=9,
+                va="center",
+                fontweight="bold",
+            )
+
+    # ── colorbar as layer axis ────────────────────────────────────────
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=L - 1))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, fraction=0.022, pad=0.02, aspect=35)
+    cbar.set_label("Layer index", fontsize=_LABEL_FS)
+    cbar.ax.tick_params(labelsize=_TICK_FS)
+    tick_step = max(1, L // 8)
+    cbar.set_ticks(range(0, L, tick_step))
+
+    # ── axes decoration ───────────────────────────────────────────────
+    ax.set_xlabel("Token position", fontsize=_LABEL_FS)
+    ax.set_ylabel(ylabel, fontsize=_LABEL_FS)
+    ax.xaxis.set_major_locator(mticker.MaxNLocator(integer=True, nbins=12))
+    ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.2f"))
+    ax.tick_params(labelsize=_TICK_FS)
+    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.45)
+    ax.grid(axis="x", linestyle=":", linewidth=0.4, alpha=0.30)
+
+    if top_k_boundary > 0:
+        ax.axvline(
+            top_k_boundary,
+            color="dimgray",
+            linewidth=1.2,
+            linestyle="--",
+            label=f"top-k boundary (pos={top_k_boundary})",
+        )
+        ax.legend(fontsize=_LEGEND_FS - 1, framealpha=0.75)
+
+    ax.set_title(
+        f"Fig 9 — {title_prefix}  ·  Head 0, all {L} layers  |  seq_len = {seq_len}\n"
+        "Each line = one layer  ·  Colour encodes layer depth  "
+        "(cool = early, warm = deep)",
+        fontsize=_TITLE_FS,
+        pad=10,
+        fontweight="bold",
+    )
+
+    _savefig(fig, os.path.join(out_dir, fname), dpi)
+
+
+def plot_entropy_by_pos_head0(
+    data: dict,
+    out_dir: str,
+    fmt: str,
+    dpi: int,
+    method_name: str = "",
+) -> None:
+    """
+    Fig 9 — entropy vs token position for head index 0, one curve per layer.
+
+    Two output files: raw entropy and normalised entropy.
+    Colormap encodes layer depth (cool = shallow, warm = deep) so the full
+    L-layer stack is legible without a cluttered legend.
+    """
+    lengths = data["lengths"]
+    sl = lengths[0]
+
+    res = data["results"][str(sl)]
+    top_k_bnd = res.get("top_k_boundary", 0)
+
+    arr_lht = np.array(res["entropy_head_layer_position"])  # [L, H, T]
+    raw_head0 = arr_lht[:, 0, :]  # [L, T]
+
+    has_norm_3d = "norm_entropy_head_layer_position" in res
+    if has_norm_3d:
+        norm_head0 = np.array(res["norm_entropy_head_layer_position"])[:, 0, :]
+    else:
+        norm_head0 = _norm_from_raw_np(raw_head0)
+
+    # ── raw ─────────────────────────────────────────────────────────────
+    _plot_entropy_by_pos_head0_one(
+        data,
+        sl,
+        arr=raw_head0,
+        title_prefix="Raw entropy  H(layer, head=0, position)",
+        ylabel="H (nats)",
+        out_dir=out_dir,
+        fname=f"{method_name}_fig09_entropy_vs_pos_head0_raw.{fmt}",
+        fmt=fmt,
+        dpi=dpi,
+        top_k_boundary=top_k_bnd,
+        cmap_name="coolwarm",
+    )
+
+    # ── normalised ───────────────────────────────────────────────────────
+    _plot_entropy_by_pos_head0_one(
+        data,
+        sl,
+        arr=norm_head0,
+        title_prefix="Normalised entropy  H_norm(layer, head=0, position)",
+        ylabel="H_norm ∈ [0, 1]",
+        out_dir=out_dir,
+        fname=f"{method_name}_fig09_entropy_vs_pos_head0_norm.{fmt}",
+        fmt=fmt,
+        dpi=dpi,
+        top_k_boundary=top_k_bnd,
+        cmap_name="coolwarm",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 
@@ -974,6 +1354,8 @@ _FIG_FUNCTIONS = [
     plot_position_head_heatmap,  # 5
     plot_delta_entropy_heatmap,  # 6
     plot_entropy_boxplot_violin,  # 7
+    plot_pos_layer_head_heatmap,  # 8  ← NEW
+    plot_entropy_by_pos_head0,  # 9  ← NEW
 ]
 
 
@@ -1071,8 +1453,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--fig",
         type=int,
         default=None,
-        choices=range(1, 8),
-        help="Generate only figure N (1–7); omit for all.",
+        choices=range(1, 10),
+        help="Generate only figure N (1–9); omit for all.",
     )
     return p
 
@@ -1090,6 +1472,7 @@ def main() -> None:
     print(f"Loading {input_path} …")
     with open(input_path, "r") as f:
         data = json.load(f)
+    data = _normalize_data(data)
     print(
         f"  lengths={data['lengths']}  "
         f"layers={data['num_layers']}  heads={data['num_heads']}"
