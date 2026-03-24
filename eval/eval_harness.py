@@ -1,11 +1,14 @@
 import argparse
 import json
 import os
-import sys
 import lm_eval
+from lm_eval.tasks import TaskManager
 from lm_eval.models.huggingface import HFLM
+import warnings
+import transformers
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+warnings.filterwarnings("ignore")
+transformers.logging.set_verbosity_error()
 
 from models.model_loader import load_model, load_tokenizer, add_args_model
 
@@ -19,8 +22,7 @@ _DEFAULT_FEWSHOT = {
     "truthfulqa_mc1": 0,
     "truthfulqa_mc2": 0,
     "mmlu": 5,
-    "longbench": 0,
-    "longbenchv2": 0,
+    "longbench2": 0,
 }
 
 # ---------------------------------------------------------------------------
@@ -31,8 +33,6 @@ _DEFAULT_FEWSHOT = {
 def _warn_unknown_tasks(task_list: list[str]) -> None:
     """Print a warning for any task that isn't in lm-eval's registry."""
     try:
-        from lm_eval.tasks import TaskManager
-
         tm = TaskManager()
         all_tasks = set(tm.all_tasks)
         for t in task_list:
@@ -53,13 +53,14 @@ def _warn_unknown_tasks(task_list: list[str]) -> None:
 def _build_output_path(output_dir: str, model_name: str, config) -> str:
     """Build a descriptive output JSON filename from model + RoPE config."""
     model_label = model_name.rstrip("/").split("/")[-1]
-    rope_label = config.rope_scaling["type"]
+    rope_scaling = config.rope_scaling
+    rope_label = rope_scaling["type"] if rope_scaling else "none"
     if rope_label != "none":
-        if config.rope_scaling["factor"] is not None:
-            rope_label += (
-                f"_factor{str(config.rope_scaling['factor']).replace('.', '_')}"
-            )
-        elif config.rope_scaling["dynamic"]:
+        factor = rope_scaling.get("factor", None)
+        dynamic = rope_scaling.get("dynamic", False)
+        if factor is not None:
+            rope_label += f"_factor{str(factor).replace('.', '_')}"
+        elif dynamic:
             rope_label += "_dynamic"
     filename = f"{model_label}_{rope_label}.json"
     return os.path.join(output_dir, filename)
@@ -71,6 +72,7 @@ def _build_output_path(output_dir: str, model_name: str, config) -> str:
 
 
 def main(args):
+    os.makedirs(args.output_dir, exist_ok=True)
     # ── 0. Validate tasks ─────────────────────────────────────────────── #
     task_list = [t.strip() for t in args.tasks.split(",") if t.strip()]
     _warn_unknown_tasks(task_list)
@@ -81,9 +83,15 @@ def main(args):
     # defaults use_cache=True.
     model, config = load_model(args)
     tokenizer = load_tokenizer(args)
+    rope_scaling = config.rope_scaling
+    rope_type = rope_scaling["type"] if rope_scaling else "none"
+    rope_factor = rope_scaling.get("factor", None) if rope_scaling else "None"
+    rope_dynamic = rope_scaling.get("dynamic", False) if rope_scaling else "False"
     print(f"\n{'='*60}")
     print(f"Loading model: {args.model_name}")
-    print(f"RoPE type    : {config.rope_scaling['type']}")
+    print(f"RoPE type    : {rope_type}")
+    print(f"RoPE factor  : {rope_factor}")
+    print(f"RoPE dynamic : {rope_dynamic}")
     print(f"Max length   : {args.max_length}")
     print(f"Tasks        : {', '.join(task_list)}")
     print(f"{'='*60}\n")
@@ -108,44 +116,56 @@ def main(args):
         num_fewshot = {t: _DEFAULT_FEWSHOT.get(t, 0) for t in task_list}
 
     # ── 4. Run evaluation ─────────────────────────────────────────────── #
-    results = lm_eval.simple_evaluate(
-        model=lm,
-        tasks=task_list,
-        num_fewshot=num_fewshot,
-        batch_size=args.batch_size,
-        log_samples=args.log_samples,
-    )
-
-    # ── 5. Save results ───────────────────────────────────────────────── #
-    os.makedirs(args.output_dir, exist_ok=True)
+    results = {}
     out_path = _build_output_path(args.output_dir, args.model_name, config)
 
-    # Attach metadata to results for traceability
-    results["metadata"] = {
-        "model_name": args.model_name,
-        "adapter_path": args.adapter_path,
-        "rope_type": config.rope_scaling["type"],
-        "rope_factor": getattr(config.rope_scaling, "factor", None),
-        "rope_dynamic": getattr(config.rope_scaling, "dynamic", None),
-        "max_length": args.max_length,
-        "tasks": task_list,
-    }
+    for task in task_list:
+        num_fewshot_task = num_fewshot.get(task, 0)
+        print(f"\n{'='*60}")
+        print(f"Running task: {task} (few-shot: {num_fewshot_task})")
+        print(f"{'='*60}")
 
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=4, ensure_ascii=False, default=str)
-    print(f"\nResults saved → {out_path}")
+        result = lm_eval.simple_evaluate(
+            model=lm,
+            tasks=[task],
+            num_fewshot=num_fewshot_task,
+            batch_size=args.batch_size,
+            log_samples=args.log_samples,
+        )
+        results[task] = result
 
-    # ── 6. Print summary ──────────────────────────────────────────────── #
+        # ── 5. Save results after each task ─────────────────────────────── #
+        results_to_save = dict(results)
+        results_to_save["metadata"] = {
+            "model_name": args.model_name,
+            "adapter_path": args.adapter_path,
+            "rope_type": rope_type,
+            "rope_factor": rope_factor,
+            "rope_dynamic": rope_dynamic,
+            "max_length": args.max_length,
+            "tasks": task_list,
+            "completed_tasks": list(results.keys()),
+        }
+
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(results_to_save, f, indent=2, ensure_ascii=False, default=str)
+        print(f"\n[Checkpoint] Results saved after task '{task}' → {out_path}")
+
+        # Print task result immediately
+        if result and "results" in result:
+            print(f"\n  Task '{task}' results:")
+            for metric, value in result["results"].get(task, {}).items():
+                if isinstance(value, float):
+                    print(f"    {metric}: {value:.4f}  ({value*100:.2f}%)")
+                elif not metric.startswith("_"):
+                    print(f"    {metric}: {value}")
+
+    # ── 6. Print final summary ────────────────────────────────────────── #
     print(f"\n{'='*60}")
-    print("RESULTS SUMMARY")
+    print(f"ALL TASKS [{', '.join(task_list)}] COMPLETED - FINAL SUMMARY")
     print(f"{'='*60}")
-    for task_name, task_results in results.get("results", {}).items():
-        print(f"\n  {task_name}:")
-        for metric, value in task_results.items():
-            if isinstance(value, float):
-                print(f"    {metric}: {value:.4f}  ({value*100:.2f}%)")
-            elif not metric.startswith("_"):
-                print(f"    {metric}: {value}")
+    print(f"Total tasks completed: {len(results)}")
+    print(f"Results saved → {out_path}")
     print(f"{'='*60}\n")
 
     return results
@@ -161,10 +181,10 @@ def add_args_harness(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument(
         "--tasks",
         type=str,
-        default="longbench,longbenchv2,arc_challenge,hellaswag,truthfulqa_mc1,mmlu",
+        default="longbench2,arc_challenge,hellaswag,truthfulqa_mc1,mmlu",
         help=(
             "Comma-separated list of lm-eval task names.  "
-            "Examples: longbench, longbenchv2, arc_challenge, hellaswag, "
+            "Examples: longbench2, arc_challenge, hellaswag, "
             "truthfulqa_mc1, mmlu.  "
             "Run `python -m lm_eval --tasks list` for all available tasks."
         ),
@@ -177,7 +197,7 @@ def add_args_harness(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
             "Number of few-shot examples for all tasks.  "
             "If omitted, uses per-task defaults: "
             "arc_challenge=25, hellaswag=10, truthfulqa=0, mmlu=5, "
-            "longbench=0, longbenchv2=0."
+            "longbench2=0."
         ),
     )
     parser.add_argument(

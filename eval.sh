@@ -2,106 +2,100 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+echo "=========================================="
+echo "Evaluation Script"
+echo "=========================================="
+
+export DISABLE_FLASH_ATTN=1
 export USE_FLASH_ATTN=0
 
-# Model
-MODEL="--model-name huggyllama/llama-7b --load-in-4bit --min-length 2048 --max-length 65536 --load-in-4bit"
-MODEL_NAME="huggyllama/llama-7b"
-MAX_LENGTH=65536
-MIN_LENGTH=2048
-DTYPE="auto"
+CUDA_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
-# RoPE method
-# NOTE: --rope-factor and --rope-dynamic are mutually exclusive.
-#   --rope-dynamic only  → runtime scaling (s = seq_len / original_L), no fixed ratio
-#   --rope-factor F only → static scaling with a fixed ratio F &gt; 1.0
-# Evaluation tests use dynamic mode so the model self-adapts across all length steps.
-ROPE_METHODS=(
+MODEL_NAME="huggyllama/llama-7b"
+DTYPE="auto"
+QUANT="--load-in-4bit"
+
+MAX_LENGTH=16384
+MIN_LENGTH=16384
+
+TASKS="longbench2,arc_challenge,hellaswag,truthfulqa_mc1,mmlu"
+BATCH_SIZE=2
+OUTPUT_DIR="results/harness"
+
+ADAPTER_DIR="/home/linzhen/workspace/finetunes/continued_pretrain"
+
+METHODS=(
     "--rope-type none"
     "--rope-type linear --rope-dynamic"
     "--rope-type ntk --rope-dynamic"
     "--rope-type part-ntk --rope-dynamic"
     "--rope-type yarn --rope-dynamic"
-    "--rope-type my-rope --rope-dynamic"
-    "--rope-type my-rope-scaled --rope-dynamic"
-    "--rope-type my-rope2 --rope-dynamic"
-    "--rope-type my-rope2-scaled --rope-dynamic"
-    "--rope-type block-layered --rope-dynamic"
-    "--rope-type block-layered-scaled --rope-dynamic"
-    "--rope-type freq-smooth --rope-dynamic"
-    "--rope-type freq-smooth-scaled --rope-dynamic"
     "--rope-type freq-reciprocal --rope-dynamic"
     "--rope-type freq-reciprocal-scaled --rope-dynamic"
-
-    "--rope-type linear --rope-factor 4.0"
-    "--rope-type ntk --rope-factor 4.0"
-    "--rope-type part-ntk --rope-factor 4.0"
-    "--rope-type yarn --rope-factor 4.0"
-    "--rope-type my-rope --rope-factor 4.0"
-    "--rope-type my-rope-scaled --rope-factor 4.0"
-    "--rope-type my-rope2 --rope-factor 4.0"
-    "--rope-type my-rope2-scaled --rope-factor 4.0"
-    "--rope-type block-layered --rope-factor 4.0"
-    "--rope-type block-layered-scaled --rope-factor 4.0"
-    "--rope-type freq-smooth --rope-factor 4.0"
-    "--rope-type freq-smooth-scaled --rope-factor 4.0"
-    "--rope-type freq-reciprocal --rope-factor 4.0"
-    "--rope-type freq-reciprocal-scaled --rope-factor 4.0"
+    "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
+    "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
+    "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
+    "--adapter-path ${ADAPTER_DIR}/part-ntk_20260315_233845"
+    "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
+    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
+    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
 )
 
-# Evaluation type
-TEST_TYPES=(
-    "perplexity"
+EVAL_TYPES=(
+    # "perplexity"
+    # "performance"
     "passkey"
-    "quality"
-    "performance"
+    "eval_harness"
 )
 
-TEST_SET="--length-step 2048"
-
 echo "=========================================="
-echo "Running all RoPE method evaluations"
+echo "Configuration"
 echo "=========================================="
-echo "Model: $MODEL"
-echo "Test types: ${TEST_TYPES[*]}"
-echo "RoPE methods: ${#ROPE_METHODS[@]}"
+echo "Model          : ${MODEL_NAME}"
+echo "Max length     : ${MAX_LENGTH}"
+echo "Quantization   : ${QUANT}"
+echo "Methods        : ${#METHODS[@]}"
+echo "Adapters       : ${#ADAPTERS[@]}"
+echo "Eval types     : ${EVAL_TYPES[*]}"
+echo "Run harness    : ${RUN_HARNESS}"
 echo "=========================================="
 
 run_eval() {
     local eval_type=$1
-    local rope_type=$2
+    local args=$2
     
     echo ""
     echo "------------------------------------------"
-    echo "Eval: $eval_type | RoPE: $rope_type"
+    echo "Eval: $eval_type | $args"
     echo "------------------------------------------"
     
-    local cmd="python $SCRIPT_DIR/eval/${eval_type}.py \
-        --model-name $MODEL_NAME \
-        --rope-type $rope_type \
-        --max-length $MAX_LENGTH \
-        --min-length $MIN_LENGTH \
-        --dtype $DTYPE \
-        --load-in-4bit"
+    local cmd="python ${SCRIPT_DIR}/eval/${eval_type}.py \
+        --model-name ${MODEL_NAME} \
+        ${args} \
+        --max-length ${MAX_LENGTH} \
+        --min-length ${MIN_LENGTH} \
+        --dtype ${DTYPE} \
+        ${QUANT}"
     
     echo "Executing: $cmd"
     eval $cmd
     
     if [ $? -eq 0 ]; then
-        echo "[SUCCESS] Eval completed: $eval_type with $rope_type"
+        echo "[SUCCESS] Eval completed: $eval_type with $args"
     else
-        echo "[FAILED] Eval failed: $eval_type with $rope_type"
+        echo "[FAILED] Eval failed: $eval_type with $args"
     fi
 }
 
-for rope_method in "${ROPE_METHODS[@]}"; do
+for eval_type in "${EVAL_TYPES[@]}"; do
     echo ""
     echo "=========================================="
-    echo "RoPE Method: $rope_method"
+    echo "Eval Type: $eval_type"
     echo "=========================================="
     
-    for test_type in "${TEST_TYPES[@]}"; do
-        run_eval "$test_type" "$rope_method"
+    for method in "${METHODS[@]}"; do
+        run_eval "$eval_type" "$method"
     done
 done
 

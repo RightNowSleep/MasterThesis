@@ -35,8 +35,10 @@ QUANTIZATION="4bit"
 DATASET="emozilla/pg_books-tokenized-bos-eos-chunked-65536"
 
 # ── Infrastructure ────────────────────────────────────────────────────────────
-CUDA_DEVICES="1,2,3"
-OUTPUT_DIR="/home/linzhen/workspace/finetunes/continued_pretrain"
+CUDA_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
+
+OUTPUT_DIR="finetunes/continued_pretrain"
 WANDB=""                # Set to a WandB project name to enable, e.g. "my-project"
 
 # ── RoPE methods ─────────────────────────────────────────────────────────────
@@ -50,8 +52,9 @@ ROPE_METHODS=(
     # "--rope-type ntk --rope-factor $ROPE_FACTOR"
     # "--rope-type part-ntk --rope-factor $ROPE_FACTOR"
     # "--rope-type yarn --rope-factor $ROPE_FACTOR"
-    "--rope-type freq-reciprocal --rope-factor $ROPE_FACTOR"
-    "--rope-type freq-reciprocal-scaled --rope-factor $ROPE_FACTOR"
+    # "--rope-type freq-reciprocal --rope-factor $ROPE_FACTOR"
+    # "--rope-type freq-reciprocal-scaled --rope-factor $ROPE_FACTOR"
+    "--rope-type freq-reciprocal-scaled-no-layer --rope-factor $ROPE_FACTOR"
 )
 
 # ── Build shared argument string ─────────────────────────────────────────────
@@ -74,8 +77,7 @@ BASE_ARGS="--model-name $MODEL_NAME \
   --lora-dropout $LORA_DROPOUT \
   --quantization $QUANTIZATION \
   --seed $SEED \
-  --output-dir $OUTPUT_DIR \
-  --cuda-visible-devices $CUDA_DEVICES"
+  --output-dir $OUTPUT_DIR"
 
 if [ -n "$WANDB" ]; then
     BASE_ARGS="$BASE_ARGS --wandb $WANDB"
@@ -101,7 +103,7 @@ run_pretrain() {
     echo "RoPE: $rope_method"
     echo "------------------------------------------"
 
-    local cmd="CUDA_VISIBLE_DEVICES=$CUDA_DEVICES python continued_pretrain.py \
+    local cmd="python continued_pretrain.py \
       $BASE_ARGS \
       $rope_method"
 

@@ -151,9 +151,6 @@ def save_checkpoint(
 
 
 def main(args):
-    if args.cuda_visible_devices:
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_visible_devices
-
     # ------------------------------------------------------------------
     # Derive experiment tag
     # ------------------------------------------------------------------
@@ -531,17 +528,11 @@ def add_args_continued_pretrain(parser):
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="/home/linzhen/workspace/finetunes/continued_pretrain",
+        default="finetunes/continued_pretrain",
         help="Root directory for saving models and checkpoints.",
     )
 
     # ── Infrastructure ───────────────────────────────────────────────────────
-    parser.add_argument(
-        "--cuda-visible-devices",
-        type=str,
-        default="1,2,3",
-        help="Comma-separated CUDA device ids to expose.",
-    )
     parser.add_argument(
         "--wandb",
         type=str,

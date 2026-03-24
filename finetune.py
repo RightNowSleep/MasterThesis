@@ -35,7 +35,7 @@ def add_args_finetune(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="/home/linzhen/workspace/finetunes/finetune",
+        default="finetunes/finetune",
     )
     parser.add_argument("--num-train-epochs", type=int, default=1)
     parser.add_argument("--per-device-train-batch-size", type=int, default=4)

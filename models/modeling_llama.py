@@ -272,6 +272,8 @@ class LlamaAttention(nn.Module):
         {"type": "freq-reciprocal",      "dynamic": True} → dynamic Freq-Reciprocal (pos only)
         {"type": "freq-reciprocal-scaled", "factor": s}   → static Freq-Reciprocal + attn scale
         {"type": "freq-reciprocal-scaled", "dynamic": True} → dynamic Freq-Reciprocal + attn scale
+        {"type": "freq-reciprocal-scaled-no-layer", "factor": s}   → static Freq-Reciprocal + attn scale, no layer index
+        {"type": "freq-reciprocal-scaled-no-layer", "dynamic": True} → dynamic Freq-Reciprocal + attn scale, no layer index
 
         ``"factor"`` and ``"dynamic"`` are mutually exclusive.  If both reach
         this point (e.g. bypassing LlamaConfig validation), ``"factor"`` wins.
@@ -457,6 +459,18 @@ class LlamaAttention(nn.Module):
                 dynamic=dynamic,
             )
 
+        elif scaling_type == "freq-reciprocal-scaled-no-layer":
+            self.rotary_emb = LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                layer_idx=self.layer_idx,
+                num_hidden_layers=self.config.num_hidden_layers,
+                dynamic=dynamic,
+            )
+
         else:
             raise ValueError(
                 f"Unknown RoPE scaling type '{scaling_type}'. "
@@ -464,7 +478,7 @@ class LlamaAttention(nn.Module):
                 "my-rope, my-rope-scaled, my-rope2, my-rope2-scaled, "
                 "block-layered, block-layered-scaled, "
                 "freq-smooth, freq-smooth-scaled, "
-                "freq-reciprocal, freq-reciprocal-scaled."
+                "freq-reciprocal, freq-reciprocal-scaled, freq-reciprocal-scaled-no-layer."
             )
 
     # ------------------------------------------------------------------ #

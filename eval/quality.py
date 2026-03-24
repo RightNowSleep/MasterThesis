@@ -687,7 +687,7 @@ class QualityEvaluator:
                 {"summary": summary, "samples": sample_records},
                 f,
                 ensure_ascii=False,
-                indent=4,
+                indent=2,
             )
 
         return summary

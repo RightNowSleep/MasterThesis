@@ -25,6 +25,7 @@ _ROPE_TYPES_WITH_DYNAMIC_FLAG = {
     "freq-smooth-scaled",
     "freq-reciprocal",
     "freq-reciprocal-scaled",
+    "freq-reciprocal-scaled-no-layer",
 }
 _ROPE_TYPE_NONE = "none"
 
@@ -346,6 +347,9 @@ def add_args_model(parser):
             "  block-layered-scaled  — Block-Layered RoPE + attention temperature\n"
             "  freq-smooth           — Freq-Smooth RoPE (position only)\n"
             "  freq-smooth-scaled    — Freq-Smooth RoPE + attention temperature\n"
+            "  freq-reciprocal       — Freq-Reciprocal RoPE (position only)\n"
+            "  freq-reciprocal-scaled — Freq-Reciprocal RoPE + attention temperature\n"
+            "  freq-reciprocal-scaled-no-layer — Freq-Reciprocal RoPE + attention temperature, no layer index\n"
             "\n"
             "All types except 'none' require exactly ONE of:\n"
             "  --rope-factor F   static scaling with fixed ratio F > 1.0\n"

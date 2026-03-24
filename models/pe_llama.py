@@ -24,6 +24,7 @@ __all__ = [
     # Freq-Reciprocal family
     "LlamaFreqReciprocalRotaryEmbedding",
     "LlamaFreqReciprocalScaledRotaryEmbedding",
+    "LlamaFreqReciprocalScaledNoLayerRotaryEmbedding",
 ]
 
 # ================================================================================== #
@@ -45,6 +46,8 @@ __all__ = [
 #  LlamaFreqSmoothScaledRotaryEmbedding   (Freq-Smooth RoPE + attn temperature)      #
 #  LlamaFreqReciprocalRotaryEmbedding     (Freq-Reciprocal RoPE, position only)      #
 #  LlamaFreqReciprocalScaledRotaryEmbedding (Freq-Reciprocal RoPE + attn temperature)#
+#  LlamaFreqReciprocalScaledNoLayerRotaryEmbedding                                   #
+#  (Freq-Reciprocal RoPE + attn temperature, no layer index)                         #
 #                                                                                    #
 #  Each class accepts a ``dynamic: bool`` constructor argument:                      #
 #    dynamic=False (default) – static mode: frequencies are pre-cached once          #
@@ -1681,6 +1684,109 @@ class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbeddin
         depth_factor = math.exp(self.layer_idx / self.N) / math.e
 
         S_t = 1.0 + 0.1 * t.log() * (1.0 + depth_factor)
+
+        return S_t.unsqueeze(-1)
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        super()._set_cos_sin_cache(seq_len, device, dtype)
+        attn_scale = self._compute_attn_scale(seq_len, device)
+        self.register_buffer(
+            "cos_cached",
+            (self.cos_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+        self.register_buffer(
+            "sin_cached",
+            (self.sin_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        if self.dynamic:
+            if seq_len is None:
+                seq_len = x.shape[2]
+            cos, sin = super().forward(x, seq_len)
+            S = max(1.0, seq_len / self.original_max_position_embeddings)
+            attn_scale = self._compute_attn_scale(seq_len, x.device)
+            return (cos * attn_scale).to(x.dtype), (sin * attn_scale).to(x.dtype)
+        return super().forward(x, seq_len)
+
+
+class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
+    LlamaFreqReciprocalRotaryEmbedding
+):
+    """
+    Freq-Reciprocal Block RoPE + power-law attention temperature scaling, no layer index.
+
+    Inherits all position-encoding logic from
+    ``LlamaFreqReciprocalRotaryEmbedding`` and multiplies the resulting cos/sin
+    values by a power-law attention temperature:
+
+        scale = √(head_dim) × S^α × (1 + β × (layer_idx / N))
+
+    where:
+        - head_dim: dimension of each attention head
+        - S: sequence length extension ratio = max(1, seq_len / L_0)
+        - α (alpha): exponent for scaling factor S
+        - β (beta): layer-dependent scaling coefficient
+        - layer_idx: 0-based index of this attention layer
+        - N: total number of transformer layers
+
+    In static mode the scalar is baked into the cos/sin cache at construction.
+    In dynamic mode it is recomputed on every forward pass.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        layer_idx: int = 0,
+        num_hidden_layers: int = 32,
+        dynamic: bool = False,
+        alpha: float = 0.25,
+        beta: float = 0.05,
+    ):
+        super().__init__(
+            dim=dim,
+            max_position_embeddings=max_position_embeddings,
+            base=base,
+            device=device,
+            scaling_factor=scaling_factor,
+            original_max_position_embeddings=original_max_position_embeddings,
+            layer_idx=layer_idx,
+            num_hidden_layers=num_hidden_layers,
+            dynamic=dynamic,
+        )
+        self.alpha = alpha
+        self.beta = beta
+
+    def _compute_attn_scale(self, seq_len: int, device):
+        """
+        Compute power-law attention temperature scaling.
+
+        The scaling factor combines position and depth factors:
+            S_t = 1 + 0.1 * log(t)
+
+        where:
+            - t: normalized position factor, max(1, pos / L_0)
+            - depth_factor: layer-aware factor, exp(layer_idx / N) / e
+
+        Returns:
+            Tensor of shape (seq_len, 1) for broadcasting with cos/sin caches.
+        """
+        t = torch.maximum(
+            torch.tensor(1.0, device=device),
+            torch.arange(seq_len, device=device, dtype=torch.float32)
+            / self.original_max_position_embeddings,
+        )
+
+        # depth_factor = math.exp(self.layer_idx / self.N) / math.e
+
+        S_t = 1.0 + 0.1 * t.log()
 
         return S_t.unsqueeze(-1)
 

@@ -308,7 +308,7 @@ class PerformanceEvaluator:
                     "memory_usages": memory_usages,
                 },
                 f,
-                indent=4,
+                indent=2,
             )
 
         print(f"Performance test completed, results saved to: {save_path}")
@@ -341,8 +341,8 @@ def generate_save_filename(model_name, config):
     rope_type = rope_scaling["type"] if rope_scaling else "none"
     parts = [model_name, rope_type]
     if rope_type != "none":
-        factor = getattr(config, "factor", None)
-        dynamic = getattr(config, "dynamic", False)
+        factor = rope_scaling.get("factor", None)
+        dynamic = rope_scaling.get("dynamic", False)
         if factor is not None:
             parts.append(f"factor{str(factor).replace('.', '_')}")
         elif dynamic:

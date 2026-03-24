@@ -1,3 +1,6 @@
+export DISABLE_FLASH_ATTN=1
+CUDA_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 # Model
 MODEL="--model-name huggyllama/llama-7b --load-in-4bit --min-length 2048 --max-length 65536"
 
@@ -7,43 +10,20 @@ MODEL="--model-name huggyllama/llama-7b --load-in-4bit --min-length 2048 --max-l
 #   --rope-factor F only → static scaling with a fixed ratio F > 1.0
 # Evaluation tests use dynamic mode so the model self-adapts across all length steps.
 ROPE_METHODS=(
-    # "--rope-type none"
-    # "--rope-type linear --rope-dynamic"
-    # "--rope-type ntk --rope-dynamic"
-    # "--rope-type part-ntk --rope-dynamic"
-    # "--rope-type yarn --rope-dynamic"
-    # "--rope-type my-rope --rope-dynamic"
-    # "--rope-type my-rope-scaled --rope-dynamic"
-    # "--rope-type my-rope2 --rope-dynamic"
-    # "--rope-type my-rope2-scaled --rope-dynamic"
-    # "--rope-type block-layered --rope-dynamic"
-    # "--rope-type block-layered-scaled --rope-dynamic"
-    # "--rope-type freq-smooth --rope-dynamic"
-    # "--rope-type freq-smooth-scaled --rope-dynamic"
-    # "--rope-type freq-reciprocal --rope-dynamic"
+    "--rope-type none"
+    "--rope-type linear --rope-dynamic"
+    "--rope-type ntk --rope-dynamic"
+    "--rope-type part-ntk --rope-dynamic"
+    "--rope-type yarn --rope-dynamic"
+    "--rope-type freq-reciprocal --rope-dynamic"
     "--rope-type freq-reciprocal-scaled --rope-dynamic"
-    # "--rope-type linear --rope-factor 4.0"
-    # "--rope-type ntk --rope-factor 4.0"
-    # "--rope-type part-ntk --rope-factor 4.0"
-    # "--rope-type yarn --rope-factor 4.0"
-    # "--rope-type my-rope --rope-factor 4.0"
-    # "--rope-type my-rope-scaled --rope-factor 4.0"
-    # "--rope-type my-rope2 --rope-factor 4.0"
-    # "--rope-type my-rope2-scaled --rope-factor 4.0"
-    # "--rope-type block-layered --rope-factor 4.0"
-    # "--rope-type block-layered-scaled --rope-factor 4.0"
-    # "--rope-type freq-smooth --rope-factor 4.0"
-    # "--rope-type freq-smooth-scaled --rope-factor 4.0"
-    # "--rope-type freq-reciprocal --rope-factor 4.0"
-    "--rope-type freq-reciprocal-scaled --rope-factor 4.0"
 )
 
 # Evaluation type
 TEST_TYPES=(
     "perplexity"
-    # "passkey"
-    # "quality"
-    # "performance"
+    "passkey"
+    "performance"
 )
 
 TEST_SET="--length-step 2048"
