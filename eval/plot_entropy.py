@@ -1180,7 +1180,6 @@ def _plot_pos_layer_head_one(
         f"Fig 8 — {title_prefix}  ·  Head × Layer heatmap at selected positions\n"
         f"seq_len = {seq_len}  |  Each panel: colour = entropy(layer, head) at that token position",
         fontsize=_SUPTITLE_FS,
-        y=1.02,
         fontweight="bold",
     )
     _savefig(fig, os.path.join(out_dir, fname), dpi, constrained_layout=True)

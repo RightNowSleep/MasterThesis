@@ -163,6 +163,7 @@ class LlamaConfig(PretrainedConfig):
         * ``"freq-reciprocal"`` — reciprocal frequency RoPE
         * ``"freq-reciprocal-scaled"`` — scaled reciprocal frequency RoPE
         * ``"freq-reciprocal-scaled-no-layer"`` — scaled reciprocal frequency RoPE, no layer index
+        * ``"freq-reciprocal-scaled-adaptive"`` — scaled reciprocal frequency RoPE, adaptive scaling
 
         All seven types share the same ``"factor"`` / ``"dynamic"`` interface:
 
@@ -209,6 +210,7 @@ class LlamaConfig(PretrainedConfig):
             "dynamic-freq-reciprocal": "freq-reciprocal",
             "dynamic-freq-reciprocal-scaled": "freq-reciprocal-scaled",
             "dynamic-freq-reciprocal-scaled-no-layer": "freq-reciprocal-scaled-no-layer",
+            "dynamic-freq-reciprocal-scaled-adaptive": "freq-reciprocal-scaled-adaptive",
         }
         if rope_scaling_type in _deprecated_dynamic_map:
             new_type = _deprecated_dynamic_map[rope_scaling_type]
@@ -239,6 +241,7 @@ class LlamaConfig(PretrainedConfig):
             "freq-reciprocal",
             "freq-reciprocal-scaled",
             "freq-reciprocal-scaled-no-layer",
+            "freq-reciprocal-scaled-adaptive",
         ]
         if rope_scaling_type is None or rope_scaling_type not in valid_types:
             raise ValueError(

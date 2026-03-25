@@ -26,6 +26,7 @@ _ROPE_TYPES_WITH_DYNAMIC_FLAG = {
     "freq-reciprocal",
     "freq-reciprocal-scaled",
     "freq-reciprocal-scaled-no-layer",
+    "freq-reciprocal-scaled-adaptive",
 }
 _ROPE_TYPE_NONE = "none"
 

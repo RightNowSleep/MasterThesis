@@ -471,6 +471,18 @@ class LlamaAttention(nn.Module):
                 dynamic=dynamic,
             )
 
+        elif scaling_type == "freq-reciprocal-scaled-adaptive":
+            self.rotary_emb = LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                layer_idx=self.layer_idx,
+                num_hidden_layers=self.config.num_hidden_layers,
+                dynamic=dynamic,
+            )
+
         else:
             raise ValueError(
                 f"Unknown RoPE scaling type '{scaling_type}'. "
@@ -478,7 +490,8 @@ class LlamaAttention(nn.Module):
                 "my-rope, my-rope-scaled, my-rope2, my-rope2-scaled, "
                 "block-layered, block-layered-scaled, "
                 "freq-smooth, freq-smooth-scaled, "
-                "freq-reciprocal, freq-reciprocal-scaled, freq-reciprocal-scaled-no-layer."
+                "freq-reciprocal, freq-reciprocal-scaled,"
+                "freq-reciprocal-scaled-no-layer, freq-reciprocal-scaled-adaptive."
             )
 
     # ------------------------------------------------------------------ #

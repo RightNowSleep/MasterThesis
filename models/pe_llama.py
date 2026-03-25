@@ -25,6 +25,7 @@ __all__ = [
     "LlamaFreqReciprocalRotaryEmbedding",
     "LlamaFreqReciprocalScaledRotaryEmbedding",
     "LlamaFreqReciprocalScaledNoLayerRotaryEmbedding",
+    "LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding",
 ]
 
 # ================================================================================== #
@@ -48,6 +49,7 @@ __all__ = [
 #  LlamaFreqReciprocalScaledRotaryEmbedding (Freq-Reciprocal RoPE + attn temperature)#
 #  LlamaFreqReciprocalScaledNoLayerRotaryEmbedding                                   #
 #  (Freq-Reciprocal RoPE + attn temperature, no layer index)                         #
+#  LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding                                  #
 #                                                                                    #
 #  Each class accepts a ``dynamic: bool`` constructor argument:                      #
 #    dynamic=False (default) – static mode: frequencies are pre-cached once          #
@@ -1789,6 +1791,97 @@ class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
         S_t = 1.0 + 0.1 * t.log()
 
         return S_t.unsqueeze(-1)
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        super()._set_cos_sin_cache(seq_len, device, dtype)
+        attn_scale = self._compute_attn_scale(seq_len, device)
+        self.register_buffer(
+            "cos_cached",
+            (self.cos_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+        self.register_buffer(
+            "sin_cached",
+            (self.sin_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        if self.dynamic:
+            if seq_len is None:
+                seq_len = x.shape[2]
+            cos, sin = super().forward(x, seq_len)
+            S = max(1.0, seq_len / self.original_max_position_embeddings)
+            attn_scale = self._compute_attn_scale(seq_len, x.device)
+            return (cos * attn_scale).to(x.dtype), (sin * attn_scale).to(x.dtype)
+        return super().forward(x, seq_len)
+
+
+class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
+    LlamaFreqReciprocalRotaryEmbedding
+):
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        layer_idx: int = 0,
+        num_hidden_layers: int = 32,
+        dynamic: bool = False,
+    ):
+        super().__init__(
+            dim=dim,
+            max_position_embeddings=max_position_embeddings,
+            base=base,
+            device=device,
+            scaling_factor=scaling_factor,
+            original_max_position_embeddings=original_max_position_embeddings,
+            layer_idx=layer_idx,
+            num_hidden_layers=num_hidden_layers,
+            dynamic=dynamic,
+        )
+        self.alpha = 0.15
+        self.beta = 0.8
+        self.gamma = 0.7
+
+    def _compute_layer_factor(self) -> float:
+        a = 0.05
+        b = 0.05
+
+        normalized_layer = self.layer_idx / (self.N - 1)
+
+        factor = (
+            1.0 + a * math.sin(2 * math.pi * normalized_layer) + b * normalized_layer
+        )
+
+        # 限制范围 [0.9, 1.15]
+        return min(max(factor, 0.9), 1.15)
+
+    def _compute_attn_scale(self, seq_len: int, device):
+        S = max(1.0, seq_len / self.original_max_position_embeddings)
+        layer_factor = self._compute_layer_factor()
+
+        positions = torch.arange(seq_len, device=device, dtype=torch.float32)
+        L0 = self.original_max_position_embeddings
+
+        rel_pos = positions - L0
+        rel_ratio = rel_pos / L0
+        position_factors = torch.where(
+            positions < L0,
+            torch.ones_like(positions),
+            1.0 + self.beta * torch.clamp(rel_ratio, min=0.0).pow(self.gamma),
+        )
+
+        attn_scale = torch.where(
+            positions < L0,
+            torch.ones_like(positions),
+            1.0 + self.alpha * math.log(S) * layer_factor * position_factors,
+        )
+
+        return attn_scale.unsqueeze(-1)
 
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
         super()._set_cos_sin_cache(seq_len, device, dtype)
