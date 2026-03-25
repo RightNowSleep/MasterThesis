@@ -19,10 +19,12 @@ from models.model_loader import load_model, load_tokenizer, add_args_model
 _DEFAULT_FEWSHOT = {
     "arc_challenge": 25,
     "hellaswag": 10,
+    "truthfulqa": 0,
     "truthfulqa_mc1": 0,
     "truthfulqa_mc2": 0,
     "mmlu": 5,
-    "longbench2": 0,
+    "longbench": None,
+    "longbench2": None,
 }
 
 # ---------------------------------------------------------------------------
@@ -120,7 +122,7 @@ def main(args):
     out_path = _build_output_path(args.output_dir, args.model_name, config)
 
     for task in task_list:
-        num_fewshot_task = num_fewshot.get(task, 0)
+        num_fewshot_task = num_fewshot.get(task, None)
         print(f"\n{'='*60}")
         print(f"Running task: {task} (few-shot: {num_fewshot_task})")
         print(f"{'='*60}")
@@ -215,6 +217,7 @@ def add_args_harness(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument(
         "--log-samples",
         action="store_true",
+        default=False,
         help="Save per-sample predictions alongside aggregate results.",
     )
     return parser

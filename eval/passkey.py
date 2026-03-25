@@ -573,13 +573,14 @@ class PasskeyEvaluator:
         pbar.close()
 
         save_path = os.path.join(self.save_dir, self.save_file)
-        with open(save_path, "w") as f:
+        with open(save_path, "w", encoding="utf-8") as f:
             json.dump(
                 {
                     "lengths": self.length_list,
                     "success_rates": success_rates,
                 },
                 f,
+                ensure_ascii=False,
                 indent=2,
             )
 

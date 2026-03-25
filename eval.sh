@@ -23,7 +23,7 @@ TASKS="longbench2,arc_challenge,hellaswag,truthfulqa_mc1,mmlu"
 BATCH_SIZE=2
 OUTPUT_DIR="results/harness"
 
-ADAPTER_DIR="/home/linzhen/workspace/finetunes/continued_pretrain"
+ADAPTER_DIR="finetunes/continued_pretrain"
 
 METHODS=(
     "--rope-type none"
@@ -40,6 +40,7 @@ METHODS=(
     "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
     "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
     "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
+    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
 )
 
 EVAL_TYPES=(

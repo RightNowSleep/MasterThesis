@@ -39,6 +39,7 @@ ADAPTER_DIR="finetunes/continued_pretrain"
 ADAPTERS=(
     "yarn_20260316_071953"
     "freq-reciprocal-scaled_20260320_003434"
+    "freq-reciprocal-scaled-no-layer_20260324_014910"
     "freq-reciprocal_20260317_001708"
     "part-ntk_20260315_233845"
     "none_20260315_003356"

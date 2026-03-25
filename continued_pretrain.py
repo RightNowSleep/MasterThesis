@@ -166,8 +166,8 @@ def main(args):
 
     log_loss_path = os.path.join(model_dir, "loss.csv")
 
-    with open(os.path.join(model_dir, "args.json"), "w") as f:
-        json.dump(vars(args), f, indent=4)
+    with open(os.path.join(model_dir, "args.json"), "w", encoding="utf-8") as f:
+        json.dump(vars(args), f, ensure_ascii=False, indent=2)
 
     if args.wandb and args.wandb.strip():
         wandb.login()

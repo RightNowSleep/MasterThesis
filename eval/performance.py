@@ -300,7 +300,7 @@ class PerformanceEvaluator:
         pbar.close()
 
         save_path = os.path.join(self.save_dir, self.save_file)
-        with open(save_path, "w") as f:
+        with open(save_path, "w", encoding="utf-8") as f:
             json.dump(
                 {
                     "lengths": lengths,
@@ -308,6 +308,7 @@ class PerformanceEvaluator:
                     "memory_usages": memory_usages,
                 },
                 f,
+                ensure_ascii=False,
                 indent=2,
             )
 

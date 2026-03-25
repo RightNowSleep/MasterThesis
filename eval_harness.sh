@@ -21,7 +21,7 @@ ROPE_METHODS=(
     "--rope-type freq-reciprocal-scaled --rope-dynamic"
 )
 
-ADAPTER_DIR = "/home/linzhen/workspace/finetunes/continued_pretrain"
+ADAPTER_DIR = "finetunes/continued_pretrain"
 ADAPTERS=(
     "none_20260315_003356"
     "linear_20260315_081529"
@@ -30,6 +30,7 @@ ADAPTERS=(
     "yarn_20260316_071953"
     "freq-reciprocal_20260317_001708"
     "freq-reciprocal-scaled_20260320_003434"
+    "freq-reciprocal-scaled-no-layer_20260324_014910"
 )
 
 echo "=========================================="
