@@ -1,13 +1,14 @@
 #!/bin/bash
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 echo "=========================================="
 echo "Evaluation Script"
 echo "=========================================="
 
+PYTHONPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH=$PYTHONPATH
+
 export DISABLE_FLASH_ATTN=1
 export USE_FLASH_ATTN=0
+export HF_ALLOW_CODE_EVAL=1
 
 CUDA_DEVICES="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
@@ -16,23 +17,26 @@ MODEL_NAME="huggyllama/llama-7b"
 DTYPE="auto"
 QUANT="--load-in-4bit"
 
-MAX_LENGTH=16384
-MIN_LENGTH=16384
-
-TASKS="longbench2,arc_challenge,hellaswag,truthfulqa_mc1,mmlu"
+MAX_LENGTH=65536
+MIN_LENGTH=2048
 BATCH_SIZE=2
-OUTPUT_DIR="results/harness"
+OUTPUT_DIR="results"
 
+ROPE=true
+ADAPTER=false
 ADAPTER_DIR="finetunes/continued_pretrain"
-
-METHODS=(
+ROPE_METHODS=(
     "--rope-type none"
-    "--rope-type linear --rope-dynamic"
-    "--rope-type ntk --rope-dynamic"
-    "--rope-type part-ntk --rope-dynamic"
-    "--rope-type yarn --rope-dynamic"
-    "--rope-type freq-reciprocal --rope-dynamic"
-    "--rope-type freq-reciprocal-scaled --rope-dynamic"
+    # "--rope-type linear --rope-dynamic"
+    # "--rope-type ntk --rope-dynamic"
+    # "--rope-type part-ntk --rope-dynamic"
+    # "--rope-type yarn --rope-dynamic"
+    # "--rope-type freq-reciprocal --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled-no-layer --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled-adaptive --rope-dynamic"
+)
+ADAPTER_PATHS=(
     "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
     "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
     "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
@@ -42,65 +46,197 @@ METHODS=(
     "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
     "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
 )
+METHODS=()
+if [ $ROPE = true ]; then
+    METHODS+=("${ROPE_METHODS[@]}")
+fi
+if [ $ADAPTER = true ]; then
+    METHODS+=("${ADAPTER_PATHS[@]}")
+fi
 
-EVAL_TYPES=(
-    # "perplexity"
-    # "performance"
-    "passkey"
-    "eval_harness"
-)
+PERPLEXITY=false
+PERFORMANCE=false
+PASSKEY=false
+EVAL_HARNESS=true
+
+PERPLEXITY_ARGS="--dataset-name emozilla/proofpile-test-tokenized \
+--split test \
+--limit 100 \
+--add-start-token True \
+--sliding-window 256 \
+--truncate True \
+--aggressive-memory True \
+--save-dir ${OUTPUT_DIR}/perplexity"
+
+PERFORMANCE_ARGS="--save-dir ${OUTPUT_DIR}/performance"
+
+PASSKEY_ARGS="--num-keys 5 \
+--iterations 20 \
+--data-mode real \
+--dataset-name konwoo/RedPajama-Data-1T-Sample-subset1000 \
+--split train \
+--aggressive-memory True \
+--restrict-tokens True \
+--save-dir ${OUTPUT_DIR}/passkey"
+
+TASKS=""
+EVAL_HARNESS_ARGS="--tasks ${TASKS} --batch-size ${BATCH_SIZE} --output-dir ${OUTPUT_DIR}/eval_harness --limit 1"
 
 echo "=========================================="
 echo "Configuration"
 echo "=========================================="
 echo "Model          : ${MODEL_NAME}"
 echo "Max length     : ${MAX_LENGTH}"
+echo "Min length     : ${MIN_LENGTH}"
 echo "Quantization   : ${QUANT}"
 echo "Methods        : ${#METHODS[@]}"
-echo "Adapters       : ${#ADAPTERS[@]}"
-echo "Eval types     : ${EVAL_TYPES[*]}"
-echo "Run harness    : ${RUN_HARNESS}"
+echo "Perplexity     : ${PERPLEXITY}"
+echo "Performance    : ${PERFORMANCE}"
+echo "Passkey        : ${PASSKEY}"
+echo "Eval Harness   : ${EVAL_HARNESS}"
 echo "=========================================="
 
-run_eval() {
-    local eval_type=$1
-    local args=$2
-    
+run_perplexity_eval() {
+    local method=$1
+
     echo ""
     echo "------------------------------------------"
-    echo "Eval: $eval_type | $args"
+    echo "Eval: perplexity | Method: $method"
     echo "------------------------------------------"
     
-    local cmd="python ${SCRIPT_DIR}/eval/${eval_type}.py \
+    local cmd="python eval/perplexity.py \
         --model-name ${MODEL_NAME} \
-        ${args} \
+        ${method} \
         --max-length ${MAX_LENGTH} \
         --min-length ${MIN_LENGTH} \
         --dtype ${DTYPE} \
-        ${QUANT}"
+        ${QUANT} \
+        ${PERPLEXITY_ARGS}"
     
     echo "Executing: $cmd"
     eval $cmd
     
     if [ $? -eq 0 ]; then
-        echo "[SUCCESS] Eval completed: $eval_type with $args"
+        echo "[SUCCESS] Perplexity eval completed: $method"
     else
-        echo "[FAILED] Eval failed: $eval_type with $args"
+        echo "[FAILED] Perplexity eval failed: $method"
     fi
 }
 
-for eval_type in "${EVAL_TYPES[@]}"; do
+run_performance_eval() {
+    local method=$1
+
     echo ""
-    echo "=========================================="
-    echo "Eval Type: $eval_type"
-    echo "=========================================="
+    echo "------------------------------------------"
+    echo "Eval: performance | Method: $method"
+    echo "------------------------------------------"
     
+    local cmd="python eval/performance.py \
+        --model-name ${MODEL_NAME} \
+        ${method} \
+        --max-length ${MAX_LENGTH} \
+        --min-length ${MIN_LENGTH} \
+        --dtype ${DTYPE} \
+        ${QUANT} \
+        ${PERFORMANCE_ARGS}"
+    
+    echo "Executing: $cmd"
+    eval $cmd
+    
+    if [ $? -eq 0 ]; then
+        echo "[SUCCESS] Performance eval completed: $method"
+    else
+        echo "[FAILED] Performance eval failed: $method"
+    fi
+}
+
+run_passkey_eval() {
+    local method=$1
+
+    echo ""
+    echo "------------------------------------------"
+    echo "Eval: passkey | Method: $method"
+    echo "------------------------------------------"
+    
+    local cmd="python eval/passkey.py \
+        --model-name ${MODEL_NAME} \
+        ${method} \
+        --max-length ${MAX_LENGTH} \
+        --min-length ${MIN_LENGTH} \
+        --dtype ${DTYPE} \
+        ${QUANT} \
+        ${PASSKEY_ARGS}"
+    
+    echo "Executing: $cmd"
+    eval $cmd
+    
+    if [ $? -eq 0 ]; then
+        echo "[SUCCESS] Passkey eval completed: $method"
+    else
+        echo "[FAILED] Passkey eval failed: $method"
+    fi
+}
+
+run_eval_harness_eval() {
+    local method=$1
+
+    echo ""
+    echo "------------------------------------------"
+    echo "Eval: eval_harness | Method: $method"
+    echo "------------------------------------------"
+    
+    local cmd="python eval/eval_harness.py \
+        --model-name ${MODEL_NAME} \
+        ${method} \
+        --max-length ${MAX_LENGTH} \
+        --min-length ${MAX_LENGTH} \
+        --dtype ${DTYPE} \
+        ${QUANT} \
+        ${EVAL_HARNESS_ARGS}"
+    
+    echo "Executing: $cmd"
+    eval $cmd
+    
+    if [ $? -eq 0 ]; then
+        echo "[SUCCESS] Eval harness completed: $method"
+    else
+        echo "[FAILED] Eval harness failed: $method"
+    fi
+}
+
+echo "=========================================="
+echo "Starting Evaluation"
+echo "=========================================="
+
+if [ "$PERPLEXITY" = true ]; then
     for method in "${METHODS[@]}"; do
-        run_eval "$eval_type" "$method"
+        run_perplexity_eval "$method"
     done
-done
+fi
+
+if [ "$PERFORMANCE" = true ]; then
+    for method in "${METHODS[@]}"; do
+        run_performance_eval "$method"
+    done
+fi
+
+if [ "$PASSKEY" = true ]; then
+    for method in "${METHODS[@]}"; do
+        run_passkey_eval "$method"
+    done
+fi
+
+if [ "$EVAL_HARNESS" = true ]; then
+    if [ $MAX_LENGTH -gt 16384 ]; then
+        MAX_LENGTH=16384
+        echo "Max length is greater than 16384, setting to 16384"
+    fi
+    for method in "${METHODS[@]}"; do
+        run_eval_harness_eval "$method"
+    done
+fi
 
 echo ""
 echo "=========================================="
-echo "All evaluations completed!"
+echo "All Evaluations Completed!"
 echo "=========================================="

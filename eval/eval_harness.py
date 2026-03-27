@@ -19,13 +19,41 @@ from models.model_loader import load_model, load_tokenizer, add_args_model
 _DEFAULT_FEWSHOT = {
     "arc_challenge": 25,
     "hellaswag": 10,
-    "truthfulqa": 0,
-    "truthfulqa_mc1": 0,
-    "truthfulqa_mc2": 0,
+    "bbh": 3,
     "mmlu": 5,
-    "longbench": None,
-    "longbench2": None,
+    "gsm8k": 8,
+    "hendrycks_math": 4,
 }
+
+_TASKS_MAP = {
+    "long_context": [
+        "longbench",
+        "longbench2",
+        "longcxt",
+        "passkey",
+        "ruler",
+        "babilong",
+    ],
+    "reasoning": [
+        "arc_challenge",
+        "truthfulqa",
+        "hellaswag",
+        "bbh",
+        "mmlu",
+    ],
+    "math": [
+        "gsm8k",
+        "aime",
+        "hendrycks_math",
+    ],
+    "code": [
+        "humaneval",
+        "mbpp",
+        "humaneval_infilling",
+    ],
+}
+
+_METADATA = {"max_seq_lengths": [2048, 4096, 8192, 16384]}
 
 # ---------------------------------------------------------------------------
 # Task name validation helper (optional; avoids cryptic lm-eval errors)
@@ -48,8 +76,20 @@ def _warn_unknown_tasks(task_list: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Output filename
+# Output
 # ---------------------------------------------------------------------------
+
+
+def _build_output_dir(task: str, output_dir: str) -> str:
+    """Build a directory for saving task results."""
+    dir = output_dir
+    for category in _TASKS_MAP:
+        if task in _TASKS_MAP[category]:
+            dir = os.path.join(output_dir, category)
+            break
+    dir = os.path.join(dir, task)
+    os.makedirs(dir, exist_ok=True)
+    return dir
 
 
 def _build_output_path(output_dir: str, model_name: str, config) -> str:
@@ -108,22 +148,14 @@ def main(args):
         max_length=args.max_length,
         batch_size=args.batch_size,
     )
+    _METADATA["pretrained"] = args.model_name
 
-    # ── 3. Build per-task few-shot counts ─────────────────────────────── #
-    if args.num_fewshot is not None:
-        # Single value overrides everything
-        num_fewshot = args.num_fewshot
-    else:
-        # Use task-specific defaults where defined, else 0
-        num_fewshot = {t: _DEFAULT_FEWSHOT.get(t, 0) for t in task_list}
-
-    # ── 4. Run evaluation ─────────────────────────────────────────────── #
-    results = {}
-    out_path = _build_output_path(args.output_dir, args.model_name, config)
-
+    # ── 3. Run evaluation ─────────────────────────────────────────────── #
     for task in task_list:
-        num_fewshot_task = num_fewshot.get(task, None)
-        print(f"\n{'='*60}")
+        output_dir = _build_output_dir(task, args.output_dir)
+        output_path = _build_output_path(output_dir, args.model_name, config)
+        num_fewshot_task = _DEFAULT_FEWSHOT.get(task, None)
+        print(f"\\n{'='*60}")
         print(f"Running task: {task} (few-shot: {num_fewshot_task})")
         print(f"{'='*60}")
 
@@ -133,11 +165,12 @@ def main(args):
             num_fewshot=num_fewshot_task,
             batch_size=args.batch_size,
             log_samples=args.log_samples,
+            limit=args.limit,
+            confirm_run_unsafe_code=True,
         )
-        results[task] = result
 
-        # ── 5. Save results after each task ─────────────────────────────── #
-        results_to_save = dict(results)
+        # ── 4. Save results after each task ─────────────────────────────── #
+        results_to_save = dict(result)
         results_to_save["metadata"] = {
             "model_name": args.model_name,
             "adapter_path": args.adapter_path,
@@ -145,13 +178,13 @@ def main(args):
             "rope_factor": rope_factor,
             "rope_dynamic": rope_dynamic,
             "max_length": args.max_length,
-            "tasks": task_list,
-            "completed_tasks": list(results.keys()),
+            "task": task,
+            "completed_tasks": task,
         }
 
-        with open(out_path, "w", encoding="utf-8") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(results_to_save, f, indent=2, ensure_ascii=False, default=str)
-        print(f"\n[Checkpoint] Results saved after task '{task}' → {out_path}")
+        print(f"\n[Checkpoint] Results saved after task '{task}' → {output_path}")
 
         # Print task result immediately
         if result and "results" in result:
@@ -162,15 +195,13 @@ def main(args):
                 elif not metric.startswith("_"):
                     print(f"    {metric}: {value}")
 
-    # ── 6. Print final summary ────────────────────────────────────────── #
+    # ── 5. Print final summary ────────────────────────────────────────── #
     print(f"\n{'='*60}")
     print(f"ALL TASKS [{', '.join(task_list)}] COMPLETED - FINAL SUMMARY")
     print(f"{'='*60}")
-    print(f"Total tasks completed: {len(results)}")
-    print(f"Results saved → {out_path}")
+    print(f"Total tasks completed: {len(task_list)}")
+    print(f"Results saved → {output_path}")
     print(f"{'='*60}\n")
-
-    return results
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +214,10 @@ def add_args_harness(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument(
         "--tasks",
         type=str,
-        default="longbench2,arc_challenge,hellaswag,truthfulqa_mc1,mmlu",
+        default=(
+            "longbench,longcxt,passkey,ruler,babilong,arc_challenge,truthfulqa,hellaswag,"
+            "bbh,mmlu,gsm8k,aime,hendrycks_math,humaneval,mbpp,humaneval_infilling"
+        ),
         help=(
             "Comma-separated list of lm-eval task names.  "
             "Examples: longbench2, arc_challenge, hellaswag, "
@@ -209,9 +243,15 @@ def add_args_harness(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         help="Batch size for lm-eval inference.",
     )
     parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit number of examples for each task to evaluate.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
-        default="results/harness",
+        default="results",
         help="Directory for saving evaluation results.",
     )
     parser.add_argument(

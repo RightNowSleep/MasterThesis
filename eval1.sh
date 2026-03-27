@@ -11,7 +11,7 @@ echo "=========================================="
 export DISABLE_FLASH_ATTN=1
 export USE_FLASH_ATTN=0
 
-CUDA_DEVICES="0,1,2,3"
+CUDA_DEVICES="2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 MODEL_NAME="huggyllama/llama-7b"
@@ -22,16 +22,19 @@ MAX_LENGTH=65536
 MIN_LENGTH=2048
 
 ENABLE_PERPLEXITY=true
-ENABLE_PERFORMANCE=true
+ENABLE_PERFORMANCE=false
 
 ROPE_METHODS=(
-    "--rope-type none"
-    "--rope-type linear --rope-dynamic"
-    "--rope-type ntk --rope-dynamic"
-    "--rope-type part-ntk --rope-dynamic"
-    "--rope-type yarn --rope-dynamic"
+    # "--rope-type none"
+    # "--rope-type linear --rope-dynamic"
+    # "--rope-type ntk --rope-dynamic"
+    # "--rope-type part-ntk --rope-dynamic"
+    # "--rope-type yarn --rope-dynamic"
     "--rope-type freq-reciprocal --rope-dynamic"
-    "--rope-type freq-reciprocal-scaled --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled-no-layer --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled-adaptive --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled-adaptive --rope-factor 4.0"
 )
 
 echo "=========================================="

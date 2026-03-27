@@ -1,7 +1,6 @@
 import os
 import sys
 import argparse
-import math
 import numpy as np
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -9,7 +8,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import torch
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
 from models.pe_llama import *
 
 ROPE_TYPE_TO_CLASS = {
@@ -31,36 +29,6 @@ ROPE_TYPE_TO_CLASS = {
 }
 
 
-def get_subplot_layout(n):
-    """Intelligently compute subplot layout, return (nrows, ncols)."""
-    if n <= 0:
-        return 1, 1
-    elif n == 1:
-        return 1, 1
-    elif n == 2:
-        return 1, 2
-    elif n == 3:
-        return 1, 3
-    elif n == 4:
-        return 2, 2
-    elif n <= 6:
-        return 2, 3
-    elif n <= 9:
-        return 3, 3
-    elif n <= 12:
-        return 3, 4
-    elif n <= 16:
-        return 4, 4
-    elif n <= 20:
-        return 4, 5
-    elif n <= 25:
-        return 5, 5
-    else:
-        ncols = int(math.ceil(math.sqrt(n)))
-        nrows = int(math.ceil(n / ncols))
-        return nrows, ncols
-
-
 def parse_args():
     parser = argparse.ArgumentParser(
         description="RoPE Position Heatmap Visualization",
@@ -71,7 +39,7 @@ def parse_args():
         "--methods",
         type=str,
         nargs="+",
-        default=["rope", "freq-reciprocal"],
+        default=["rope", "linear", "ntk", "part-ntk", "freq-reciprocal"],
         choices=list(ROPE_TYPE_TO_CLASS.keys()),
         help="RoPE methods to visualize (space-separated)",
     )
@@ -115,57 +83,42 @@ def parse_args():
         default=32,
         help="Number of hidden layers",
     )
+    parser.add_argument(
+        "--dynamic",
+        action="store_true",
+        default=False,
+        help="Use dynamic scaling for methods that support it",
+    )
 
     parser.add_argument(
         "--output",
         type=str,
-        default="drawer/rope_heatmap.png",
-        help="Output file path",
+        default="drawer/heatmap.png",
+        help="Output directory and base filename (method name will be prepended)",
     )
     parser.add_argument(
         "--fig-width",
-        type=int,
-        default=18,
-        help="Figure width (inches)",
+        type=float,
+        default=4.5,
+        help="Figure width in inches (3.5 for single column, 7 for double column)",
     )
     parser.add_argument(
         "--fig-height",
-        type=int,
-        default=8,
-        help="Figure height (inches)",
+        type=float,
+        default=6.0,
+        help="Figure height in inches",
     )
     parser.add_argument(
         "--dpi",
         type=int,
-        default=300,
-        help="DPI for output image",
+        default=600,
+        help="DPI for output image (300 for screen, 600 for print)",
     )
     parser.add_argument(
         "--cmap",
         type=str,
-        default="viridis",
-        help="Colormap name",
-    )
-    parser.add_argument(
-        "--share-colorbar",
-        action="store_true",
-        default=True,
-        help="Share a single colorbar across all subplots",
-    )
-    parser.add_argument("--title", type=str, default=None, help="Custom figure title")
-
-    parser.add_argument(
-        "--show-mapping",
-        action="store_true",
-        default=True,
-        help="Show dimension mapping from RoPE to FreqReciprocal with dashed lines",
-    )
-    parser.add_argument(
-        "--mapping-block-sizes",
-        type=float,
-        nargs="+",
-        default=[2.0, 4.0, 6.0, 8.0],
-        help="Block sizes to visualize mapping (used with --show-mapping)",
+        default="plasma",
+        help="Colormap name (plasma, inferno, viridis recommended for papers)",
     )
 
     return parser.parse_args()
@@ -240,91 +193,43 @@ def generate_title(method, args):
     return title
 
 
-def find_dimension_for_block_size(model, target_block_size):
+def draw_original_length_box(ax, original_L, dim_half, fontsize=10):
     """
-    Find the dimension index i where block_size is closest to target_block_size.
-    Returns the dimension index and the actual block_size at that dimension.
+    Draw a dashed rectangle to highlight the original length region.
+    X-axis is dimension, Y-axis is position.
     """
-    if not hasattr(model, "block_sizes"):
-        return None, None
-    block_sizes = model.block_sizes.cpu().numpy()
-    idx = np.argmin(np.abs(block_sizes - target_block_size))
-    return idx, block_sizes[idx]
+    rect = plt.Rectangle(
+        (0, 0),
+        dim_half - 1,
+        original_L - 1,
+        fill=False,
+        edgecolor="white",
+        linestyle="--",
+        linewidth=1.5,
+        alpha=0.9,
+    )
+    ax.add_patch(rect)
 
+    text_x = dim_half * 0.85
+    text_y = original_L - 1
 
-def draw_mapping_lines(axes, methods, freq_matrices, args, models):
-    """
-    Draw dashed lines on heatmaps to show RoPE -> FreqReciprocal dimension mapping.
-    """
-    if not args.show_mapping:
-        return
-    if len(methods) != 2 or "rope" not in methods or "freq-reciprocal" not in methods:
-        print(
-            "Warning: --show-mapping requires exactly 'rope' and 'freq-reciprocal' methods"
-        )
-        return
-
-    rope_idx = methods.index("rope")
-    freq_recip_idx = methods.index("freq-reciprocal")
-    freq_recip_model = models[freq_recip_idx]
-
-    seq_len = args.seq_len
-    rope_seq_len = freq_matrices[rope_idx].shape[0]
-    freq_recip_seq_len = freq_matrices[freq_recip_idx].shape[0]
-
-    colors = ["#E63946", "#1D3557", "#2A9D8F", "#F4A261"]
-    linestyle = "--"
-
-    legend_handles = []
-
-    for i, target_b in enumerate(args.mapping_block_sizes):
-        dim_idx, actual_b = find_dimension_for_block_size(freq_recip_model, target_b)
-        if dim_idx is None:
-            continue
-
-        color = colors[i % len(colors)]
-
-        rope_line_len = rope_seq_len
-        freq_recip_line_len = int(seq_len * target_b)
-
-        axes[rope_idx].axvline(
-            x=dim_idx,
-            ymin=0,
-            ymax=1,
-            color=color,
-            linestyle=linestyle,
-            linewidth=2,
-            alpha=0.9,
-        )
-
-        axes[freq_recip_idx].axvline(
-            x=dim_idx,
-            ymin=0,
-            ymax=freq_recip_line_len / freq_recip_seq_len,
-            color=color,
-            linestyle=linestyle,
-            linewidth=2,
-            alpha=0.9,
-        )
-
-        legend_handles.append(
-            plt.Line2D(
-                [0],
-                [0],
-                color=color,
-                linestyle=linestyle,
-                linewidth=2,
-                label=f"b={target_b:.1f}, i={dim_idx}",
-            )
-        )
-
-    if legend_handles:
-        axes[freq_recip_idx].legend(
-            handles=legend_handles,
-            loc="upper right",
-            fontsize=8,
-            framealpha=0.9,
-        )
+    ax.text(
+        text_x,
+        text_y,
+        f"Original L={original_L}",
+        color="white",
+        fontsize=fontsize,
+        fontweight="bold",
+        ha="center",
+        va="center",
+        bbox=dict(
+            boxstyle="round,pad=0.3",
+            facecolor="black",
+            edgecolor="white",
+            alpha=0.7,
+            linewidth=0.5,
+        ),
+    )
 
 
 def main():
@@ -332,13 +237,23 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float32
 
-    n = len(args.methods)
-    nrows, ncols = get_subplot_layout(n)
+    output_dir = os.path.dirname(args.output) or "."
+    base_filename = os.path.basename(args.output)
+    _, ext = os.path.splitext(base_filename)
 
-    freq_matrices = []
-    titles = []
-    seq_lens = []
-    models = []
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.serif": ["Times New Roman", "DejaVu Serif"],
+            "font.size": 10,
+            "axes.labelsize": 11,
+            "axes.titlesize": 12,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+            "legend.fontsize": 9,
+            "figure.dpi": 100,
+        }
+    )
 
     for method in args.methods:
         model = create_rope_model(method, args, device)
@@ -348,67 +263,56 @@ def main():
             actual_seq_len = int(args.seq_len * args.scaling_factor)
         model._set_cos_sin_cache(actual_seq_len, device=device, dtype=dtype)
         freq = model.cos_cached.cpu().numpy()
-        freq_matrices.append(freq)
-        titles.append(generate_title(method, args))
-        seq_lens.append(actual_seq_len)
-        models.append(model)
+        title = generate_title(method, args)
 
-    if args.share_colorbar:
-        vmin = min(f.min() for f in freq_matrices)
-        vmax = max(f.max() for f in freq_matrices)
-        norm = Normalize(vmin=vmin, vmax=vmax)
+        dim_half = args.dim // 2
 
-    fig_width = args.fig_width if ncols <= 2 else args.fig_width + (ncols - 2) * 4
-    fig_height = args.fig_height if nrows == 1 else args.fig_height + (nrows - 1) * 3
+        fig, ax = plt.subplots(figsize=(12, 12))
 
-    fig, axes = plt.subplots(
-        nrows,
-        ncols,
-        figsize=(fig_width, fig_height),
-        constrained_layout=True,
-    )
+        im = ax.imshow(
+            freq,
+            cmap=args.cmap,
+            aspect="auto",
+            interpolation="nearest",
+            origin="lower",
+        )
 
-    if n == 1:
-        axes = [axes]
-    elif nrows == 1 or ncols == 1:
-        axes = list(axes)
-    else:
-        axes = axes.flatten()
+        ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
+        ax.set_xlabel("Dimension $i$", fontsize=11)
+        ax.set_ylabel("Position", fontsize=11)
+        ax.set_xlim(0, dim_half - 1)
+        ax.set_ylim(0, actual_seq_len - 1)
 
-    main_title = (
-        args.title or f"RoPE Frequency Heatmap (dim={args.dim}, L={args.original_L})"
-    )
-    fig.suptitle(main_title, fontsize=16)
+        n_xticks = min(6, dim_half)
+        xtick_positions = np.linspace(0, dim_half - 1, n_xticks, dtype=int)
+        ax.set_xticks(xtick_positions)
 
-    images = []
-    for i, (freq, title) in enumerate(zip(freq_matrices, titles)):
-        if args.share_colorbar:
-            im = axes[i].imshow(freq, cmap=args.cmap, norm=norm, aspect="auto")
+        n_yticks = min(8, actual_seq_len)
+        ytick_positions = np.linspace(0, actual_seq_len - 1, n_yticks, dtype=int)
+        ax.set_yticks(ytick_positions)
+
+        ax.grid(True, alpha=0.2, linestyle=":", color="white", linewidth=0.5)
+
+        if method == "rope":
+            original_L_display = args.original_L
         else:
-            im = axes[i].imshow(freq, cmap=args.cmap, aspect="auto")
-        images.append(im)
-        axes[i].set_title(title, fontsize=10)
-        axes[i].set_xlabel(f"Dimension i (0-{args.dim//2 - 1})")
-        axes[i].set_ylabel(f"Position (0-{seq_lens[i] - 1})")
-        axes[i].set_xlim(0, args.dim // 2 - 1)
-        axes[i].set_ylim(0, seq_lens[i] - 1)
+            original_L_display = int(args.original_L * args.scaling_factor)
 
-    for i in range(n, len(axes)):
-        axes[i].axis("off")
+        if original_L_display < actual_seq_len:
+            draw_original_length_box(ax, original_L_display, dim_half, fontsize=9)
 
-    draw_mapping_lines(axes, args.methods, freq_matrices, args, models)
+        cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02, aspect=30)
+        cbar.set_label("Frequency Value", rotation=270, labelpad=15, fontsize=11)
+        cbar.ax.tick_params(labelsize=9)
 
-    if args.share_colorbar:
-        visible_axes = [axes[i] for i in range(n)]
-        cbar = fig.colorbar(images[-1], ax=visible_axes, shrink=0.8, pad=0.02)
-        cbar.set_label("Frequency Value", rotation=270, labelpad=20, fontsize=12)
-    else:
-        for i in range(n):
-            fig.colorbar(images[i], ax=axes[i], shrink=0.8)
+        plt.tight_layout()
 
-    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    plt.savefig(args.output, dpi=args.dpi, bbox_inches="tight")
-    print(f"Saved to {args.output}")
+        method_filename = f"{method}{ext}"
+        output_path = os.path.join(output_dir, method_filename)
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(output_path, dpi=args.dpi, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        print(f"Saved to {output_path}")
 
 
 if __name__ == "__main__":
