@@ -66,7 +66,8 @@ __all__ = [
 
 
 class LlamaRotaryEmbedding(nn.Module):
-    """Standard Llama Rotary Position Embedding (RoPE).
+    """
+    Standard Llama Rotary Position Embedding (RoPE).
 
     Implements the original RoPE as described in the Llama paper. Computes
     cos/sin caches for rotary position embeddings with fixed base frequency.
@@ -123,7 +124,8 @@ class LlamaRotaryEmbedding(nn.Module):
 
 
 class LlamaLinearScalingRotaryEmbedding(nn.Module):
-    """Position Interpolation (PI) with linear position scaling.
+    """
+    Position Interpolation (PI) with linear position scaling.
 
     Implements linear position scaling where positions are divided by the
     scaling factor to extend the context window. Supports both static and
@@ -206,7 +208,8 @@ class LlamaLinearScalingRotaryEmbedding(nn.Module):
 
 
 class LlamaNTKAwareScaledRotaryEmbedding(nn.Module):
-    """NTK-aware RoPE scaling with base frequency modification.
+    """
+    NTK-aware RoPE scaling with base frequency modification.
 
     Modifies the RoPE base frequency to extend context length. The base is
     scaled as base' = base * s^(d/(d-2)) where s is the scaling factor.
@@ -292,7 +295,8 @@ class LlamaNTKAwareScaledRotaryEmbedding(nn.Module):
 
 
 class LlamaNTKByPartsScaledRotaryEmbedding(nn.Module):
-    """NTK-by-parts RoPE scaling with piecewise frequency blending.
+    """
+    NTK-by-parts RoPE scaling with piecewise frequency blending.
 
     Splits dimensions into three groups based on rotation frequency within
     the original context: high-frequency (unchanged), low-frequency (linearly
@@ -391,7 +395,8 @@ class LlamaNTKByPartsScaledRotaryEmbedding(nn.Module):
 
 
 class LlamaYarnScaledRotaryEmbedding(LlamaNTKByPartsScaledRotaryEmbedding):
-    """YaRN (Yet Another RoPE extensioN) with attention temperature scaling.
+    """
+    YaRN (Yet Another RoPE extensioN) with attention temperature scaling.
 
     Combines NTK-by-parts frequency blending with attention temperature
     scaling (t = 1 + 0.1 * ln(s)) to improve extrapolation performance.
@@ -478,7 +483,8 @@ def _layer_aware_attn_scale(
     seq_len: int,
     original_max_position_embeddings: int,
 ) -> float:
-    """Compute layer-dependent attention amplitude scalar with inverted-U profile.
+    """
+    Compute layer-dependent attention amplitude scalar with inverted-U profile.
 
     Middle layers receive weaker correction (u_norm approaches 1, layer_alpha approaches 0),
     while first and last layers receive stronger correction (u_norm approaches 0, layer_alpha approaches 0.1).
@@ -516,7 +522,8 @@ def _layer_aware_attn_scale(
 
 
 class LlamaMyRotaryEmbedding(nn.Module):
-    """Layer-aware My RoPE with position encoding only.
+    """
+    Layer-aware My RoPE with position encoding only.
 
     Implements NTK-by-parts frequency blending with layer-adaptive alpha/beta
     boundaries using an inverted-U profile across layers. Does not apply
@@ -658,7 +665,8 @@ class LlamaMyRotaryEmbedding(nn.Module):
 
 
 class LlamaMyScaledRotaryEmbedding(LlamaMyRotaryEmbedding):
-    """Layer-aware My RoPE with attention temperature scaling.
+    """
+    Layer-aware My RoPE with attention temperature scaling.
 
     Inherits position encoding from LlamaMyRotaryEmbedding and applies a
     layer-dependent attention temperature scalar with inverted-U profile.
@@ -709,7 +717,8 @@ class LlamaMyScaledRotaryEmbedding(LlamaMyRotaryEmbedding):
 
 
 class LlamaMyRotaryEmbedding2(nn.Module):
-    """Multi-scale My RoPE with position encoding only.
+    """
+    Multi-scale My RoPE with position encoding only.
 
     Splits the head dimension into three sub-spaces for local, paragraph, and
     document scales, each with its own NTK-by-parts parameters and base frequency.
@@ -791,7 +800,8 @@ class LlamaMyRotaryEmbedding2(nn.Module):
             )
 
     def _get_scale_inv_freq_static(self, scale_idx: int, device):
-        """Compute blended inv_freq for one sub-space using fixed scaling_factor.
+        """
+        Compute blended inv_freq for one sub-space using fixed scaling_factor.
 
         Args:
             scale_idx (int): Index of the sub-space scale.
@@ -835,7 +845,8 @@ class LlamaMyRotaryEmbedding2(nn.Module):
         self.register_buffer("sin_cached", sin_final.to(dtype), persistent=False)
 
     def _get_scale_inv_freq_dynamic(self, scale_idx: int, seq_len: int, device):
-        """Compute blended inv_freq for one sub-space using runtime seq_len.
+        """
+        Compute blended inv_freq for one sub-space using runtime seq_len.
 
         Args:
             scale_idx (int): Index of the sub-space scale.
@@ -896,7 +907,8 @@ class LlamaMyRotaryEmbedding2(nn.Module):
 
 
 class LlamaMyScaledRotaryEmbedding2(LlamaMyRotaryEmbedding2):
-    """Multi-scale My RoPE 2 with attention temperature scaling.
+    """
+    Multi-scale My RoPE 2 with attention temperature scaling.
 
     Inherits position encoding from LlamaMyRotaryEmbedding2 and applies the
     same layer-dependent attention temperature scalar.
@@ -945,7 +957,8 @@ class LlamaMyScaledRotaryEmbedding2(LlamaMyRotaryEmbedding2):
 
 
 class LlamaBlockLayeredRotaryEmbedding(nn.Module):
-    """Block-Layered RoPE with position encoding only.
+    """
+    Block-Layered RoPE with position encoding only.
 
     Implements quantized effective position indices using per-dimension block
     sizes that grow exponentially with dimension index. Prevents angular value
@@ -1017,7 +1030,8 @@ class LlamaBlockLayeredRotaryEmbedding(nn.Module):
     # ------------------------------------------------------------------ #
 
     def _compute_block_sizes(self, S: float, device=None) -> torch.Tensor:
-        """Compute per-dimension block sizes for extension ratio S.
+        """
+        Compute per-dimension block sizes for extension ratio S.
 
         Block sizes grow exponentially: b_i = clamp(S^(i / i*), 1, S) for i < i*,
         and b_i = S for i >= i*. When S = 1.0, all b_i = 1.0 (standard RoPE).
@@ -1081,7 +1095,8 @@ class LlamaBlockLayeredRotaryEmbedding(nn.Module):
 
 
 class LlamaBlockLayeredScaledRotaryEmbedding(LlamaBlockLayeredRotaryEmbedding):
-    """Block-Layered RoPE with attention temperature scaling.
+    """
+    Block-Layered RoPE with attention temperature scaling.
 
     Inherits position encoding from LlamaBlockLayeredRotaryEmbedding and
     applies a layer-dependent attention temperature scalar with inverted-U profile.
@@ -1130,7 +1145,8 @@ class LlamaBlockLayeredScaledRotaryEmbedding(LlamaBlockLayeredRotaryEmbedding):
 
 
 class LlamaFreqSmoothRotaryEmbedding(nn.Module):
-    """Freq-Smooth Block RoPE with position encoding only.
+    """
+    Freq-Smooth Block RoPE with position encoding only.
 
     Implements quantized effective position indices using a quadratic block-size
     schedule derived from normalized RoPE base frequencies. Provides C1 smoothness
@@ -1205,7 +1221,8 @@ class LlamaFreqSmoothRotaryEmbedding(nn.Module):
     # ------------------------------------------------------------------ #
 
     def _compute_block_sizes(self, S: float, device=None) -> torch.Tensor:
-        """Compute per-dimension block sizes using quadratic schedule.
+        """
+        Compute per-dimension block sizes using quadratic schedule.
 
         Uses normalized frequency to compute block sizes with C1 smoothness
         at the critical dimension boundary.
@@ -1282,7 +1299,8 @@ class LlamaFreqSmoothRotaryEmbedding(nn.Module):
 
 
 class LlamaFreqSmoothScaledRotaryEmbedding(LlamaFreqSmoothRotaryEmbedding):
-    """Freq-Smooth Block RoPE with attention temperature scaling.
+    """
+    Freq-Smooth Block RoPE with attention temperature scaling.
 
     Inherits position encoding from LlamaFreqSmoothRotaryEmbedding and applies
     a layer-dependent attention temperature scalar with inverted-U profile.
@@ -1446,7 +1464,8 @@ class LlamaFreqReciprocalRotaryEmbedding(nn.Module):
     # ------------------------------------------------------------------ #
 
     def _compute_block_sizes(self, S: float, device=None) -> torch.Tensor:
-        """Compute per-dimension block sizes using reciprocal frequency schedule.
+        """
+        Compute per-dimension block sizes using reciprocal frequency schedule.
 
         Block sizes follow a linear relationship with reciprocal frequency,
         ensuring constant product between block size rate and frequency decay rate.
@@ -1524,7 +1543,8 @@ class LlamaFreqReciprocalRotaryEmbedding(nn.Module):
 
 
 class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbedding):
-    """Freq-Reciprocal Block RoPE with power-law attention temperature scaling.
+    """
+    Freq-Reciprocal Block RoPE with power-law attention temperature scaling.
 
     Inherits position encoding from LlamaFreqReciprocalRotaryEmbedding and
     applies a power-law attention temperature scaling with layer-dependent factors.
@@ -1564,7 +1584,8 @@ class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbeddin
         self.beta = beta
 
     def _compute_attn_scale(self, seq_len: int, device):
-        """Compute power-law attention temperature scaling.
+        """
+        Compute power-law attention temperature scaling.
 
         Combines position and depth factors for attention temperature adjustment.
 
@@ -1615,7 +1636,8 @@ class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbeddin
 class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
     LlamaFreqReciprocalRotaryEmbedding
 ):
-    """Freq-Reciprocal Block RoPE with power-law attention temperature scaling (no layer index).
+    """
+    Freq-Reciprocal Block RoPE with power-law attention temperature scaling (no layer index).
 
     Inherits position encoding from LlamaFreqReciprocalRotaryEmbedding and
     applies a power-law attention temperature scaling without layer-dependent factors.
@@ -1655,7 +1677,8 @@ class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
         self.beta = beta
 
     def _compute_attn_scale(self, seq_len: int, device):
-        """Compute power-law attention temperature scaling without layer index.
+        """
+        Compute power-law attention temperature scaling without layer index.
 
         Args:
             seq_len (int): Sequence length for scaling computation.
@@ -1704,7 +1727,8 @@ class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
 class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
     LlamaFreqReciprocalRotaryEmbedding
 ):
-    """Freq-Reciprocal Block RoPE with adaptive attention temperature scaling.
+    """
+    Freq-Reciprocal Block RoPE with adaptive attention temperature scaling.
 
     Inherits position encoding from LlamaFreqReciprocalRotaryEmbedding and
     applies an adaptive attention temperature scaling that considers both
@@ -1745,7 +1769,8 @@ class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
         self.beta = beta
 
     def _compute_attn_scale(self, seq_len: int, block_sizes: torch.Tensor, device):
-        """Compute adaptive attention temperature scaling.
+        """
+        Compute adaptive attention temperature scaling.
 
         Considers both position and dimension compression factors for adaptive
         temperature adjustment based on sequence length and block sizes.
