@@ -15,10 +15,10 @@ MAX_LENGTH=3072
 NUM_SAMPLES=100
 LOAD_4BIT="--load-in-4bit"
 DATASET="emozilla/proofpile-test-tokenized"
-ROPE_METHODS=("linear" "ntk" "part-ntk")
+ROPE_METHODS=("linear" "ntk" "part-ntk" "freq-reciprocal")
 DYNAMIC="--rope-dynamic"
 
-PART1=true
+PART1=false
 PART2=true
 
 mkdir -p "$SAVE_DIR"

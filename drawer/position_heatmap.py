@@ -93,7 +93,7 @@ def parse_args():
     parser.add_argument(
         "--output",
         type=str,
-        default="drawer/heatmap.png",
+        default="drawer/position_heatmap",
         help="Output directory and base filename (method name will be prepended)",
     )
     parser.add_argument(
@@ -237,7 +237,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float32
 
-    output_dir = os.path.dirname(args.output) or "."
+    output_dir = args.output
     base_filename = os.path.basename(args.output)
     _, ext = os.path.splitext(base_filename)
 

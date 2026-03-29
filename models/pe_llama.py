@@ -1817,7 +1817,9 @@ class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
         return super().forward(x, seq_len)
 
 
-class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(nn.Module):
+class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
+    LlamaFreqReciprocalRotaryEmbedding
+):
     def __init__(
         self,
         dim: int,
@@ -1846,20 +1848,56 @@ class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(nn.Module):
         self.alpha = alpha
         self.beta = beta
 
-    def _compute_attn_scale(self, seq_len: int, device):
+    def _compute_attn_scale(self, seq_len: int, block_sizes: torch.Tensor, device):
+        """
         t = torch.maximum(
             torch.tensor(1.0, device=device),
             torch.arange(seq_len, device=device, dtype=torch.float32)
             / self.original_max_position_embeddings,
-        )
+        )  # [seq_len]
 
-        S_t = 1.0 + 0.15 * t.log()
+        S_t = 1.0 + 0.15 * t.log()[:, None] # / block_sizes[None, :]
 
-        return S_t.unsqueeze(-1)
+        t = torch.arange(seq_len, device=device, dtype=torch.float32) + 1.0
+        scale = 1.0 + 0.15 * torch.exp(
+            -1.0 * t / max(seq_len, self.original_max_position_embeddings)
+        ) * math.log(max(1.0, seq_len / self.original_max_position_embeddings))
+        S_t = torch.clamp(scale, min=1.0).unsqueeze(-1)
+        """
+        # 获取位置索引 (从1开始，因为RoPE的position从1开始)
+        t = torch.arange(seq_len, device=device, dtype=torch.float32) + 1.0
+
+        # 计算动态扩展比例 s(m)
+        s = torch.clamp(t / self.original_max_position_embeddings, min=1.0)  # [seq_len]
+
+        # 基础温度项：继承YaRN的对数温度公式
+        # t_base = 0.1 * ln(s) + 1
+        t_base = 1.0 + 0.15 * torch.log(s)  # [seq_len]
+
+        # 维度压缩补偿项：
+        # 当seq_len超过预训练长度时，考虑平均块大小的影响
+        if seq_len > self.original_max_position_embeddings:
+            # 计算平均压缩比例：block_sizes的平均值反映了位置编码的整体压缩程度
+            s = seq_len / self.original_max_position_embeddings
+            d_half = block_sizes.shape[0]
+            block_mean = block_sizes.mean().item()
+            # 维度补偿项
+            dim_compensation = 0.1 * math.log(block_mean)
+            t_scale = t_base + dim_compensation
+        else:
+            t_scale = t_base
+
+        # 确保缩放因子至少为1
+        t_scale = torch.clamp(t_scale, min=1.0)
+
+        # 缩放因子应用于cos和sin，需要开平方根
+        # 因为 cos(θ) * sqrt(t) 和 sin(θ) * sqrt(t) 会导致注意力分数放大 t 倍
+        return t_scale.unsqueeze(-1)  # [seq_len, 1]
 
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
         super()._set_cos_sin_cache(seq_len, device, dtype)
-        attn_scale = self._compute_attn_scale(seq_len, device)
+        attn_scale = self._compute_attn_scale(seq_len, self.block_sizes, device)
+        attn_scale = torch.cat([attn_scale, attn_scale], dim=-1)
         self.register_buffer(
             "cos_cached",
             (self.cos_cached * attn_scale).to(dtype),
@@ -1872,11 +1910,20 @@ class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, seq_len: int = None):
+        device, dtype = x.device, x.dtype
         if self.dynamic:
             if seq_len is None:
                 seq_len = x.shape[2]
-            cos, sin = super().forward(x, seq_len)
             S = max(1.0, seq_len / self.original_max_position_embeddings)
-            attn_scale = self._compute_attn_scale(seq_len, x.device)
-            return (cos * attn_scale).to(x.dtype), (sin * attn_scale).to(x.dtype)
+            b = self._compute_block_sizes(S, device=device)
+            inv_freq = self.inv_freq.to(device=device)
+            t = torch.arange(seq_len, device=device, dtype=torch.float32)
+            t_eff = torch.floor(t[:, None] / b[None, :])
+            freqs = t_eff * inv_freq[None, :]
+            cos, sin = freqs.cos(), freqs.sin()
+            attn_scale = self._compute_attn_scale(seq_len, b, device)
+            return (
+                torch.cat([cos * attn_scale, cos * attn_scale], dim=-1).to(dtype),
+                torch.cat([sin * attn_scale, sin * attn_scale], dim=-1).to(dtype),
+            )
         return super().forward(x, seq_len)

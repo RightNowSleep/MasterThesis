@@ -22,11 +22,11 @@ MIN_LENGTH=2048
 BATCH_SIZE=2
 OUTPUT_DIR="results"
 
-ROPE=true
-ADAPTER=false
+ROPE=false
+ADAPTER=true
 ADAPTER_DIR="finetunes/continued_pretrain"
 ROPE_METHODS=(
-    "--rope-type none"
+    # "--rope-type none"
     # "--rope-type linear --rope-dynamic"
     # "--rope-type ntk --rope-dynamic"
     # "--rope-type part-ntk --rope-dynamic"
@@ -34,7 +34,7 @@ ROPE_METHODS=(
     # "--rope-type freq-reciprocal --rope-dynamic"
     # "--rope-type freq-reciprocal-scaled --rope-dynamic"
     # "--rope-type freq-reciprocal-scaled-no-layer --rope-dynamic"
-    # "--rope-type freq-reciprocal-scaled-adaptive --rope-dynamic"
+    "--rope-type freq-reciprocal-scaled-adaptive --rope-dynamic"
 )
 ADAPTER_PATHS=(
     "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
@@ -78,9 +78,9 @@ PASSKEY_ARGS="--num-keys 5 \
 --aggressive-memory True \
 --restrict-tokens True \
 --save-dir ${OUTPUT_DIR}/passkey"
-
-TASKS=""
-EVAL_HARNESS_ARGS="--tasks ${TASKS} --batch-size ${BATCH_SIZE} --output-dir ${OUTPUT_DIR}/eval_harness --limit 1"
+# longbench,longbench2,longcxt,passkey,ruler,babilong,bbh,mmlu,gsm8k,aime,hendrycks_math,humaneval,mbpp,humaneval_infilling
+TASKS="passkey"
+EVAL_HARNESS_ARGS="--tasks ${TASKS} --batch-size ${BATCH_SIZE} --output-dir ${OUTPUT_DIR}/eval_harness"
 
 echo "=========================================="
 echo "Configuration"

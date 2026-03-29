@@ -149,51 +149,56 @@ def main(args):
         batch_size=args.batch_size,
     )
     _METADATA["pretrained"] = args.model_name
+    ERRORS = dict()
 
     # ── 3. Run evaluation ─────────────────────────────────────────────── #
     for task in task_list:
-        output_dir = _build_output_dir(task, args.output_dir)
-        output_path = _build_output_path(output_dir, args.model_name, config)
-        num_fewshot_task = _DEFAULT_FEWSHOT.get(task, None)
-        print(f"\\n{'='*60}")
-        print(f"Running task: {task} (few-shot: {num_fewshot_task})")
-        print(f"{'='*60}")
+        try:
+            output_dir = _build_output_dir(task, args.output_dir)
+            output_path = _build_output_path(output_dir, args.model_name, config)
+            num_fewshot_task = _DEFAULT_FEWSHOT.get(task, None)
+            print(f"\\n{'='*60}")
+            print(f"Running task: {task} (few-shot: {num_fewshot_task})")
+            print(f"{'='*60}")
 
-        result = lm_eval.simple_evaluate(
-            model=lm,
-            tasks=[task],
-            num_fewshot=num_fewshot_task,
-            batch_size=args.batch_size,
-            log_samples=args.log_samples,
-            limit=args.limit,
-            confirm_run_unsafe_code=True,
-        )
+            result = lm_eval.simple_evaluate(
+                model=lm,
+                tasks=[task],
+                num_fewshot=num_fewshot_task,
+                batch_size=args.batch_size,
+                log_samples=args.log_samples,
+                limit=args.limit,
+                confirm_run_unsafe_code=True,
+            )
 
-        # ── 4. Save results after each task ─────────────────────────────── #
-        results_to_save = dict(result)
-        results_to_save["metadata"] = {
-            "model_name": args.model_name,
-            "adapter_path": args.adapter_path,
-            "rope_type": rope_type,
-            "rope_factor": rope_factor,
-            "rope_dynamic": rope_dynamic,
-            "max_length": args.max_length,
-            "task": task,
-            "completed_tasks": task,
-        }
+            # ── 4. Save results after each task ─────────────────────────────── #
+            results_to_save = dict(result)
+            results_to_save["metadata"] = {
+                "model_name": args.model_name,
+                "adapter_path": args.adapter_path,
+                "rope_type": rope_type,
+                "rope_factor": rope_factor,
+                "rope_dynamic": rope_dynamic,
+                "max_length": args.max_length,
+                "task": task,
+                "completed_tasks": task,
+            }
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(results_to_save, f, indent=2, ensure_ascii=False, default=str)
-        print(f"\n[Checkpoint] Results saved after task '{task}' → {output_path}")
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(results_to_save, f, indent=2, ensure_ascii=False, default=str)
+            print(f"\n[Checkpoint] Results saved after task '{task}' → {output_path}")
 
-        # Print task result immediately
-        if result and "results" in result:
-            print(f"\n  Task '{task}' results:")
-            for metric, value in result["results"].get(task, {}).items():
-                if isinstance(value, float):
-                    print(f"    {metric}: {value:.4f}  ({value*100:.2f}%)")
-                elif not metric.startswith("_"):
-                    print(f"    {metric}: {value}")
+            # Print task result immediately
+            if result and "results" in result:
+                print(f"\n  Task '{task}' results:")
+                for metric, value in result["results"].get(task, {}).items():
+                    if isinstance(value, float):
+                        print(f"    {metric}: {value:.4f}  ({value*100:.2f}%)")
+                    elif not metric.startswith("_"):
+                        print(f"    {metric}: {value}")
+        except Exception as e:
+            ERRORS[task] = str(e)
+            print(f"Error running task '{task}': {e}")
 
     # ── 5. Print final summary ────────────────────────────────────────── #
     print(f"\n{'='*60}")
@@ -202,6 +207,11 @@ def main(args):
     print(f"Total tasks completed: {len(task_list)}")
     print(f"Results saved → {output_path}")
     print(f"{'='*60}\n")
+    if ERRORS:
+        print(f"Errors encountered: {', '.join(ERRORS.keys())}")
+        print(f"{'='*60}\n")
+        for task, error in ERRORS.items():
+            print(f"  {task}: {error}")
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +225,7 @@ def add_args_harness(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--tasks",
         type=str,
         default=(
-            "longbench,longcxt,passkey,ruler,babilong,arc_challenge,truthfulqa,hellaswag,"
+            "longbench,longbench2,longcxt,passkey,ruler,babilong,arc_challenge,truthfulqa,hellaswag,"
             "bbh,mmlu,gsm8k,aime,hendrycks_math,humaneval,mbpp,humaneval_infilling"
         ),
         help=(

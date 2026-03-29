@@ -322,6 +322,10 @@ def _grid(n: int):
         return 2, 3
     if n <= 9:
         return 3, 3
+    if n <= 16:
+        return 4, 4
+    if n <= 32:
+        return 4, 8
     cols = math.ceil(math.sqrt(n))
     rows = math.ceil(n / cols)
     return rows, cols
@@ -333,9 +337,103 @@ def _common_vrange(matrices: List[np.ndarray]):
     return float(np.nanmin(all_vals)), float(np.nanmax(all_vals))
 
 
-# ---------------------------------------------------------------------------
-# Figure 1 – Layer depth entropy curve
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# Figure 1  –  Layer-depth entropy curve, one subplot per head
+# ===========================================================================
+
+
+def _plot_layer_depth_curve_per_head_one(
+    data: dict,
+    key: str,
+    ylabel: str,
+    suptitle: str,
+    out_path: str,
+    fmt: str,
+    dpi: int,
+) -> None:
+    """
+    Internal worker for Fig 1 (raw or norm variant).
+
+    Parameters
+    ----------
+    key      : 'entropy_head_layer' or 'norm_entropy_head_layer'
+               Shape of stored data: [L][H]  (already mean over T)
+    ylabel   : y-axis label string
+    suptitle : figure-level title
+    out_path : full file path (including filename)
+    """
+    lengths = data["lengths"]
+    num_heads = data["num_heads"]
+    L = data["num_layers"]
+    layer_x = np.arange(L)
+
+    nrows, ncols = _grid(num_heads)
+
+    # figure size: each subplot ~5×4 inches, packed together
+    fig_w = ncols * 5.5
+    fig_h = nrows * 4.5
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(fig_w, fig_h),
+        squeeze=False,
+        sharex=True,
+    )
+
+    for h in range(num_heads):
+        r, c = divmod(h, ncols)
+        ax = axes[r][c]
+
+        for sl in lengths:
+            col = _get_color(sl, lengths)
+            # matrix shape: [L, H]  →  take column h  →  [L]
+            matrix = np.array(data["results"][str(sl)][key])  # [L][H] list-of-lists
+            curve = np.array(matrix)[:, h]  # [L]
+            ax.plot(
+                layer_x,
+                curve,
+                color=col,
+                linewidth=1.8,
+                marker="o",
+                markersize=3.5,
+                label=f"len={sl}",
+            )
+            # end label: only for the last head row to avoid clutter
+            if c == ncols - 1:
+                _end_label(ax, layer_x, curve, str(sl), col, fs=8)
+
+        ax.set_title(f"Head {h}", fontsize=_LABEL_FS - 3, pad=4)
+        ax.xaxis.set_major_locator(mticker.MultipleLocator(max(1, L // 4)))
+        ax.tick_params(labelsize=_TICK_FS - 2)
+        ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.45)
+
+        # y-label only on leftmost column
+        if c == 0:
+            ax.set_ylabel(ylabel, fontsize=_LABEL_FS - 2)
+        # x-label only on bottom row
+        if r == nrows - 1:
+            ax.set_xlabel("Layer index", fontsize=_LABEL_FS - 2)
+
+    # hide unused subplots
+    for idx in range(num_heads, nrows * ncols):
+        r, c = divmod(idx, ncols)
+        axes[r][c].set_visible(False)
+
+    # shared legend (collect handles from the first visible subplot)
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper right",
+            fontsize=_LEGEND_FS,
+            framealpha=0.85,
+            ncol=len(lengths),
+            title="Sequence length",
+        )
+
+    fig.suptitle(suptitle, fontsize=_SUPTITLE_FS, y=1.01)
+    _savefig(fig, out_path, dpi)
 
 
 def plot_layer_depth_curve(
@@ -346,71 +444,53 @@ def plot_layer_depth_curve(
     method_name: str = "",
 ) -> None:
     """
-    Fig 1 — x=layer index, y=mean entropy, one line per seq-length.
+    Fig 1 — Two figures, each with one subplot per attention head.
 
-    Layout: 1×2 (raw left, normalised right).
-    Each curve represents the mean over all token positions and all heads,
-    showing the per-layer entropy profile of the network.
+    Fig 1-raw : x=layer, y=mean raw Shannon entropy H(l,h)
+                (mean over token positions T for that head)
+    Fig 1-norm: same for normalised entropy H_norm(l,h)
 
-    Interpretation
-    ^^^^^^^^^^^^^^
-    A U-shape or monotone decrease indicates depth-wise sharpening.
-    Vertical separation between coloured curves at the same layer shows
-    how sensitive that layer is to context length.
+    Data source
+    -----------
+    'entropy_head_layer'      [L][H]  — raw H, mean over T
+    'norm_entropy_head_layer' [L][H]  — norm H, mean over T
     """
-    lengths = data["lengths"]
-    L = data["num_layers"]
-    layer_x = np.arange(L)
-
-    fig, axes = plt.subplots(1, 2, figsize=_FS_12)
-
-    for ax_idx, (key, ylabel, title) in enumerate(
-        [
-            (
-                "entropy_layer_position",
-                "Mean entropy (nats)",
-                "Raw Shannon entropy  H(l)",
-            ),
-            (
-                "norm_entropy_layer_position",
-                "Mean normalised entropy  H_norm ∈ [0,1]",
-                "Normalised entropy  H_norm(l)",
-            ),
-        ]
-    ):
-        ax = axes[ax_idx]
-        for sl in lengths:
-            col = _get_color(sl, lengths)
-            matrix = np.array(data["results"][str(sl)][key])  # [L, T]
-            curve = matrix.mean(axis=1)  # [L]
-            ax.plot(
-                layer_x,
-                curve,
-                color=col,
-                linewidth=2.2,
-                marker="o",
-                markersize=5,
-                label=f"len={sl}",
-            )
-            _end_label(ax, layer_x, curve, str(sl), col)
-
-        ax.set_xlabel("Layer index", fontsize=_LABEL_FS)
-        ax.set_ylabel(ylabel, fontsize=_LABEL_FS)
-        ax.set_title(title, fontsize=_TITLE_FS, pad=10)
-        ax.xaxis.set_major_locator(mticker.MultipleLocator(4))
-        ax.tick_params(labelsize=_TICK_FS)
-        ax.grid(axis="y", linestyle="--", linewidth=0.6, alpha=0.55)
-        ax.legend(fontsize=_LEGEND_FS, framealpha=0.8)
-
-    fig.suptitle(
-        "Fig 1 — Attention entropy profile across network depth",
-        fontsize=_SUPTITLE_FS,
-        y=1.01,
+    # ── Raw ──────────────────────────────────────────────────────────────
+    _plot_layer_depth_curve_per_head_one(
+        data,
+        key="entropy_head_layer",
+        ylabel="Mean H (nats)",
+        suptitle=(
+            "Fig 1-raw — Raw Shannon entropy per head across network depth\n"
+            "Each subplot = one attention head  ·  "
+            "x = layer  ·  y = mean H over token positions  ·  "
+            "curves = sequence lengths"
+        ),
+        out_path=os.path.join(
+            out_dir,
+            f"{method_name}_fig01_layer_depth_curve_per_head_raw.{fmt}",
+        ),
+        fmt=fmt,
+        dpi=dpi,
     )
-    _savefig(
-        fig,
-        os.path.join(out_dir, f"{method_name}_fig01_layer_depth_curve.{fmt}"),
-        dpi,
+
+    # ── Normalised ────────────────────────────────────────────────────────
+    _plot_layer_depth_curve_per_head_one(
+        data,
+        key="norm_entropy_head_layer",
+        ylabel="Mean H_norm ∈ [0,1]",
+        suptitle=(
+            "Fig 1-norm — Normalised entropy per head across network depth\n"
+            "Each subplot = one attention head  ·  "
+            "x = layer  ·  y = mean H_norm over token positions  ·  "
+            "curves = sequence lengths"
+        ),
+        out_path=os.path.join(
+            out_dir,
+            f"{method_name}_fig01_layer_depth_curve_per_head_norm.{fmt}",
+        ),
+        fmt=fmt,
+        dpi=dpi,
     )
 
 
@@ -1297,35 +1377,25 @@ def _plot_entropy_by_pos_head0_one(
     # gray band for forced top-k region
     _shade_boundary(ax, top_k_boundary, alpha=0.08)
 
-    # --- draw lines: distinguish layer groups by line-width + alpha ---
-    lw_base, lw_hi = 1.0, 2.2
-    alpha_base, alpha_hi = 0.55, 0.92
-    highlight_every = max(1, L // 8)  # every ~1/8 of layers gets a thicker line
-
     for l_idx in range(L):
-        is_highlight = (l_idx % highlight_every == 0) or (l_idx == L - 1)
-        lw = lw_hi if is_highlight else lw_base
-        alpha = alpha_hi if is_highlight else alpha_base
         ax.plot(
             pos_x,
             arr[l_idx],
             color=colors[l_idx],
-            linewidth=lw,
-            alpha=alpha,
-            rasterized=True,  # keeps file size small for many lines
+            linewidth=1.0,
+            alpha=0.65,
+            rasterized=True,
         )
-        # end-label for highlighted lines only
-        if is_highlight:
-            ax.annotate(
-                f"L{l_idx}",
-                xy=(T - 1, arr[l_idx, -1]),
-                xytext=(6, 0),
-                textcoords="offset points",
-                color=colors[l_idx],
-                fontsize=9,
-                va="center",
-                fontweight="bold",
-            )
+        ax.annotate(
+            f"L{l_idx}",
+            xy=(T - 1, arr[l_idx, -1]),
+            xytext=(6, 0),
+            textcoords="offset points",
+            color=colors[l_idx],
+            fontsize=8,
+            va="center",
+            fontweight="bold",
+        )
 
     # ── colorbar as layer axis ────────────────────────────────────────
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=L - 1))
@@ -1480,8 +1550,8 @@ _FIG_FUNCTIONS = [
     plot_position_head_heatmap,  # 5
     plot_delta_entropy_heatmap,  # 6
     plot_entropy_boxplot_violin,  # 7
-    plot_pos_layer_head_heatmap,  # 8  ← NEW
-    plot_entropy_by_pos_head0,  # 9  ← NEW
+    plot_pos_layer_head_heatmap,  # 8
+    plot_entropy_by_pos_head0,  # 9
 ]
 
 
