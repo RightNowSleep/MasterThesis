@@ -9,11 +9,16 @@ from models.model_loader import load_model, load_tokenizer, add_args_model
 
 
 def add_args_finetune(parser: argparse.ArgumentParser):
-    r"""
-    Add SFT-specific hyperparameters to the argument parser.
+    """Add SFT-specific hyperparameters to the argument parser.
 
-    Model, tokenizer, and RoPE arguments are inherited from
-    add_args_model() in the model_loader module.
+    Model, tokenizer, and RoPE arguments are inherited from add_args_model()
+    in the model_loader module.
+
+    Args:
+        parser: Argument parser to add SFT-specific arguments to.
+
+    Returns:
+        argparse.ArgumentParser: The parser with added SFT-specific arguments.
 
     Added Arguments:
         --output-dir: Directory to save the fine-tuned model.
@@ -85,18 +90,24 @@ def add_args_finetune(parser: argparse.ArgumentParser):
 
 
 def main(args):
-    r"""
-    Main entry point for supervised fine-tuning (SFT) with QLoRA and DeepSpeed.
+    """Main entry point for supervised fine-tuning (SFT) with QLoRA and DeepSpeed.
 
     Pipeline:
-    1. Parse command-line arguments for model, SFT, and LoRA configurations.
-    2. Load tokenizer and define chat-template formatting function.
-    3. Build quantization config (4-bit or 8-bit) if requested.
-    4. Load the model via the unified loader.
-    5. Configure LoRA for parameter-efficient fine-tuning if enabled.
-    6. Load and prepare the training dataset.
-    7. Initialize SFTTrainer and start training.
-    8. Save the fine-tuned model to the output directory.
+        1. Parse command-line arguments for model, SFT, and LoRA configurations.
+        2. Load tokenizer and define chat-template formatting function.
+        3. Build quantization config (4-bit or 8-bit) if requested.
+        4. Load the model via the unified loader.
+        5. Configure LoRA for parameter-efficient fine-tuning if enabled.
+        6. Load and prepare the training dataset.
+        7. Initialize SFTTrainer and start training.
+        8. Save the fine-tuned model to the output directory.
+
+    Args:
+        args: Parsed command-line arguments containing model, SFT, and LoRA
+            configurations.
+
+    Returns:
+        None
     """
     # ------------------------------------------------------------------
     # Derive experiment tag from --rope-type

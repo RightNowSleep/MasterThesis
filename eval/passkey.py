@@ -18,13 +18,13 @@ random.seed(42)
 
 def get_order_suffix(i: int) -> str:
     """
-    Generate ordinal suffix
+    Generate ordinal suffix.
 
     Args:
-        i (int): Number
+        i: Number.
 
     Returns:
-        str: Ordinal suffix string, e.g., 1->"1st", 2->"2nd", 3->"3rd", 4->"4th"
+        Ordinal suffix string, e.g., 1->"1st", 2->"2nd", 3->"3rd", 4->"4th".
     """
     if 11 <= i % 100 <= 13:
         return f"{i}th"
@@ -40,18 +40,24 @@ def get_order_suffix(i: int) -> str:
 
 class BaseDataLoader(ABC):
     """
-    Abstract base class for data loaders
+    Abstract base class for data loaders.
 
-    Defines a unified interface for data loaders, subclasses need to implement the generate_prompt method
+    Defines a unified interface for data loaders, subclasses need to implement
+    the generate_prompt method.
+
+    Attributes:
+        tokenizer: Tokenizer object.
+        length: Target token count.
+        task_description: Task description text.
     """
 
     def __init__(self, tokenizer, length: int):
         """
-        Initialize data loader
+        Initialize data loader.
 
         Args:
-            tokenizer: Tokenizer object
-            length (int): Target token count
+            tokenizer: Tokenizer object.
+            length: Target token count.
         """
         self.tokenizer = tokenizer
         self.length = length
@@ -62,40 +68,46 @@ class BaseDataLoader(ABC):
 
     def set_length(self, length: int):
         """
-        Set target token count
+        Set target token count.
 
         Args:
-            length (int): Target token count
+            length: Target token count.
         """
         self.length = length
 
     @abstractmethod
     def generate_prompt(self, num_keys: int = 1) -> tuple:
         """
-        Generate test prompt (abstract method)
+        Generate test prompt (abstract method).
 
         Args:
-            num_keys (int): Number of pass keys, default is 1
+            num_keys: Number of pass keys, default is 1.
 
         Returns:
-            tuple: (prompt_text, pass_keys, target_key)
-                - prompt_text (str): Generated test prompt text
-                - pass_keys (list): List of all pass keys
-                - target_key (int): Target pass key for the model to answer
+            A tuple of (prompt_text, pass_keys, target_key).
+                prompt_text: Generated test prompt text.
+                pass_keys: List of all pass keys.
+                target_key: Target pass key for the model to answer.
         """
         pass
 
 
 class SyntheticDataLoader(BaseDataLoader):
-    """Generates synthetic corpus using repeated garbage text for passkey testing"""
+    """
+    Generates synthetic corpus using repeated garbage text for passkey testing.
+
+    Attributes:
+        garbage: Garbage text string for padding.
+        garbage_tokens: Tokenized garbage text.
+    """
 
     def __init__(self, tokenizer, length: int):
         """
-        Initialize synthetic data loader
+        Initialize synthetic data loader.
 
         Args:
-            tokenizer: Tokenizer object
-            length (int): Target token count
+            tokenizer: Tokenizer object.
+            length: Target token count.
         """
         super().__init__(tokenizer, length)
         self.garbage = "The grass is green. The sky is blue. The sun is three. Here we go. There and back again."
@@ -103,16 +115,16 @@ class SyntheticDataLoader(BaseDataLoader):
 
     def generate_prompt(self, num_keys: int = 1) -> tuple:
         """
-        Generate synthetic corpus test prompt
+        Generate synthetic corpus test prompt.
 
         Args:
-            num_keys (int): Number of pass keys, default is 1
+            num_keys: Number of pass keys, default is 1.
 
         Returns:
-            tuple: (prompt_text, pass_keys, target_key)
-                - prompt_text (str): Generated test prompt text
-                - pass_keys (list): List of all pass keys
-                - target_key (int): Target pass key for the model to answer
+            A tuple of (prompt_text, pass_keys, target_key).
+                prompt_text: Generated test prompt text.
+                pass_keys: List of all pass keys.
+                target_key: Target pass key for the model to answer.
         """
         pass_keys = [random.randint(1, 50000) for _ in range(num_keys)]
 
@@ -184,7 +196,14 @@ class SyntheticDataLoader(BaseDataLoader):
 
 
 class RealDataLoader(BaseDataLoader):
-    """Loads text from real datasets for passkey testing"""
+    """
+    Loads text from real datasets for passkey testing.
+
+    Attributes:
+        dataset_name: Dataset name.
+        split: Dataset split.
+        docs: Pre-tokenized document segments.
+    """
 
     def __init__(
         self,
@@ -194,13 +213,13 @@ class RealDataLoader(BaseDataLoader):
         length: int = 8192,
     ):
         """
-        Initialize real data loader
+        Initialize real data loader.
 
         Args:
-            dataset_name (str): Dataset name, e.g., "togethercomputer/RedPajama-Data-1T-Sample"
-            split (str): Dataset split, e.g., "train", "test"
-            tokenizer: Tokenizer object
-            length (int): Total text length (token count)
+            dataset_name: Dataset name, e.g., "togethercomputer/RedPajama-Data-1T-Sample".
+            split: Dataset split, e.g., "train", "test".
+            tokenizer: Tokenizer object.
+            length: Total text length (token count).
         """
         super().__init__(tokenizer, length)
         self.dataset_name = dataset_name
@@ -209,22 +228,22 @@ class RealDataLoader(BaseDataLoader):
 
     def set_length(self, length: int):
         """
-        Set target token count and rebuild junk text
+        Set target token count and rebuild junk text.
 
         Args:
-            length (int): Target token count
+            length: Target token count.
         """
         self.length = length
         self.docs = self._construct_junk()
 
     def _construct_junk(self):
         """
-        Construct junk text
+        Construct junk text.
 
-        Randomly sample text from real dataset until reaching specified token count
+        Randomly sample text from real dataset until reaching specified token count.
 
         Returns:
-            list: List of pre-tokenized document segments
+            List of pre-tokenized document segments.
         """
         data = load_dataset(self.dataset_name)[self.split]
         token_count = 0
@@ -243,16 +262,16 @@ class RealDataLoader(BaseDataLoader):
 
     def generate_prompt(self, num_keys: int = 1) -> tuple:
         """
-        Generate real corpus test prompt
+        Generate real corpus test prompt.
 
         Args:
-            num_keys (int): Number of pass keys, default is 1
+            num_keys: Number of pass keys, default is 1.
 
         Returns:
-            tuple: (prompt_text, pass_keys, target_key)
-                - prompt_text (str): Generated test prompt text
-                - pass_keys (list): List of all pass keys
-                - target_key (int): Target pass key for the model to answer
+            A tuple of (prompt_text, pass_keys, target_key).
+                prompt_text: Generated test prompt text.
+                pass_keys: List of all pass keys.
+                target_key: Target pass key for the model to answer.
         """
         pass_keys = [random.randint(1, 50000) for _ in range(num_keys)]
 
@@ -322,21 +341,24 @@ class PasskeyEvaluator:
     """
     Passkey evaluator for needle-in-a-haystack retrieval testing.
 
-    Args:
-        model: Loaded model object
-        tokenizer: Tokenizer object
-        restrict_tokens (bool): Whether to restrict output tokens (digits only), default is True
-        data_mode (str): Data mode, "synthetic" or "real"
-        dataset_name (str): Dataset name, only used for real mode
-        split (str): Dataset split, only used for real mode
-        min_length (int): Minimum token count, default is 2048
-        max_length (int): Maximum token count, default is 32768
-        length_step (int): Length step size; if None, uses exponential growth (multiply by 2 each time)
-        iterations (int): Number of test iterations, default is 20
-        num_keys (int): Number of pass keys, default is 1
-        aggressive_memory (bool): Whether to clear memory after each iteration, default is True
-        save_dir (str): Save directory, default is "results/passkey"
-        save_file (str): Save filename, default is None
+    Attributes:
+        model: Loaded model object.
+        tokenizer: Tokenizer object.
+        restrict_tokens: Whether to restrict output tokens (digits only), default is True.
+        data_mode: Data mode, "synthetic" or "real".
+        dataset_name: Dataset name, only used for real mode.
+        split: Dataset split, only used for real mode.
+        min_length: Minimum token count, default is 2048.
+        max_length: Maximum token count, default is 32768.
+        length_step: Length step size; if None, uses exponential growth (multiply by 2 each time).
+        iterations: Number of test iterations, default is 20.
+        num_keys: Number of pass keys, default is 1.
+        aggressive_memory: Whether to clear memory after each iteration, default is True.
+        length_list: List of lengths to evaluate.
+        data_loader: Data loader object.
+        pipe: Text generation pipeline.
+        save_dir: Save directory, default is "results/passkey".
+        save_file: Save filename, default is None.
     """
 
     def __init__(
@@ -357,23 +379,23 @@ class PasskeyEvaluator:
         save_file: str = None,
     ):
         """
-        Initialize evaluator
+        Initialize evaluator.
 
         Args:
-            model: Loaded model object
-            tokenizer: Tokenizer object
-            restrict_tokens (bool): Whether to restrict output tokens (digits only), default is True
-            data_mode (str): Data mode, "synthetic" or "real"
-            dataset_name (str): Dataset name, only used for real mode
-            split (str): Dataset split, only used for real mode
-            min_length (int): Minimum token count, default is 2048
-            max_length (int): Maximum token count, default is 8192
-            length_step (int): Length step size; if None, uses exponential growth (multiply by 2 each time)
-            iterations (int): Number of test iterations, default is 20
-            num_keys (int): Number of pass keys, default is 1
-            aggressive_memory (bool): Whether to clear memory after each iteration, default is True
-            save_dir (str): Save directory, default is "results/passkey"
-            save_file (str): Save filename, default is None
+            model: Loaded model object.
+            tokenizer: Tokenizer object.
+            restrict_tokens: Whether to restrict output tokens (digits only), default is True.
+            data_mode: Data mode, "synthetic" or "real".
+            dataset_name: Dataset name, only used for real mode.
+            split: Dataset split, only used for real mode.
+            min_length: Minimum token count, default is 2048.
+            max_length: Maximum token count, default is 8192.
+            length_step: Length step size; if None, uses exponential growth (multiply by 2 each time).
+            iterations: Number of test iterations, default is 20.
+            num_keys: Number of pass keys, default is 1.
+            aggressive_memory: Whether to clear memory after each iteration, default is True.
+            save_dir: Save directory, default is "results/passkey".
+            save_file: Save filename, default is None.
         """
         self.model = model
         self.tokenizer = tokenizer
@@ -408,11 +430,11 @@ class PasskeyEvaluator:
         """
         Generate a list of lengths for evaluating the model at different context lengths.
 
-        If length_step is not None, grows at fixed step size (e.g., 2048, 2560, 3072, 3584...)
-        If length_step is None, uses exponential growth (e.g., 2048, 4096, 8192...)
+        If length_step is not None, grows at fixed step size (e.g., 2048, 2560, 3072, 3584...).
+        If length_step is None, uses exponential growth (e.g., 2048, 4096, 8192...).
 
         Returns:
-            list: List of lengths, e.g., [2048, 4096, 8192]
+            List of lengths, e.g., [2048, 4096, 8192].
         """
         if self.length_step is not None:
             tokens = [
@@ -437,17 +459,17 @@ class PasskeyEvaluator:
         length: int,
     ):
         """
-        Create data loader
+        Create data loader.
 
         Args:
-            data_mode (str): Data mode
-            dataset_name (str): Dataset name
-            split (str): Dataset split
-            tokenizer: Tokenizer object
-            length (int): Target token count
+            data_mode: Data mode.
+            dataset_name: Dataset name.
+            split: Dataset split.
+            tokenizer: Tokenizer object.
+            length: Target token count.
 
         Returns:
-            BaseDataLoader: Data loader object
+            Data loader object.
         """
         if data_mode == "synthetic":
             return SyntheticDataLoader(tokenizer, length)
@@ -456,9 +478,9 @@ class PasskeyEvaluator:
 
     def _setup_pipeline(self):
         """
-        Set up text generation pipeline
+        Set up text generation pipeline.
 
-        If restrict_tokens is True, restrict model to only output digit tokens
+        If restrict_tokens is True, restrict model to only output digit tokens.
         """
         if self.restrict_tokens:
             vocab = self.tokenizer.get_vocab()
@@ -493,15 +515,15 @@ class PasskeyEvaluator:
 
     def evaluate_sample(self):
         """
-        Evaluate a single sample's pass key
+        Evaluate a single sample's pass key.
 
         Returns:
-            dict: Dictionary containing evaluation results:
-                - prompt_text (str): Input prompt text
-                - num_tokens (int): Token count of input text
-                - pass_keys (list): Generated pass key list
-                - target (int/str): Target pass key (number) or raw response
-                - correct (bool): Whether target pass key was successfully extracted
+            Dictionary containing evaluation results:
+                prompt_text: Input prompt text.
+                num_tokens: Token count of input text.
+                pass_keys: Generated pass key list.
+                target: Target pass key (number) or raw response.
+                correct: Whether target pass key was successfully extracted.
         """
         prompt_text, pass_keys, target = self.data_loader.generate_prompt(self.num_keys)
 
@@ -537,9 +559,9 @@ class PasskeyEvaluator:
         Run needle-in-a-haystack evaluation across all configured lengths.
 
         Returns:
-            dict: Evaluation result dictionary containing:
-                - lengths (list): List of evaluated lengths
-                - success_rates (list): List of success rates at corresponding lengths
+            Evaluation result dictionary containing:
+                lengths: List of evaluated lengths.
+                success_rates: List of success rates at corresponding lengths.
         """
         success_rates = []
 
@@ -599,7 +621,7 @@ def generate_save_filename(model_name, config):
         config: The configuration object.
 
     Returns:
-        str: The filename.
+        The filename.
 
     Examples:
         --rope-type none                              → llama-7b_none.json

@@ -39,29 +39,31 @@ _ALL_ROPE_TYPES = [_ROPE_TYPE_NONE] + sorted(_ROPE_TYPES_WITH_DYNAMIC_FLAG)
 
 
 def _build_rope_scaling(args) -> Optional[Dict]:
-    r"""
-    Translate flat CLI arguments into the ``rope_scaling`` dict expected by
-    ``LlamaConfig``.
+    """
+    Translate flat CLI arguments into the ``rope_scaling`` dict expected by ``LlamaConfig``.
 
-    Rules
-    -----
-    * ``--rope-type none``  → returns ``None``  (standard RoPE, no scaling)
-    * ``--rope-factor`` and ``--rope-dynamic`` are **mutually exclusive** for all
-      six scaling types (linear / ntk / part-ntk / yarn / my-rope / my-rope2 /
-      block-layered / block-layered-scaled / freq-smooth / freq-smooth-scaled):
+    Rules:
+        - ``--rope-type none``  → returns ``None``  (standard RoPE, no scaling)
+        - ``--rope-factor`` and ``--rope-dynamic`` are **mutually exclusive** for all
+          scaling types (linear / ntk / part-ntk / yarn / my-rope / my-rope2 /
+          block-layered / block-layered-scaled / freq-smooth / freq-smooth-scaled):
 
-      - ``--rope-factor F``   (F > 1.0)  — static scaling with a fixed ratio.
-      - ``--rope-dynamic``               — dynamic scaling; ratio derived at
-                                           runtime as ``s = max(1, L / L_orig)``.
-      - Both supplied simultaneously     — ``--rope-factor`` wins and a warning
-                                           is emitted; ``--rope-dynamic`` is
-                                           ignored.
-      - Neither supplied                 — raises ``ValueError``.
+          - ``--rope-factor F``   (F > 1.0)  — static scaling with a fixed ratio.
+          - ``--rope-dynamic``               — dynamic scaling; ratio derived at
+            runtime as ``s = max(1, L / L_orig)``.
+          - Both supplied simultaneously     — ``--rope-factor`` wins and a warning
+            is emitted; ``--rope-dynamic`` is ignored.
+          - Neither supplied                 — raises ``ValueError``.
 
-    Raises
-    ------
-    ValueError
-        If neither ``--rope-factor`` nor ``--rope-dynamic`` is provided.
+    Args:
+        args: Parsed argument namespace containing rope_type, rope_factor, and rope_dynamic attributes.
+
+    Returns:
+        Optional[Dict]: A dictionary with 'type' and either 'factor' or 'dynamic' keys,
+            or None if rope_type is 'none'.
+
+    Raises:
+        ValueError: If neither ``--rope-factor`` nor ``--rope-dynamic`` is provided.
     """
     if args.rope_type == _ROPE_TYPE_NONE:
         return None
@@ -93,7 +95,16 @@ def _build_rope_scaling(args) -> Optional[Dict]:
 
 
 def _resolve_torch_dtype(dtype_str: str):
-    """Map a dtype string to a torch.dtype (or the literal string 'auto')."""
+    """
+    Map a dtype string to a torch.dtype (or the literal string 'auto').
+
+    Args:
+        dtype_str: A string representing the data type. Valid values are 'float32',
+            'float16', 'bfloat16', or 'auto'.
+
+    Returns:
+        Union[torch.dtype, str]: The corresponding torch.dtype or the string 'auto'.
+    """
     mapping = {
         "float32": torch.float32,
         "float16": torch.float16,
@@ -110,22 +121,17 @@ def _resolve_torch_dtype(dtype_str: str):
 
 def load_model(args, quantization_config=None):
     """
-    Load a LlamaForCausalLM model from pretrained weights with the RoPE
-    configuration specified by ``args``.
+    Load a LlamaForCausalLM model from pretrained weights with the RoPE configuration specified by ``args``.
 
-    Parameters
-    ----------
-    args :
-        Parsed argument namespace (see ``add_args_model``).
-    quantization_config : BitsAndBytesConfig, optional
-        If provided, overrides any quantization settings derived from args.
+    Args:
+        args: Parsed argument namespace (see ``add_args_model``).
+        quantization_config: Optional BitsAndBytesConfig. If provided, overrides any
+            quantization settings derived from args.
 
-    Returns
-    -------
-    model : LlamaForCausalLM
-        Loaded (and optionally adapter-merged) model.
-    config : LlamaConfig
-        Final model configuration used for loading.
+    Returns:
+        tuple: A tuple containing:
+            - model (LlamaForCausalLM): Loaded (and optionally adapter-merged) model.
+            - config (LlamaConfig): Final model configuration used for loading.
     """
     print(f"Loading model : {args.model_name}")
     if args.adapter_path:
@@ -208,14 +214,12 @@ def load_tokenizer(args):
     """
     Load the tokenizer associated with ``args.model_name``.
 
-    Parameters
-    ----------
-    args :
-        Parsed argument namespace (see ``add_args_model``).
+    Args:
+        args: Parsed argument namespace (see ``add_args_model``).
 
-    Returns
-    -------
-    tokenizer : PreTrainedTokenizer
+    Returns:
+        PreTrainedTokenizer: The loaded tokenizer with pad_token set to eos_token
+            if not already defined.
     """
     print(f"Loading tokenizer: {args.model_name}")
     tokenizer = AutoTokenizer.from_pretrained(
@@ -239,22 +243,18 @@ def add_args_model(parser):
     """
     Register all model-loading arguments with ``parser``.
 
-    Argument groups
-    ---------------
-    Model identity   : --model-name, --adapter-path
-    Hardware         : --device, --dtype, --load-in-8bit, --load-in-4bit
-    Training helpers : --use-cache, --gradient-checkpointing
-    Sequence length  : --max-length, --min-length
-    RoPE scaling     : --rope-type, --rope-factor, --rope-dynamic
+    Argument groups:
+        - Model identity: --model-name, --adapter-path
+        - Hardware: --device, --dtype, --load-in-8bit, --load-in-4bit
+        - Training helpers: --use-cache, --gradient-checkpointing
+        - Sequence length: --max-length, --min-length
+        - RoPE scaling: --rope-type, --rope-factor, --rope-dynamic
 
-    Parameters
-    ----------
-    parser : argparse.ArgumentParser
+    Args:
+        parser: argparse.ArgumentParser instance to add arguments to.
 
-    Returns
-    -------
-    argparse.ArgumentParser
-        The same parser with arguments added (for chaining).
+    Returns:
+        argparse.ArgumentParser: The same parser with arguments added (for chaining).
     """
     # ── Model identity ──────────────────────────────────────────────── #
     parser.add_argument(

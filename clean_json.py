@@ -5,18 +5,13 @@ from typing import Any
 
 
 def remove_samples_recursive(obj: Any) -> Any:
-    """
-    递归删除字典中所有层级的 'samples' 字段。
+    """Recursively remove all 'samples' fields from all levels in a dictionary.
 
-    Parameters
-    ----------
-    obj : Any
-        要处理的对象（字典、列表或其他类型）
+    Args:
+        obj: The object to process (dictionary, list, or other type).
 
-    Returns
-    -------
-    Any
-        处理后的对象
+    Returns:
+        The processed object with all 'samples' fields removed.
     """
     if isinstance(obj, dict):
         return {
@@ -29,14 +24,13 @@ def remove_samples_recursive(obj: Any) -> Any:
 
 
 def clean_json_files(root_dir: str) -> None:
-    """
-    清理指定目录下所有 JSON 文件，递归删除所有层级的 'samples' 字段。
-    entropy 目录使用紧凑格式保存，其他目录使用格式化保存。
+    """Clean all JSON files in the specified directory by recursively removing all 'samples' fields.
 
-    Parameters
-    ----------
-    root_dir : str
-        要扫描的根目录路径
+    Files in the 'entropy' directory are saved in compact format, while files in other
+    directories are saved with formatting.
+
+    Args:
+        root_dir: The root directory path to scan.
     """
     root_path = Path(root_dir)
     json_files = list(root_path.rglob("*.json"))
@@ -56,13 +50,13 @@ def clean_json_files(root_dir: str) -> None:
                 else:
                     json.dump(cleaned_data, f, ensure_ascii=False, indent=2)
 
-            print(f"已清理: {json_path}")
+            print(f"Cleaned: {json_path}")
             cleaned_count += 1
 
         except Exception as e:
-            print(f"处理失败: {json_path} - {e}")
+            print(f"Failed to process: {json_path} - {e}")
 
-    print(f"\n完成! 共清理 {cleaned_count} 个文件")
+    print(f"\nCompleted! Total {cleaned_count} files cleaned")
 
 
 if __name__ == "__main__":

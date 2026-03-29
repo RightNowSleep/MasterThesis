@@ -17,6 +17,25 @@ def ntk_by_parts_weights_by_layer(
     layer_idx: int = 0,
     N: int = 32,
 ) -> np.ndarray:
+    """Calculate extrapolation weights for NTK-by-parts method by layer.
+
+    Computes frequency-dependent extrapolation weights that vary based on the
+    transformer layer index, using an inverted U-shaped normalization pattern.
+
+    Args:
+        dim: Dimension of the model (default 128).
+        base: Base value for positional encoding (default 10000).
+        L: Maximum sequence length (default 2048).
+        alpha: Lower bound parameter for weight clipping (default 1.0).
+        beta: Upper bound parameter for weight clipping (default 32.0).
+        layer_idx: Index of the current transformer layer (default 0).
+        N: Total number of transformer layers (default 32).
+
+    Returns:
+        np.ndarray: Array of extrapolation weights for each frequency group,
+            with shape (dim//2,). Values range from 0.0 (interpolation) to
+            1.0 (extrapolation).
+    """
     # 64 frequency groups (corresponding to dimensions 0,2,...126)
     theta = 1.0 / (base ** (np.arange(0, dim, 2) / dim))
     lambda_d = 2 * np.pi / theta
@@ -36,8 +55,8 @@ def ntk_by_parts_weights_by_layer(
     l_norm = 1 / (1 + math.exp(x))
     current_shift = int(l_norm * shift)
     layer_norm = 2.0 * layer_idx / (N - 1) - 1.0
-    u_norm = 1.0 - layer_norm**2  # Inverted U shape
-    current_shift = int(shift * u_norm)  # Large at both ends, small in the middle
+    u_norm = 1.0 - layer_norm**2  # Inverted U-shaped normalization
+    current_shift = int(shift * u_norm)  # Higher weights at both ends, lower in middle
     beta_idx_layer = beta_idx - current_shift
     alpha_idx_layer = alpha_idx - current_shift
 

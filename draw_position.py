@@ -1,4 +1,10 @@
 # sinusoidal_pe_heatmap_with_box.py
+"""Generate a heatmap visualization of sinusoidal positional encoding.
+
+This module creates a visual representation of the sinusoidal positional encoding
+matrix used in transformer models, highlighting the extrapolation region beyond
+the training context length.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 

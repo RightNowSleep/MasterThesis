@@ -181,13 +181,11 @@ def _norm_from_raw_np(arr: np.ndarray) -> np.ndarray:
     """
     Compute H_norm = H / log(t+1) along the last axis of a numpy array.
 
-    Parameters
-    ----------
-    arr : ndarray  shape [..., T]
+    Args:
+        arr: ndarray of shape [..., T].
 
-    Returns
-    -------
-    ndarray  shape [..., T]  values in [0, 1]
+    Returns:
+        ndarray of shape [..., T] with values in [0, 1].
     """
     T = arr.shape[-1]
     pos = np.arange(T, dtype=np.float64)
@@ -197,21 +195,28 @@ def _norm_from_raw_np(arr: np.ndarray) -> np.ndarray:
 
 def _normalize_data(data: dict) -> dict:
     """
-    Convert the new single-length JSON format produced by the updated
-    EntropyEvaluator into the legacy multi-length format expected by all
-    plotting functions.
+    Convert the new single-length JSON format produced by the updated EntropyEvaluator
+    into the legacy multi-length format expected by all plotting functions.
 
-    New format  →  data["max_length"] = int,
-                   data["results"]    = {metric_key: value, ...}
+    New format:
+        data["max_length"] = int,
+        data["results"] = {metric_key: value, ...}
 
-    Legacy format → data["lengths"]   = [int, ...]
-                    data["results"]   = {str(seq_len): {metric_key: value, ...}}
+    Legacy format:
+        data["lengths"] = [int, ...]
+        data["results"] = {str(seq_len): {metric_key: value, ...}}
 
     If the data already uses the legacy format (has a "lengths" key) it is
     returned unchanged so this function is safe to call unconditionally.
 
     For single-length data, shorter lengths are derived by truncating the
     primary [L, H, T] arrays and recomputing derived metrics.
+
+    Args:
+        data: The data dictionary to normalize.
+
+    Returns:
+        The normalized data dictionary.
     """
     if "lengths" in data:
         return data
@@ -293,11 +298,18 @@ def _normalize_data(data: dict) -> dict:
 
 def _auto_select_layers(data: dict, n: int = 4) -> List[int]:
     """
-    Return the indices of the *n* layers with the highest average
-    head-entropy standard deviation across all evaluated sequence lengths.
+    Return the indices of the *n* layers with the highest average head-entropy
+    standard deviation across all evaluated sequence lengths.
 
     These layers show the most intra-layer head specialisation and are the
     most informative to inspect in detail.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        n: Number of layers to select, default is 4.
+
+    Returns:
+        List of layer indices sorted by descending standard deviation.
     """
     lengths = data["lengths"]
     num_layers = data["num_layers"]
@@ -354,13 +366,15 @@ def _plot_layer_depth_curve_per_head_one(
     """
     Internal worker for Fig 1 (raw or norm variant).
 
-    Parameters
-    ----------
-    key      : 'entropy_head_layer' or 'norm_entropy_head_layer'
-               Shape of stored data: [L][H]  (already mean over T)
-    ylabel   : y-axis label string
-    suptitle : figure-level title
-    out_path : full file path (including filename)
+    Args:
+        data: The data dictionary containing entropy results.
+        key: 'entropy_head_layer' or 'norm_entropy_head_layer'.
+            Shape of stored data: [L][H] (already mean over T).
+        ylabel: y-axis label string.
+        suptitle: figure-level title.
+        out_path: full file path (including filename).
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
     """
     lengths = data["lengths"]
     num_heads = data["num_heads"]
@@ -446,14 +460,20 @@ def plot_layer_depth_curve(
     """
     Fig 1 — Two figures, each with one subplot per attention head.
 
-    Fig 1-raw : x=layer, y=mean raw Shannon entropy H(l,h)
-                (mean over token positions T for that head)
-    Fig 1-norm: same for normalised entropy H_norm(l,h)
+    Fig 1-raw: x=layer, y=mean raw Shannon entropy H(l,h)
+        (mean over token positions T for that head).
+    Fig 1-norm: same for normalised entropy H_norm(l,h).
 
-    Data source
-    -----------
-    'entropy_head_layer'      [L][H]  — raw H, mean over T
-    'norm_entropy_head_layer' [L][H]  — norm H, mean over T
+    Data source:
+        'entropy_head_layer': [L][H] — raw H, mean over T.
+        'norm_entropy_head_layer': [L][H] — norm H, mean over T.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        method_name: Prefix for output filenames.
     """
     # ── Raw ──────────────────────────────────────────────────────────────
     _plot_layer_depth_curve_per_head_one(
@@ -511,7 +531,21 @@ def _plot_head_layer_heatmap_one(
     cmap: str = "viridis",
     vrange_fixed: tuple | None = None,
 ) -> None:
-    """Internal worker for Fig 2 (raw and norm share the same layout)."""
+    """
+    Internal worker for Fig 2 (raw and norm share the same layout).
+
+    Args:
+        data: The data dictionary containing entropy results.
+        key: Key for the entropy metric to plot.
+        title_prefix: Prefix for the figure title.
+        ylabel: Label for the colorbar.
+        out_dir: Output directory for saving figures.
+        fname: Output filename.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        cmap: Colormap name, default is 'viridis'.
+        vrange_fixed: Optional fixed (vmin, vmax) tuple for color scale.
+    """
     lengths = data["lengths"]
     nrows, ncols = _grid(len(lengths))
 
@@ -567,7 +601,16 @@ def plot_head_layer_heatmap(
     dpi: int,
     method_name: str = "",
 ) -> None:
-    """Fig 2 — two files: raw entropy and normalised entropy."""
+    """
+    Fig 2 — two files: raw entropy and normalised entropy.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        method_name: Prefix for output filenames.
+    """
     _plot_head_layer_heatmap_one(
         data,
         "entropy_head_layer",
@@ -607,7 +650,20 @@ def _plot_entropy_vs_position_one(
     fmt: str,
     dpi: int,
 ) -> None:
-    """Internal worker for Fig 3."""
+    """
+    Internal worker for Fig 3.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        key: Key for the entropy metric to plot.
+        ylabel: Label for the y-axis.
+        title_prefix: Prefix for the figure title.
+        selected_layers: List of layer indices to plot.
+        out_dir: Output directory for saving figures.
+        fname: Output filename.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+    """
     lengths = data["lengths"]
     nrows, ncols = _grid(len(selected_layers))
     top_k_boundary = max(data["results"][str(sl)]["top_k_boundary"] for sl in lengths)
@@ -665,7 +721,18 @@ def plot_entropy_vs_position(
     selected_layers: List[int] | None = None,
     method_name: str = "",
 ) -> None:
-    """Fig 3 — two files: raw and normalised."""
+    """
+    Fig 3 — two files: raw and normalised.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        selected_layers: Optional list of layer indices to plot.
+            If None, auto-selects layers with highest head-entropy std.
+        method_name: Prefix for output filenames.
+    """
     layers = selected_layers or _auto_select_layers(data, n=4)
     print(f"  Fig 3 auto-selected layers: {layers}")
 
@@ -707,11 +774,18 @@ def plot_head_norm_std_by_layer(
 ) -> None:
     """
     Fig 4 — x=layer, y=std of per-head normalised entropy across heads,
-             one line per seq-length.
+        one line per seq-length.
 
     A high std at layer l means the heads in that layer have very different
-    attention patterns (strong specialisation).  A low std means they behave
+    attention patterns (strong specialisation). A low std means they behave
     similarly (possible redundancy).
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        method_name: Prefix for output filenames.
     """
     lengths = data["lengths"]
     L = data["num_layers"]
@@ -769,7 +843,20 @@ def _plot_position_head_heatmap_one(
     fmt: str,
     dpi: int,
 ) -> None:
-    """Internal worker for Fig 5."""
+    """
+    Internal worker for Fig 5.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        top_layer: Layer index to plot.
+        ylabel: Label for the colorbar.
+        title_prefix: Prefix for the figure title.
+        is_norm: Whether to plot normalised entropy.
+        out_dir: Output directory for saving figures.
+        fname: Output filename.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+    """
     lengths = data["lengths"]
     nrows, ncols = _grid(len(lengths))
     top_k_bnd = max(data["results"][str(sl)]["top_k_boundary"] for sl in lengths)
@@ -852,6 +939,14 @@ def plot_position_head_heatmap(
 
     Selects the single layer with the highest intra-layer head std
     (most informative layer to inspect at token-position resolution).
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        selected_layers: Optional list of layer indices. Uses first element.
+        method_name: Prefix for output filenames.
     """
     top_layer = (selected_layers or _auto_select_layers(data, n=1))[0]
     print(f"  Fig 5 top-variance layer: {top_layer}")
@@ -895,7 +990,19 @@ def _plot_delta_heatmap_one(
     fmt: str,
     dpi: int,
 ) -> None:
-    """Internal worker for Fig 6."""
+    """
+    Internal worker for Fig 6.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        key: Key for the entropy metric to plot.
+        ylabel: Label for the colorbar.
+        title_prefix: Prefix for the figure title.
+        out_dir: Output directory for saving figures.
+        fname: Output filename.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+    """
     lengths = data["lengths"]
     baseline = str(lengths[0])
     longer = lengths[1:]
@@ -966,7 +1073,16 @@ def plot_delta_entropy_heatmap(
     dpi: int,
     method_name: str = "",
 ) -> None:
-    """Fig 6 — two files: raw and normalised."""
+    """
+    Fig 6 — two files: raw and normalised.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        method_name: Prefix for output filenames.
+    """
     if len(data["lengths"]) < 2:
         print("  Fig 6: skipped (need at least 2 lengths).")
         return
@@ -1003,14 +1119,13 @@ def _violin_from_data(ax, positions, datasets, color, width=0.7, alpha=0.45):
     Draw a smooth violin (via scipy KDE) behind a boxplot for a set of
     (position, data) pairs.
 
-    Parameters
-    ----------
-    ax        : matplotlib Axes
-    positions : list[int]   x positions for each violin
-    datasets  : list[ndarray]  1-D data for each position
-    color     : str
-    width     : float   half-width of each violin
-    alpha     : float   transparency
+    Args:
+        ax: matplotlib Axes.
+        positions: List of x positions for each violin.
+        datasets: List of 1-D data arrays for each position.
+        color: Color string for the violins.
+        width: Half-width of each violin, default is 0.7.
+        alpha: Transparency, default is 0.45.
     """
     for pos, vals in zip(positions, datasets):
         if len(vals) < 4:
@@ -1047,6 +1162,12 @@ def _plot_boxplot_violin_one(
 
     Data: for each layer, extract H×T normalised entropy values from
     entropy_head_layer_position (computing norm on-the-fly).
+
+    Args:
+        data: The data dictionary containing entropy results.
+        lengths: List of all sequence lengths.
+        seq_len: Current sequence length to plot.
+        ax: matplotlib Axes to draw on.
     """
     col = _get_color(seq_len, lengths)
     raw_3d = np.array(
@@ -1117,11 +1238,18 @@ def plot_entropy_boxplot_violin(
     2×2 sub-plots, one per seq-length.
 
     The violin shows the full KDE of H_norm values across all heads and
-    token positions in the average sample.  The overlaid box shows the
+    token positions in the average sample. The overlaid box shows the
     pre-computed quartiles (min, Q1, median, Q3, max).
 
     Wide violins at a layer → broad diversity of attention patterns.
     Bimodal violin → coexisting sharp heads and diffuse heads in that layer.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        method_name: Prefix for output filenames.
     """
     lengths = data["lengths"]
     nrows, ncols = _grid(len(lengths))
@@ -1165,10 +1293,16 @@ def _select_positions(
     """
     Return *n* evenly-spaced token positions within [0, T-1].
 
-    mode = 'center'  →  positions sit at the centre of each equal-width bin
-                        e.g. T=900, n=9  → [50, 150, …, 850]
-    mode = 'end'     →  positions sit at the right edge of each bin
-                        e.g. T=900, n=9  → [100, 200, …, 900-1]
+    Args:
+        T: Total number of token positions.
+        n: Number of positions to select, default is 9.
+        mode: 'center' for positions at the centre of each equal-width bin
+            (e.g., T=900, n=9 → [50, 150, …, 850]).
+            'end' for positions at the right edge of each bin
+            (e.g., T=900, n=9 → [100, 200, …, 900-1]).
+
+    Returns:
+        List of selected token positions.
     """
     if mode == "center":
         return [int((T / n) * (i + 0.5)) for i in range(n)]
@@ -1193,9 +1327,22 @@ def _plot_pos_layer_head_one(
     Internal worker for Fig 8.
 
     For each of the 9 selected positions, draw a heat-map:
-        x-axis = layer index  (0 … L-1)
-        y-axis = head  index  (0 … H-1)
+        x-axis = layer index (0 … L-1)
+        y-axis = head index (0 … H-1)
         colour = entropy at that (layer, head, position)
+
+    Args:
+        data: The data dictionary containing entropy results.
+        seq_len: Sequence length to plot.
+        key_3d: Key for the 3D entropy metric.
+        title_prefix: Prefix for the figure title.
+        ylabel_cbar: Label for the colorbar.
+        out_dir: Output directory for saving figures.
+        fname: Output filename.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        vrange_fixed: Optional fixed (vmin, vmax) tuple for color scale.
+        cmap: Colormap name, default is 'magma'.
     """
     res = data["results"][str(seq_len)]
     arr = np.array(res[key_3d])  # [L, H, T]
@@ -1277,9 +1424,16 @@ def plot_pos_layer_head_heatmap(
 
     Two output files: raw entropy and normalised entropy.
     Uses 'entropy_head_layer_position' (raw) and
-         'norm_entropy_head_layer_position' (norm) from the JSON.
+        'norm_entropy_head_layer_position' (norm) from the JSON.
     Falls back to computing norm on-the-fly from raw if the norm key
     is absent (backward-compatible with older JSON files).
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        method_name: Prefix for output filenames.
     """
     lengths = data["lengths"]
     sl = lengths[-1]  # single-length evaluator → last (and usually only) length
@@ -1360,11 +1514,19 @@ def _plot_entropy_by_pos_head0_one(
     """
     Internal worker for Fig 9.
 
-    arr  : [L, T]  entropy at head=0 for every (layer, position)
-    Draws one line per layer, coloured by layer index using a diverging
-    colormap so early / late layers are visually distinct.
-    A thin colorbar replaces the legend.
-    xlim_range : (xmin, xmax)  optional range to limit x-axis display
+    Args:
+        data: The data dictionary containing entropy results.
+        seq_len: Sequence length to plot.
+        arr: [L, T] entropy at head=0 for every (layer, position).
+        title_prefix: Prefix for the figure title.
+        ylabel: Label for the y-axis.
+        out_dir: Output directory for saving figures.
+        fname: Output filename.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        top_k_boundary: Position boundary for top-k region, default is 0.
+        cmap_name: Colormap name, default is 'coolwarm'.
+        xlim_range: Optional (xmin, xmax) tuple to limit x-axis display.
     """
     L, T = arr.shape
     pos_x = np.arange(T)
@@ -1457,6 +1619,13 @@ def plot_entropy_by_pos_head0(
     Two output files: raw entropy and normalised entropy.
     Colormap encodes layer depth (cool = shallow, warm = deep) so the full
     L-layer stack is legible without a cluttered legend.
+
+    Args:
+        data: The data dictionary containing entropy results.
+        out_dir: Output directory for saving figures.
+        fmt: Output format (e.g., 'png', 'pdf').
+        dpi: Resolution for raster formats.
+        method_name: Prefix for output filenames.
     """
     lengths = data["lengths"]
     sl = lengths[-1]
@@ -1565,13 +1734,12 @@ def plot_all(
     """
     Generate all seven figures.
 
-    Parameters
-    ----------
-    data    : dict   loaded from EntropyEvaluator JSON output
-    out_dir : str    destination directory (created if absent)
-    fmt     : str    'png' | 'pdf' | 'svg'
-    dpi     : int    resolution (raster formats)
-    method_name : str  prefix for output filenames
+    Args:
+        data: Loaded from EntropyEvaluator JSON output.
+        out_dir: Destination directory (created if absent).
+        fmt: Output format ('png', 'pdf', or 'svg').
+        dpi: Resolution for raster formats.
+        method_name: Prefix for output filenames.
     """
     os.makedirs(out_dir, exist_ok=True)
 

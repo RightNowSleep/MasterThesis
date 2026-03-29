@@ -71,13 +71,11 @@ def _shannon_entropy(attn: torch.Tensor) -> torch.Tensor:
     """
     Shannon entropy in nats along the last (key) axis.
 
-    Parameters
-    ----------
-    attn : Tensor  [..., T_q, T_k]   softmax weights, rows sum to 1
+    Args:
+        attn: Tensor of shape [..., T_q, T_k] with softmax weights, rows sum to 1.
 
-    Returns
-    -------
-    Tensor  [..., T_q]
+    Returns:
+        Tensor of shape [..., T_q].
     """
     return -(attn * (attn + _EPS).log()).sum(dim=-1)
 
@@ -93,13 +91,11 @@ def _position_normalise(ent: torch.Tensor) -> torch.Tensor:
     behaviour (tiny causal window); these are flagged in the JSON and
     visually annotated in the plot script.
 
-    Parameters
-    ----------
-    ent : Tensor  [..., T]
+    Args:
+        ent: Tensor of shape [..., T].
 
-    Returns
-    -------
-    Tensor  [..., T]  ∈ [0, 1]
+    Returns:
+        Tensor of shape [..., T] with values in [0, 1].
     """
     T = ent.shape[-1]
     pos = torch.arange(T, dtype=ent.dtype, device=ent.device)
@@ -119,20 +115,20 @@ class EntropyEvaluator:
     Constructor parameters mirror PerplexityEvaluator so the two can be
     swapped in ``test.py`` with minimal changes.
 
-    Attributes
-    ----------
-    model             : LlamaForCausalLM   (eval mode)
-    tokenizer         : PreTrainedTokenizer
-    dataset_path      : str
-    split             : str
-    num_samples       : int   number of randomly selected samples (all length ≥ max_length)
-    device            : str
-    add_start_token   : bool
-    max_length        : int   single evaluation length
-    top_k             : int
-    aggressive_memory : bool
-    save_dir          : str
-    save_file         : str
+    Attributes:
+        model: LlamaForCausalLM in eval mode.
+        tokenizer: PreTrainedTokenizer.
+        dataset_path: Dataset path or name.
+        split: Dataset split.
+        num_samples: Number of randomly selected samples (all length ≥ max_length).
+        device: Compute device.
+        add_start_token: Whether to prepend BOS token.
+        max_length: Single evaluation length.
+        top_k: K for top-k concentration metric.
+        aggressive_memory: Whether to free GPU cache after every sample.
+        seed: Random seed for reproducible sample selection.
+        save_dir: Directory for JSON output.
+        save_file: JSON filename (auto-generated when None).
     """
 
     def __init__(
@@ -152,21 +148,22 @@ class EntropyEvaluator:
         save_file: str = None,
     ):
         r"""
-        Parameters
-        ----------
-        model             : pretrained LlamaForCausalLM
-        tokenizer         : matching tokenizer
-        dataset           : HuggingFace dataset path (needs 'input_ids' column)
-        split             : dataset split
-        num_samples       : how many samples to randomly draw (all must be ≥ max_length)
-        device            : 'cuda' | 'cpu' | 'gpu' | None (auto)
-        add_start_token   : prepend BOS; tokenizer must have bos_token
-        max_length        : the single sequence length to evaluate
-        top_k             : k for the top-k concentration metric
-        aggressive_memory : free GPU cache after every sample
-        seed              : random seed for reproducible sample selection
-        save_dir          : directory for JSON output
-        save_file         : JSON filename (auto-generated when None)
+        Initialize the entropy evaluator.
+
+        Args:
+            model: Pretrained LlamaForCausalLM.
+            tokenizer: Matching tokenizer.
+            dataset: HuggingFace dataset path (needs 'input_ids' column).
+            split: Dataset split.
+            num_samples: How many samples to randomly draw (all must be ≥ max_length).
+            device: 'cuda' | 'cpu' | 'gpu' | None (auto).
+            add_start_token: Prepend BOS; tokenizer must have bos_token.
+            max_length: The single sequence length to evaluate.
+            top_k: K for the top-k concentration metric.
+            aggressive_memory: Free GPU cache after every sample.
+            seed: Random seed for reproducible sample selection.
+            save_dir: Directory for JSON output.
+            save_file: JSON filename (auto-generated when None).
         """
         self.model = model.eval()
         self.tokenizer = tokenizer
@@ -244,7 +241,9 @@ class EntropyEvaluator:
         padding is ever needed and the accumulator shape is exact from the
         start.
 
-        Primary output shape: [L, H, max_length]  (mean over samples only)
+        Returns:
+            Dictionary containing entropy metrics with primary output shape
+            [L, H, max_length] (mean over samples only).
         """
         max_length = self.max_length
 
@@ -383,9 +382,8 @@ class EntropyEvaluator:
         r"""
         Evaluate at ``self.max_length`` and write JSON.
 
-        Returns
-        -------
-        dict   full output including metadata and results
+        Returns:
+            Full output dictionary including metadata and results.
         """
         torch.cuda.empty_cache()
         results = self._compute_entropy()
@@ -425,7 +423,15 @@ class EntropyEvaluator:
 
 
 def add_args_entropy(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Register entropy-evaluation CLI arguments."""
+    """
+    Register entropy-evaluation CLI arguments.
+
+    Args:
+        parser: ArgumentParser to add arguments to.
+
+    Returns:
+        Parser with added arguments.
+    """
     parser.add_argument(
         "--dataset-name",
         type=str,
@@ -443,7 +449,15 @@ def add_args_entropy(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
 
 
 def generate_save_filename(args) -> str:
-    """llama-7b_none.json  /  llama-7b_linear_dynamic.json  / …"""
+    """
+    Generate filename based on model and RoPE configuration.
+
+    Args:
+        args: Arguments object with model_name, rope_type, rope_factor, and rope_dynamic.
+
+    Returns:
+        Filename string (e.g., 'llama-7b_none.json', 'llama-7b_linear_dynamic.json').
+    """
     model_name = args.model_name.split("/")[-1]
     parts = [model_name, args.rope_type]
     if args.rope_type != "none":

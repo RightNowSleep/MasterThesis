@@ -60,6 +60,17 @@ _CONFIG_FOR_DOC = "LlamaConfig"
 
 
 def _get_unpad_data(attention_mask):
+    """Extracts indices and sequence length information from attention mask.
+
+    Args:
+        attention_mask: Attention mask tensor indicating which positions are valid.
+
+    Returns:
+        A tuple containing:
+            - indices: Flattened indices of non-zero elements in attention mask.
+            - cu_seqlens: Cumulative sequence lengths with padding.
+            - max_seqlen_in_batch: Maximum sequence length in the batch.
+    """
     seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
     indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = seqlens_in_batch.max().item()
@@ -75,6 +86,19 @@ def _get_unpad_data(attention_mask):
 
 
 def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] = None):
+    """Expands attention mask to 4D format.
+
+    Args:
+        mask: Input attention mask tensor.
+        dtype: Data type for the expanded mask.
+        tgt_len: Target length for the attention mask.
+
+    Returns:
+        Expanded 4D attention mask tensor.
+
+    Raises:
+        DeprecationWarning: This function is deprecated and will be removed in v4.37.
+    """
     warnings.warn(
         "Calling `transformers.models.llama.modeling_llama._prepare_4d_attention_mask` is deprecated and will be removed in v4.37. "
         "Use `transformers.modeling_attn_mask_utils._prepare_4d_attention_mask"
@@ -88,6 +112,20 @@ def _make_causal_mask(
     device: torch.device,
     past_key_values_length: int = 0,
 ):
+    """Creates a causal mask for autoregressive attention.
+
+    Args:
+        input_ids_shape: Shape of the input ids tensor.
+        dtype: Data type for the mask.
+        device: Device on which to create the mask.
+        past_key_values_length: Length of past key values for caching.
+
+    Returns:
+        Causal attention mask tensor.
+
+    Raises:
+        DeprecationWarning: This function is deprecated and will be removed in v4.37.
+    """
     warnings.warn(
         "Calling `transformers.models.llama.modeling_llama._make_causal_mask` is deprecated and will be removed in v4.37. Use `transformers.models.llama.modeling_llama.AttentionMaskConverter._make_causal_mask"
     )
@@ -100,12 +138,36 @@ def _make_causal_mask(
 
 
 class LlamaRMSNorm(nn.Module):
+    """Root Mean Square Layer Normalization for LLaMA model.
+
+    This implements RMSNorm which normalizes the input using the root mean square,
+    providing a simpler alternative to Layer Normalization without mean centering.
+
+    Attributes:
+        weight: Learnable scale parameter.
+        variance_epsilon: Small constant for numerical stability.
+    """
+
     def __init__(self, hidden_size, eps=1e-6):
+        """Initializes the LlamaRMSNorm layer.
+
+        Args:
+            hidden_size: Size of the hidden dimension.
+            eps: Epsilon value for numerical stability. Defaults to 1e-6.
+        """
         super().__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size))
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):
+        """Applies RMS normalization to the input tensor.
+
+        Args:
+            hidden_states: Input tensor to normalize.
+
+        Returns:
+            Normalized tensor with the same shape as input.
+        """
         input_dtype = hidden_states.dtype
         hidden_states = hidden_states.to(torch.float32)
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
@@ -117,13 +179,33 @@ ALL_LAYERNORM_LAYERS.append(LlamaRMSNorm)
 
 
 def rotate_half(x):
-    """Rotates half the hidden dims of the input."""
+    """Rotates half the hidden dims of the input.
+
+    Args:
+        x: Input tensor to rotate.
+
+    Returns:
+        Tensor with rotated hidden dimensions.
+    """
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
     return torch.cat((-x2, x1), dim=-1)
 
 
 def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
+    """Applies rotary position embeddings to query and key tensors.
+
+    Args:
+        q: Query tensor to apply positional embeddings.
+        k: Key tensor to apply positional embeddings.
+        cos: Cosine values for rotary embeddings.
+        sin: Sine values for rotary embeddings.
+        position_ids: Position indices for the sequence.
+        unsqueeze_dim: Dimension to unsqueeze the cos/sin tensors. Defaults to 1.
+
+    Returns:
+        A tuple of (q_embed, k_embed) with rotary position embeddings applied.
+    """
     cos = cos[position_ids].unsqueeze(unsqueeze_dim)
     sin = sin[position_ids].unsqueeze(unsqueeze_dim)
     q_embed = (q * cos) + (rotate_half(q) * sin)
@@ -132,7 +214,27 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
 
 
 class LlamaMLP(nn.Module):
+    """Multi-Layer Perceptron for LLaMA model.
+
+    This implements the feed-forward network component with gated activation,
+    using a SwiGLU-like architecture with gate, up, and down projections.
+
+    Attributes:
+        config: LlamaConfig object containing model configuration.
+        hidden_size: Size of the hidden dimension.
+        intermediate_size: Size of the intermediate dimension.
+        gate_proj: Linear layer for gating mechanism.
+        up_proj: Linear layer for up projection.
+        down_proj: Linear layer for down projection.
+        act_fn: Activation function.
+    """
+
     def __init__(self, config):
+        """Initializes the LlamaMLP layer.
+
+        Args:
+            config: LlamaConfig object containing model configuration.
+        """
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
@@ -143,6 +245,14 @@ class LlamaMLP(nn.Module):
         self.act_fn = ACT2FN[config.hidden_act]
 
     def forward(self, x):
+        """Forward pass through the MLP layer.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output tensor after passing through the MLP.
+        """
         if self.config.pretraining_tp > 1:
             slice = self.intermediate_size // self.config.pretraining_tp
             gate_proj_slices = self.gate_proj.weight.split(slice, dim=0)
@@ -173,6 +283,18 @@ class LlamaMLP(nn.Module):
 
 
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
+    """Repeats key/value tensors to match the number of query heads.
+
+    This is used for Grouped Query Attention where the number of key-value heads
+    is less than the number of query heads.
+
+    Args:
+        hidden_states: Input tensor of shape (batch, num_key_value_heads, slen, head_dim).
+        n_rep: Number of times to repeat each key-value head.
+
+    Returns:
+        Tensor with repeated key-value heads of shape (batch, num_key_value_heads * n_rep, slen, head_dim).
+    """
     batch, num_key_value_heads, slen, head_dim = hidden_states.shape
     if n_rep == 1:
         return hidden_states
@@ -187,7 +309,41 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 
 class LlamaAttention(nn.Module):
+    """Multi-headed attention mechanism for LLaMA model.
+
+    This implements the attention mechanism with support for Grouped Query Attention (GQA),
+    various RoPE scaling methods, and multiple attention implementations.
+
+    Attributes:
+        config: LlamaConfig object containing model configuration.
+        layer_idx: Index of this layer in the transformer stack.
+        attention_dropout: Dropout probability for attention weights.
+        hidden_size: Size of the hidden dimension.
+        num_heads: Number of attention heads.
+        head_dim: Dimension of each attention head.
+        num_key_value_heads: Number of key-value heads (can be less than num_heads for GQA).
+        num_key_value_groups: Number of query heads per key-value head.
+        max_position_embeddings: Maximum sequence length for position embeddings.
+        original_max_position_embeddings: Original maximum position embeddings before scaling.
+        rope_theta: Base frequency for rotary position embeddings.
+        is_causal: Whether to use causal attention masking.
+        q_proj: Linear layer for query projection.
+        k_proj: Linear layer for key projection.
+        v_proj: Linear layer for value projection.
+        o_proj: Linear layer for output projection.
+        rotary_emb: Rotary position embedding module.
+    """
+
     def __init__(self, config: LlamaConfig, layer_idx: Optional[int] = None):
+        """Initializes the LlamaAttention layer.
+
+        Args:
+            config: LlamaConfig object containing model configuration.
+            layer_idx: Index of this layer in the transformer stack. Defaults to None.
+
+        Raises:
+            ValueError: If hidden_size is not divisible by num_heads.
+        """
         super().__init__()
         self.config = config
         self.layer_idx = layer_idx
@@ -238,45 +394,47 @@ class LlamaAttention(nn.Module):
         self._init_rope()
 
     def _init_rope(self):
-        """
-        Instantiate the correct RoPE embedding class from ``config.rope_scaling``.
+        """Initializes the rotary position embedding based on configuration.
 
-        Config format
-        -------------
-        None                                                → standard RoPE
-        {"type": "linear",        "factor": s}             → static PI
-        {"type": "linear",        "dynamic": True}         → dynamic PI
-        {"type": "ntk",           "factor": s}             → static NTK-aware
-        {"type": "ntk",           "dynamic": True}         → dynamic NTK-aware
-        {"type": "part-ntk",      "factor": s}             → static NTK-by-parts
-        {"type": "part-ntk",      "dynamic": True}         → dynamic NTK-by-parts
-        {"type": "yarn",          "factor": s}             → static YaRN
-        {"type": "yarn",          "dynamic": True}         → dynamic YaRN
-        {"type": "my-rope",              "factor": s}   → static My RoPE (pos only)
-        {"type": "my-rope",              "dynamic": True} → dynamic My RoPE (pos only)
-        {"type": "my-rope-scaled",       "factor": s}   → static My RoPE + attn scale
-        {"type": "my-rope-scaled",       "dynamic": True} → dynamic My RoPE + attn scale
-        {"type": "my-rope2",             "factor": s}   → static My RoPE 2 (pos only)
-        {"type": "my-rope2",             "dynamic": True} → dynamic My RoPE 2 (pos only)
-        {"type": "my-rope2-scaled",      "factor": s}   → static My RoPE 2 + attn scale
-        {"type": "my-rope2-scaled",      "dynamic": True} → dynamic My RoPE 2 + attn scale
-        {"type": "block-layered",        "factor": s}   → static Block-Layered (pos only)
-        {"type": "block-layered",        "dynamic": True} → dynamic Block-Layered (pos only)
-        {"type": "block-layered-scaled", "factor": s}   → static Block-Layered + attn scale
-        {"type": "block-layered-scaled", "dynamic": True} → dynamic Block-Layered + attn scale
-        {"type": "freq-smooth",          "factor": s}   → static Freq-Smooth (pos only)
-        {"type": "freq-smooth",          "dynamic": True} → dynamic Freq-Smooth (pos only)
-        {"type": "freq-smooth-scaled",   "factor": s}   → static Freq-Smooth + attn scale
-        {"type": "freq-smooth-scaled",   "dynamic": True} → dynamic Freq-Smooth + attn scale
-        {"type": "freq-reciprocal",      "factor": s}   → static Freq-Reciprocal (pos only)
-        {"type": "freq-reciprocal",      "dynamic": True} → dynamic Freq-Reciprocal (pos only)
-        {"type": "freq-reciprocal-scaled", "factor": s}   → static Freq-Reciprocal + attn scale
-        {"type": "freq-reciprocal-scaled", "dynamic": True} → dynamic Freq-Reciprocal + attn scale
-        {"type": "freq-reciprocal-scaled-no-layer", "factor": s}   → static Freq-Reciprocal + attn scale, no layer index
-        {"type": "freq-reciprocal-scaled-no-layer", "dynamic": True} → dynamic Freq-Reciprocal + attn scale, no layer index
+        Instantiates the correct RoPE embedding class from config.rope_scaling.
+        Supports multiple scaling methods including linear, NTK-aware, YaRN, and custom methods.
 
-        ``"factor"`` and ``"dynamic"`` are mutually exclusive.  If both reach
-        this point (e.g. bypassing LlamaConfig validation), ``"factor"`` wins.
+        Config format:
+            - None: Standard RoPE
+            - {"type": "linear", "factor": s}: Static Position Interpolation
+            - {"type": "linear", "dynamic": True}: Dynamic Position Interpolation
+            - {"type": "ntk", "factor": s}: Static NTK-aware scaling
+            - {"type": "ntk", "dynamic": True}: Dynamic NTK-aware scaling
+            - {"type": "part-ntk", "factor": s}: Static NTK-by-parts
+            - {"type": "part-ntk", "dynamic": True}: Dynamic NTK-by-parts
+            - {"type": "yarn", "factor": s}: Static YaRN
+            - {"type": "yarn", "dynamic": True}: Dynamic YaRN
+            - {"type": "my-rope", "factor": s}: Static My RoPE (pos only)
+            - {"type": "my-rope", "dynamic": True}: Dynamic My RoPE (pos only)
+            - {"type": "my-rope-scaled", "factor": s}: Static My RoPE + attn scale
+            - {"type": "my-rope-scaled", "dynamic": True}: Dynamic My RoPE + attn scale
+            - {"type": "my-rope2", "factor": s}: Static My RoPE 2 (pos only)
+            - {"type": "my-rope2", "dynamic": True}: Dynamic My RoPE 2 (pos only)
+            - {"type": "my-rope2-scaled", "factor": s}: Static My RoPE 2 + attn scale
+            - {"type": "my-rope2-scaled", "dynamic": True}: Dynamic My RoPE 2 + attn scale
+            - {"type": "block-layered", "factor": s}: Static Block-Layered (pos only)
+            - {"type": "block-layered", "dynamic": True}: Dynamic Block-Layered (pos only)
+            - {"type": "block-layered-scaled", "factor": s}: Static Block-Layered + attn scale
+            - {"type": "block-layered-scaled", "dynamic": True}: Dynamic Block-Layered + attn scale
+            - {"type": "freq-smooth", "factor": s}: Static Freq-Smooth (pos only)
+            - {"type": "freq-smooth", "dynamic": True}: Dynamic Freq-Smooth (pos only)
+            - {"type": "freq-smooth-scaled", "factor": s}: Static Freq-Smooth + attn scale
+            - {"type": "freq-smooth-scaled", "dynamic": True}: Dynamic Freq-Smooth + attn scale
+            - {"type": "freq-reciprocal", "factor": s}: Static Freq-Reciprocal (pos only)
+            - {"type": "freq-reciprocal", "dynamic": True}: Dynamic Freq-Reciprocal (pos only)
+            - {"type": "freq-reciprocal-scaled", "factor": s}: Static Freq-Reciprocal + attn scale
+            - {"type": "freq-reciprocal-scaled", "dynamic": True}: Dynamic Freq-Reciprocal + attn scale
+            - {"type": "freq-reciprocal-scaled-no-layer", "factor": s}: Static Freq-Reciprocal + attn scale, no layer index
+            - {"type": "freq-reciprocal-scaled-no-layer", "dynamic": True}: Dynamic Freq-Reciprocal + attn scale, no layer index
+
+        Note:
+            "factor" and "dynamic" are mutually exclusive. If both are present,
+            "factor" takes precedence.
         """
         if self.layer_idx == 0:
             print(f"Initializing RoPE, config type: {self.config.rope_scaling}")
@@ -293,7 +451,6 @@ class LlamaAttention(nn.Module):
         scaling_factor = self.config.rope_scaling.get("factor", None)
         dynamic = self.config.rope_scaling.get("dynamic", None)
 
-        # ── Defensive mutual-exclusivity guard ───────────────────────────── #
         if scaling_factor is not None and dynamic:
             dynamic = False
         if scaling_factor is None:
@@ -496,6 +653,16 @@ class LlamaAttention(nn.Module):
 
     # ------------------------------------------------------------------ #
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int):
+        """Reshapes tensor for attention computation.
+
+        Args:
+            tensor: Input tensor to reshape.
+            seq_len: Sequence length.
+            bsz: Batch size.
+
+        Returns:
+            Reshaped tensor with shape (bsz, num_heads, seq_len, head_dim).
+        """
         return (
             tensor.view(bsz, seq_len, self.num_heads, self.head_dim)
             .transpose(1, 2)
@@ -512,6 +679,25 @@ class LlamaAttention(nn.Module):
         use_cache: bool = False,
         **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        """Forward pass through the attention layer.
+
+        Args:
+            hidden_states: Input tensor of shape (batch_size, seq_len, hidden_size).
+            attention_mask: Attention mask tensor. Defaults to None.
+            position_ids: Position indices for rotary embeddings. Defaults to None.
+            past_key_value: Cached key-value states for faster generation. Defaults to None.
+            output_attentions: Whether to return attention weights. Defaults to False.
+            use_cache: Whether to use cached key-value states. Defaults to False.
+
+        Returns:
+            A tuple containing:
+                - attn_output: Output tensor of shape (batch_size, seq_len, hidden_size).
+                - attn_weights: Attention weights if output_attentions is True, else None.
+                - past_key_value: Updated cache if use_cache is True, else None.
+
+        Raises:
+            ValueError: If cache structure has changed and layer_idx is not provided.
+        """
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
@@ -667,7 +853,23 @@ class LlamaAttention(nn.Module):
 
 
 class LlamaFlashAttention2(LlamaAttention):
+    """Flash Attention 2 implementation for LLaMA model.
+
+    This class extends LlamaAttention to use Flash Attention 2 for improved
+    memory efficiency and faster computation on supported hardware.
+
+    Attributes:
+        _flash_attn_uses_top_left_mask: Boolean indicating whether Flash Attention
+            uses top-left mask format based on version.
+    """
+
     def __init__(self, *args, **kwargs):
+        """Initializes the LlamaFlashAttention2 layer.
+
+        Args:
+            *args: Variable length argument list passed to parent class.
+            **kwargs: Arbitrary keyword arguments passed to parent class.
+        """
         super().__init__(*args, **kwargs)
         self._flash_attn_uses_top_left_mask = not is_flash_attn_greater_or_equal_2_10()
 
@@ -681,6 +883,23 @@ class LlamaFlashAttention2(LlamaAttention):
         use_cache: bool = False,
         **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        """Forward pass through the Flash Attention 2 layer.
+
+        Args:
+            hidden_states: Input tensor of shape (batch_size, seq_len, hidden_size).
+            attention_mask: Attention mask tensor. Defaults to None.
+            position_ids: Position indices for rotary embeddings. Defaults to None.
+            past_key_value: Cached key-value states for faster generation. Defaults to None.
+            output_attentions: Whether to return attention weights. Defaults to False.
+                Note: Flash Attention 2 does not support returning attention weights.
+            use_cache: Whether to use cached key-value states. Defaults to False.
+
+        Returns:
+            A tuple containing:
+                - attn_output: Output tensor of shape (batch_size, seq_len, hidden_size).
+                - attn_weights: Always None for Flash Attention 2.
+                - past_key_value: Updated cache if use_cache is True, else None.
+        """
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
@@ -785,6 +1004,20 @@ class LlamaFlashAttention2(LlamaAttention):
         dropout=0.0,
         softmax_scale=None,
     ):
+        """Performs Flash Attention 2 forward pass.
+
+        Args:
+            query_states: Query tensor.
+            key_states: Key tensor.
+            value_states: Value tensor.
+            attention_mask: Attention mask tensor.
+            query_length: Length of the query sequence.
+            dropout: Dropout probability. Defaults to 0.0.
+            softmax_scale: Scale factor for softmax. Defaults to None.
+
+        Returns:
+            Attention output tensor.
+        """
         if not self._flash_attn_uses_top_left_mask:
             causal = self.is_causal
         else:
@@ -847,6 +1080,24 @@ class LlamaFlashAttention2(LlamaAttention):
         attention_mask,
         query_length,
     ):
+        """Unpads input tensors for variable-length Flash Attention.
+
+        Args:
+            query_layer: Query tensor.
+            key_layer: Key tensor.
+            value_layer: Value tensor.
+            attention_mask: Attention mask tensor.
+            query_length: Length of the query sequence.
+
+        Returns:
+            A tuple containing:
+                - query_layer: Unpadded query tensor.
+                - key_layer: Unpadded key tensor.
+                - value_layer: Unpadded value tensor.
+                - indices_q: Indices for query tensor.
+                - (cu_seqlens_q, cu_seqlens_k): Cumulative sequence lengths.
+                - (max_seqlen_in_batch_q, max_seqlen_in_batch_k): Maximum sequence lengths.
+        """
         indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
         batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
 
@@ -894,6 +1145,12 @@ class LlamaFlashAttention2(LlamaAttention):
 
 
 class LlamaSdpaAttention(LlamaAttention):
+    """Scaled Dot Product Attention implementation for LLaMA model.
+
+    This class extends LlamaAttention to use PyTorch's native scaled_dot_product_attention
+    for improved performance on supported hardware.
+    """
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -903,6 +1160,23 @@ class LlamaSdpaAttention(LlamaAttention):
         output_attentions: bool = False,
         use_cache: bool = False,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        """Forward pass through the SDPA attention layer.
+
+        Args:
+            hidden_states: Input tensor of shape (batch_size, seq_len, hidden_size).
+            attention_mask: Attention mask tensor. Defaults to None.
+            position_ids: Position indices for rotary embeddings. Defaults to None.
+            past_key_value: Cached key-value states for faster generation. Defaults to None.
+            output_attentions: Whether to return attention weights. Defaults to False.
+                Note: SDPA does not support returning attention weights.
+            use_cache: Whether to use cached key-value states. Defaults to False.
+
+        Returns:
+            A tuple containing:
+                - attn_output: Output tensor of shape (batch_size, seq_len, hidden_size).
+                - attn_weights: Always None for SDPA.
+                - past_key_value: Updated cache if use_cache is True, else None.
+        """
         if output_attentions:
             logger.warning_once(
                 "LlamaModel is using LlamaSdpaAttention, but `torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to the manual attention implementation, "
@@ -1002,7 +1276,26 @@ LLAMA_ATTENTION_CLASSES = {
 
 
 class LlamaDecoderLayer(nn.Module):
+    """Transformer decoder layer for LLaMA model.
+
+    This implements a single transformer decoder layer with self-attention
+    and feed-forward network components.
+
+    Attributes:
+        hidden_size: Size of the hidden dimension.
+        self_attn: Self-attention module.
+        mlp: Feed-forward network module.
+        input_layernorm: Layer normalization applied before self-attention.
+        post_attention_layernorm: Layer normalization applied before MLP.
+    """
+
     def __init__(self, config: LlamaConfig, layer_idx: int):
+        """Initializes the LlamaDecoderLayer.
+
+        Args:
+            config: LlamaConfig object containing model configuration.
+            layer_idx: Index of this layer in the transformer stack.
+        """
         super().__init__()
         self.hidden_size = config.hidden_size
         self.self_attn = LLAMA_ATTENTION_CLASSES[config._attn_implementation](
@@ -1029,6 +1322,22 @@ class LlamaDecoderLayer(nn.Module):
         torch.FloatTensor,
         Optional[Tuple[torch.FloatTensor, torch.FloatTensor]],
     ]:
+        """Forward pass through the decoder layer.
+
+        Args:
+            hidden_states: Input tensor of shape (batch_size, seq_len, hidden_size).
+            attention_mask: Attention mask tensor. Defaults to None.
+            position_ids: Position indices for rotary embeddings. Defaults to None.
+            past_key_value: Cached key-value states for faster generation. Defaults to None.
+            output_attentions: Whether to return attention weights. Defaults to False.
+            use_cache: Whether to use cached key-value states. Defaults to False.
+
+        Returns:
+            A tuple containing:
+                - hidden_states: Output tensor of shape (batch_size, seq_len, hidden_size).
+                - self_attn_weights: Attention weights if output_attentions is True, else None.
+                - present_key_value: Updated cache if use_cache is True, else None.
+        """
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
@@ -1083,6 +1392,22 @@ LLAMA_START_DOCSTRING = r"""
     LLAMA_START_DOCSTRING,
 )
 class LlamaPreTrainedModel(PreTrainedModel):
+    """Base class for all LLaMA models.
+
+    This class provides the base functionality for LLaMA models, including
+    weight initialization and configuration management.
+
+    Attributes:
+        config_class: Configuration class for this model.
+        base_model_prefix: Prefix for the base model in state dict.
+        supports_gradient_checkpointing: Whether gradient checkpointing is supported.
+        _no_split_modules: Modules that should not be split during model parallel.
+        _skip_keys_device_placement: Keys to skip during device placement.
+        _supports_flash_attn_2: Whether Flash Attention 2 is supported.
+        _supports_sdpa: Whether scaled dot product attention is supported.
+        _supports_cache_class: Whether custom cache class is supported.
+    """
+
     config_class = LlamaConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
@@ -1093,6 +1418,11 @@ class LlamaPreTrainedModel(PreTrainedModel):
     _supports_cache_class = True
 
     def _init_weights(self, module):
+        """Initializes the weights of the model.
+
+        Args:
+            module: Module to initialize.
+        """
         std = self.config.initializer_range
         if isinstance(module, nn.Linear):
             module.weight.data.normal_(mean=0.0, std=std)
@@ -1133,7 +1463,28 @@ LLAMA_INPUTS_DOCSTRING = r"""
     LLAMA_START_DOCSTRING,
 )
 class LlamaModel(LlamaPreTrainedModel):
+    """The base LLaMA Model transformer.
+
+    This model outputs raw hidden-states without any specific head on top.
+    It consists of an embedding layer, a stack of decoder layers, and a final layer norm.
+
+    Attributes:
+        padding_idx: Index of padding token in the vocabulary.
+        vocab_size: Size of the vocabulary.
+        embed_tokens: Embedding layer for tokens.
+        layers: List of decoder layers.
+        _use_sdpa: Whether to use scaled dot product attention.
+        _use_flash_attention_2: Whether to use Flash Attention 2.
+        norm: Final layer normalization.
+        gradient_checkpointing: Whether gradient checkpointing is enabled.
+    """
+
     def __init__(self, config: LlamaConfig):
+        """Initializes the LlamaModel.
+
+        Args:
+            config: LlamaConfig object containing model configuration.
+        """
         super().__init__(config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
@@ -1157,9 +1508,19 @@ class LlamaModel(LlamaPreTrainedModel):
         self.post_init()
 
     def get_input_embeddings(self):
+        """Returns the input embeddings layer.
+
+        Returns:
+            The embedding layer used for input tokens.
+        """
         return self.embed_tokens
 
     def set_input_embeddings(self, value):
+        """Sets the input embeddings layer.
+
+        Args:
+            value: New embedding layer to use for input tokens.
+        """
         self.embed_tokens = value
 
     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
@@ -1175,6 +1536,31 @@ class LlamaModel(LlamaPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, BaseModelOutputWithPast]:
+        """Forward pass through the LlamaModel.
+
+        Args:
+            input_ids: Indices of input sequence tokens in the vocabulary. Defaults to None.
+            attention_mask: Mask to avoid performing attention on padding token indices. Defaults to None.
+            position_ids: Indices of positions of each input sequence tokens. Defaults to None.
+            past_key_values: Pre-computed hidden-states for fast sequential decoding. Defaults to None.
+            inputs_embeds: Embedded representation as an alternative to input_ids. Defaults to None.
+            use_cache: Whether to return past key values. Defaults to None.
+            output_attentions: Whether to return attention weights. Defaults to None.
+            output_hidden_states: Whether to return hidden states of all layers. Defaults to None.
+            return_dict: Whether to return a ModelOutput instead of a tuple. Defaults to None.
+
+        Returns:
+            If return_dict is True, returns a BaseModelOutputWithPast containing:
+                - last_hidden_state: Sequence of hidden states at the last layer.
+                - past_key_values: Cached key-value states if use_cache is True.
+                - hidden_states: Hidden states of all layers if output_hidden_states is True.
+                - attentions: Attention weights if output_attentions is True.
+            Otherwise, returns a tuple with these elements (excluding None values).
+
+        Raises:
+            ValueError: If both input_ids and inputs_embeds are provided.
+            ValueError: If neither input_ids nor inputs_embeds is provided.
+        """
         output_attentions = (
             output_attentions
             if output_attentions is not None
@@ -1314,9 +1700,26 @@ class LlamaModel(LlamaPreTrainedModel):
 
 
 class LlamaForCausalLM(LlamaPreTrainedModel):
+    """LLaMA Model with a causal language modeling head.
+
+    This model is designed for causal language modeling tasks, with a linear
+    layer on top of the hidden states for vocabulary prediction.
+
+    Attributes:
+        _tied_weights_keys: Keys for weights that should be tied.
+        model: The base LlamaModel.
+        vocab_size: Size of the vocabulary.
+        lm_head: Linear layer for language modeling predictions.
+    """
+
     _tied_weights_keys = ["lm_head.weight"]
 
     def __init__(self, config):
+        """Initializes the LlamaForCausalLM.
+
+        Args:
+            config: LlamaConfig object containing model configuration.
+        """
         super().__init__(config)
         self.model = LlamaModel(config)
         self.vocab_size = config.vocab_size
@@ -1324,21 +1727,51 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
         self.post_init()
 
     def get_input_embeddings(self):
+        """Returns the input embeddings layer.
+
+        Returns:
+            The embedding layer used for input tokens.
+        """
         return self.model.embed_tokens
 
     def set_input_embeddings(self, v):
+        """Sets the input embeddings layer.
+
+        Args:
+            v: New embedding layer to use for input tokens.
+        """
         self.model.embed_tokens = v
 
     def get_output_embeddings(self):
+        """Returns the output embeddings layer.
+
+        Returns:
+            The linear layer used for output predictions.
+        """
         return self.lm_head
 
     def set_output_embeddings(self, e):
+        """Sets the output embeddings layer.
+
+        Args:
+            e: New linear layer to use for output predictions.
+        """
         self.lm_head = e
 
     def set_decoder(self, decoder):
+        """Sets the decoder model.
+
+        Args:
+            decoder: New decoder model to use.
+        """
         self.model = decoder
 
     def get_decoder(self):
+        """Returns the decoder model.
+
+        Returns:
+            The decoder model.
+        """
         return self.model
 
     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
@@ -1359,11 +1792,28 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
-        r"""
-        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Labels for computing the masked language modeling loss.
+        """Forward pass through the LlamaForCausalLM.
+
+        Args:
+            input_ids: Indices of input sequence tokens in the vocabulary. Defaults to None.
+            attention_mask: Mask to avoid performing attention on padding token indices. Defaults to None.
+            position_ids: Indices of positions of each input sequence tokens. Defaults to None.
+            past_key_values: Pre-computed hidden-states for fast sequential decoding. Defaults to None.
+            inputs_embeds: Embedded representation as an alternative to input_ids. Defaults to None.
+            labels: Labels for computing the masked language modeling loss. Defaults to None.
+            use_cache: Whether to return past key values. Defaults to None.
+            output_attentions: Whether to return attention weights. Defaults to None.
+            output_hidden_states: Whether to return hidden states of all layers. Defaults to None.
+            return_dict: Whether to return a ModelOutput instead of a tuple. Defaults to None.
 
         Returns:
+            If return_dict is True, returns a CausalLMOutputWithPast containing:
+                - loss: Language modeling loss if labels is provided.
+                - logits: Prediction scores of the language modeling head.
+                - past_key_values: Cached key-value states if use_cache is True.
+                - hidden_states: Hidden states of all layers if output_hidden_states is True.
+                - attentions: Attention weights if output_attentions is True.
+            Otherwise, returns a tuple with these elements (excluding None values).
         """
         output_attentions = (
             output_attentions
@@ -1437,6 +1887,18 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
         inputs_embeds=None,
         **kwargs,
     ):
+        """Prepares inputs for generation.
+
+        Args:
+            input_ids: Input token ids.
+            past_key_values: Cached key-value states. Defaults to None.
+            attention_mask: Attention mask. Defaults to None.
+            inputs_embeds: Embedded inputs. Defaults to None.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Dictionary containing model inputs for generation.
+        """
         if past_key_values is not None:
             if isinstance(past_key_values, Cache):
                 cache_length = past_key_values.get_seq_length()
@@ -1485,6 +1947,15 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
 
     @staticmethod
     def _reorder_cache(past_key_values, beam_idx):
+        """Reorders the cache for beam search.
+
+        Args:
+            past_key_values: Cached key-value states.
+            beam_idx: Beam indices to reorder by.
+
+        Returns:
+            Reordered cache.
+        """
         reordered_past = ()
         for layer_past in past_key_values:
             reordered_past += (
@@ -1505,7 +1976,23 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
     LLAMA_START_DOCSTRING,
 )
 class LlamaForSequenceClassification(LlamaPreTrainedModel):
+    """LLaMA Model with a sequence classification head.
+
+    This model is designed for sequence classification tasks, using the last token
+    for classification similar to other causal models like GPT-2.
+
+    Attributes:
+        num_labels: Number of classification labels.
+        model: The base LlamaModel.
+        score: Linear layer for classification predictions.
+    """
+
     def __init__(self, config):
+        """Initializes the LlamaForSequenceClassification.
+
+        Args:
+            config: LlamaConfig object containing model configuration.
+        """
         super().__init__(config)
         self.num_labels = config.num_labels
         self.model = LlamaModel(config)
@@ -1513,9 +2000,19 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
         self.post_init()
 
     def get_input_embeddings(self):
+        """Returns the input embeddings layer.
+
+        Returns:
+            The embedding layer used for input tokens.
+        """
         return self.model.embed_tokens
 
     def set_input_embeddings(self, v):
+        """Sets the input embeddings layer.
+
+        Args:
+            v: New embedding layer to use for input tokens.
+        """
         self.model.embed_tokens = v
 
     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
@@ -1532,6 +2029,32 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, SequenceClassifierOutputWithPast]:
+        """Forward pass through the LlamaForSequenceClassification.
+
+        Args:
+            input_ids: Indices of input sequence tokens in the vocabulary. Defaults to None.
+            attention_mask: Mask to avoid performing attention on padding token indices. Defaults to None.
+            position_ids: Indices of positions of each input sequence tokens. Defaults to None.
+            past_key_values: Pre-computed hidden-states for fast sequential decoding. Defaults to None.
+            inputs_embeds: Embedded representation as an alternative to input_ids. Defaults to None.
+            labels: Labels for computing the sequence classification loss. Defaults to None.
+            use_cache: Whether to return past key values. Defaults to None.
+            output_attentions: Whether to return attention weights. Defaults to None.
+            output_hidden_states: Whether to return hidden states of all layers. Defaults to None.
+            return_dict: Whether to return a ModelOutput instead of a tuple. Defaults to None.
+
+        Returns:
+            If return_dict is True, returns a SequenceClassifierOutputWithPast containing:
+                - loss: Classification loss if labels is provided.
+                - logits: Classification scores.
+                - past_key_values: Cached key-value states if use_cache is True.
+                - hidden_states: Hidden states of all layers if output_hidden_states is True.
+                - attentions: Attention weights if output_attentions is True.
+            Otherwise, returns a tuple with these elements (excluding None values).
+
+        Raises:
+            ValueError: If batch size > 1 and no padding token is defined.
+        """
         return_dict = (
             return_dict if return_dict is not None else self.config.use_return_dict
         )

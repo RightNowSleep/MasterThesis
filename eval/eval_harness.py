@@ -61,7 +61,12 @@ _METADATA = {"max_seq_lengths": [2048, 4096, 8192, 16384]}
 
 
 def _warn_unknown_tasks(task_list: list[str]) -> None:
-    """Print a warning for any task that isn't in lm-eval's registry."""
+    """
+    Print a warning for any task that isn't in lm-eval's registry.
+
+    Args:
+        task_list: List of task names to validate.
+    """
     try:
         tm = TaskManager()
         all_tasks = set(tm.all_tasks)
@@ -81,7 +86,16 @@ def _warn_unknown_tasks(task_list: list[str]) -> None:
 
 
 def _build_output_dir(task: str, output_dir: str) -> str:
-    """Build a directory for saving task results."""
+    """
+    Build a directory for saving task results.
+
+    Args:
+        task: Task name.
+        output_dir: Base output directory.
+
+    Returns:
+        Full path to the task-specific output directory.
+    """
     dir = output_dir
     for category in _TASKS_MAP:
         if task in _TASKS_MAP[category]:
@@ -93,7 +107,17 @@ def _build_output_dir(task: str, output_dir: str) -> str:
 
 
 def _build_output_path(output_dir: str, model_name: str, config) -> str:
-    """Build a descriptive output JSON filename from model + RoPE config."""
+    """
+    Build a descriptive output JSON filename from model + RoPE config.
+
+    Args:
+        output_dir: Output directory path.
+        model_name: Name of the model.
+        config: Model configuration object.
+
+    Returns:
+        Full path to the output JSON file.
+    """
     model_label = model_name.rstrip("/").split("/")[-1]
     rope_scaling = config.rope_scaling
     rope_label = rope_scaling["type"] if rope_scaling else "none"
@@ -220,7 +244,15 @@ def main(args):
 
 
 def add_args_harness(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add lm-eval-harness-specific arguments."""
+    """
+    Add lm-eval-harness-specific arguments.
+
+    Args:
+        parser: ArgumentParser to add arguments to.
+
+    Returns:
+        Parser with added arguments.
+    """
     parser.add_argument(
         "--tasks",
         type=str,

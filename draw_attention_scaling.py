@@ -9,10 +9,18 @@ plt.rcParams["axes.unicode_minus"] = False
 
 
 def calculate_u_norm(layer, N):
-    """
-    Calculate u_norm according to formula
-    Formula 5: x = (2*layer)/(N-1) - 1
-    Formula 6: u_norm = 1 - x^2
+    """Calculate the normalized layer position factor.
+
+    Computes u_norm using a quadratic formula that creates an inverted U-shape
+    pattern across network layers, where middle layers have the highest values.
+
+    Args:
+        layer: The layer index (0 to N-1).
+        N: Total number of layers in the network.
+
+    Returns:
+        float: The normalized layer position factor u_norm, ranging from 0.0
+            (at shallow and deep layers) to 1.0 (at middle layers).
     """
     x = (2 * layer) / (N - 1) - 1
     u_norm = 1 - x**2
@@ -20,10 +28,20 @@ def calculate_u_norm(layer, N):
 
 
 def attention_scale_factor(u_norm, S):
-    """
-    Calculate attention scaling factor
-    u_norm: normalized position calculated from formulas 5-6
-    S: context length extension ratio L_ext/L
+    """Calculate the attention scaling factor based on layer position and context extension.
+
+    Computes a scaling factor for attention scores that adjusts based on the layer's
+    position in the network and the context length extension ratio.
+
+    Args:
+        u_norm: Normalized layer position factor calculated from calculate_u_norm.
+            Higher values indicate middle layers, lower values indicate shallow/deep layers.
+        S: Context length extension ratio (L_ext / L), where L is the original
+            context length and L_ext is the extended context length.
+
+    Returns:
+        float: The attention scaling factor √t, where values greater than 1.0
+            indicate increased attention scaling for longer contexts.
     """
     return 1 + 0.1 * (1 - u_norm) * np.log(S)
 

@@ -1,5 +1,24 @@
 #!/bin/bash
 
+# =============================================================================
+# eval2.sh
+# -----------------------------------------------------------------------------
+# Purpose: Run Evaluation Group 2 (Passkey & Harness) for fine-tuned adapters
+# -----------------------------------------------------------------------------
+# Description:
+#   This script evaluates fine-tuned model adapters using passkey retrieval
+#   and lm-eval-harness benchmarks. It tests multiple adapters trained with
+#   different RoPE methods on standard NLP tasks.
+# -----------------------------------------------------------------------------
+# Usage:
+#   bash eval2.sh
+# -----------------------------------------------------------------------------
+# Parameters: None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Output:
+#   Evaluation results saved to: results/harness/
+# =============================================================================
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHONPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH
@@ -14,6 +33,7 @@ export USE_FLASH_ATTN=0
 CUDA_DEVICES="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
+# ── Model Configuration ──────────────────────────────────────────────────────
 MODEL_NAME="huggyllama/llama-7b"
 DTYPE="auto"
 QUANT="--load-in-4bit"
@@ -21,6 +41,7 @@ QUANT="--load-in-4bit"
 MAX_LENGTH=16384
 MIN_LENGTH=16384
 
+# ── Evaluation Tasks Configuration ───────────────────────────────────────────
 TASKS="arc_challenge,hellaswag,truthfulqa_mc1,mmlu"
 TASK_LIST=(
     "arc_challenge"
@@ -32,9 +53,11 @@ TASK_LIST=(
 BATCH_SIZE=1
 OUTPUT_DIR="results/harness"
 
+# ── Evaluation Flags ─────────────────────────────────────────────────────────
 ENABLE_PASSKEY=false
 ENABLE_HARNESS=true
 
+# ── Adapter Configuration ────────────────────────────────────────────────────
 ADAPTER_DIR="finetunes/continued_pretrain"
 ADAPTERS=(
     "yarn_20260316_071953"
@@ -60,6 +83,17 @@ echo "Passkey         : ${ENABLE_PASSKEY}"
 echo "Harness         : ${ENABLE_HARNESS}"
 echo "=========================================="
 
+# -----------------------------------------------------------------------------
+# Function: run_passkey_eval
+# -----------------------------------------------------------------------------
+# Purpose: Execute passkey retrieval evaluation for a specific adapter
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 - adapter_name: Name of the adapter directory to evaluate
+# -----------------------------------------------------------------------------
+# Returns:
+#   0 on success, non-zero on failure
+# -----------------------------------------------------------------------------
 run_passkey_eval() {
     local adapter_name=$1
     
@@ -86,6 +120,18 @@ run_passkey_eval() {
     fi
 }
 
+# -----------------------------------------------------------------------------
+# Function: run_harness_eval
+# -----------------------------------------------------------------------------
+# Purpose: Execute lm-eval-harness evaluation for a specific adapter and task
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 - adapter_name: Name of the adapter directory to evaluate
+#   $2 - task: Name of the evaluation task (e.g., arc_challenge, hellaswag)
+# -----------------------------------------------------------------------------
+# Returns:
+#   0 on success, non-zero on failure
+# -----------------------------------------------------------------------------
 run_harness_eval() {
     local adapter_name=$1
     local task=$2

@@ -28,6 +28,14 @@ warnings.filterwarnings("ignore")
 
 
 def find_all_linear_names(model):
+    """Find all linear layer names in the model for LoRA targeting.
+
+    Args:
+        model: The PyTorch model to inspect for linear layers.
+
+    Returns:
+        List of unique linear layer names suitable for LoRA targeting.
+    """
     linear_cls = (torch.nn.Linear,)
     try:
         linear_cls = linear_cls + (bnb.nn.Linear4bit, bnb.nn.Linear8bitLt)
@@ -44,6 +52,15 @@ def find_all_linear_names(model):
 
 
 def make_collate_fn(max_length: int):
+    """Create a collate function for batching dataset examples.
+
+    Args:
+        max_length: Maximum sequence length for truncation.
+
+    Returns:
+        A collate function that batches examples and truncates to max_length.
+    """
+
     def collate_fn(examples):
         batch = {}
         for key in examples[0]:
@@ -61,6 +78,15 @@ def make_collate_fn(max_length: int):
 
 
 def get_optimizer_param_groups(model, weight_decay: float):
+    """Create parameter groups for optimizer with selective weight decay.
+
+    Args:
+        model: The model whose parameters will be grouped.
+        weight_decay: Weight decay coefficient for applicable parameters.
+
+    Returns:
+        List of parameter group dictionaries with weight_decay settings.
+    """
     no_decay_keywords = [
         "bias",
         "layer_norm",
@@ -94,6 +120,19 @@ def save_checkpoint(
     args=None,
     tokenizer=None,
 ):
+    """Save a training checkpoint with model state and training configuration.
+
+    Args:
+        accelerator: The Accelerator instance managing distributed training.
+        model: The model to save.
+        model_config: The model configuration to save.
+        output_dir: Directory path for saving checkpoints.
+        step: Current training step number.
+        epoch: Current epoch number.
+        max_checkpoints: Maximum number of checkpoints to retain.
+        args: Optional training arguments to save.
+        tokenizer: Optional tokenizer to save.
+    """
     checkpoint_path = os.path.join(output_dir, f"checkpoint_step_{step:06d}")
     os.makedirs(checkpoint_path, exist_ok=True)
 
@@ -151,6 +190,13 @@ def save_checkpoint(
 
 
 def main(args):
+    """Execute the continued pretraining pipeline with LoRA/QLoRA.
+
+    Args:
+        args: Parsed arguments containing all training configuration including
+            model settings, optimization parameters, LoRA configuration,
+            quantization options, and output settings.
+    """
     # ------------------------------------------------------------------
     # Derive experiment tag
     # ------------------------------------------------------------------
@@ -465,6 +511,14 @@ def main(args):
 
 
 def add_args_continued_pretrain(parser):
+    """Add continued pretraining specific arguments to the argument parser.
+
+    Args:
+        parser: The argparse.ArgumentParser instance to add arguments to.
+
+    Returns:
+        The modified argument parser with continued pretraining arguments.
+    """
     # ── Dataset ──────────────────────────────────────────────────────────────
     parser.add_argument(
         "--dataset",

@@ -2,16 +2,29 @@
 
 # =============================================================================
 # finetune.sh
-# Runs supervised fine-tuning (QLoRA / LoRA) across all RoPE methods.
-# Usage: bash finetune.sh
+# -----------------------------------------------------------------------------
+# Purpose: Run supervised fine-tuning (QLoRA / LoRA) across all RoPE methods
+# -----------------------------------------------------------------------------
+# Description:
+#   This script performs supervised fine-tuning on a LLaMA-7b model using
+#   QLoRA/LoRA techniques. It iterates through multiple RoPE (Rotary Position
+#   Embedding) methods to compare their effectiveness for long-context tasks.
+# -----------------------------------------------------------------------------
+# Usage:
+#   bash finetune.sh
+# -----------------------------------------------------------------------------
+# Parameters: None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Output:
+#   Fine-tuned model checkpoints saved to: finetunes/finetune/
 # =============================================================================
 
-# ── Model ─────────────────────────────────────────────────────────────────────
+# ── Model Configuration ──────────────────────────────────────────────────────
 MODEL_NAME="huggyllama/llama-7b"
 MAX_LENGTH=32768
 DTYPE="bfloat16"
 
-# ── Training hyperparameters ──────────────────────────────────────────────────
+# ── Training Hyperparameters ─────────────────────────────────────────────────
 BATCH_SIZE=1
 GRADIENT_ACCUMULATE_EVERY=8
 MAX_TRAIN_STEPS=600
@@ -24,22 +37,22 @@ CHECKPOINTING_STEPS=20
 MAX_CHECKPOINTS=3
 SEED=42
 
-# ── LoRA / quantization ───────────────────────────────────────────────────────
+# ── LoRA / Quantization Settings ─────────────────────────────────────────────
 LORA_R=64
 LORA_ALPHA=128
 LORA_DROPOUT=0.05
 QUANTIZATION="4bit"
 
-# ── Dataset ───────────────────────────────────────────────────────────────────
+# ── Dataset Configuration ────────────────────────────────────────────────────
 DATASET="emozilla/pg_books-tokenized-bos-eos-chunked-65536"
 
-# ── Infrastructure ────────────────────────────────────────────────────────────
+# ── Infrastructure Settings ──────────────────────────────────────────────────
 CUDA_DEVICES="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 OUTPUT_DIR="finetunes/finetune"
 WANDB=""                # Set to a WandB project name to enable, e.g. "my-project"
 
-# ── RoPE methods ──────────────────────────────────────────────────────────────
+# ── RoPE Methods Configuration ───────────────────────────────────────────────
 # NOTE: --rope-factor and --rope-dynamic are mutually exclusive.
 #   --rope-factor F only → static scaling with fixed ratio F > 1.0  (used here:
 #                          fine-tuning targets a known max length, static is preferred)
@@ -62,7 +75,7 @@ ROPE_METHODS=(
     "--rope-type freq-reciprocal-scaled --rope-factor 4.0"
 )
 
-# ── Build shared argument string ──────────────────────────────────────────────
+# ── Build Shared Argument String ─────────────────────────────────────────────
 BASE_ARGS="--model-name $MODEL_NAME \
   --max-length $MAX_LENGTH \
   --dtype $DTYPE \
@@ -100,6 +113,17 @@ echo "RoPE methods: ${#ROPE_METHODS[@]}"
 echo "Output dir : $OUTPUT_DIR"
 echo "=========================================="
 
+# -----------------------------------------------------------------------------
+# Function: run_finetune
+# -----------------------------------------------------------------------------
+# Purpose: Execute fine-tuning for a specific RoPE method
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 - rope_method: The RoPE configuration string (e.g., "--rope-type linear")
+# -----------------------------------------------------------------------------
+# Returns:
+#   0 on success, non-zero on failure
+# -----------------------------------------------------------------------------
 run_finetune() {
     local rope_method=$1
 

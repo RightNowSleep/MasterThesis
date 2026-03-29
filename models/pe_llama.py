@@ -66,6 +66,20 @@ __all__ = [
 
 
 class LlamaRotaryEmbedding(nn.Module):
+    """Standard Llama Rotary Position Embedding (RoPE).
+
+    Implements the original RoPE as described in the Llama paper. Computes
+    cos/sin caches for rotary position embeddings with fixed base frequency.
+
+    Attributes:
+        dim (int): Dimension of the embedding (head dimension).
+        max_position_embeddings (int): Maximum sequence length for caching.
+        base (int): Base frequency for computing inverse frequencies.
+        inv_freq (torch.Tensor): Inverse frequency buffer.
+        cos_cached (torch.Tensor): Cached cosine values.
+        sin_cached (torch.Tensor): Cached sine values.
+    """
+
     def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
         super().__init__()
         self.dim = dim
@@ -109,21 +123,22 @@ class LlamaRotaryEmbedding(nn.Module):
 
 
 class LlamaLinearScalingRotaryEmbedding(nn.Module):
-    """
-    Position Interpolation (PI) — linear position scaling.
+    """Position Interpolation (PI) with linear position scaling.
 
-    Parameters
-    ----------
-    scaling_factor : float
-        Extension ratio s.  In static mode the positions are divided by s so
-        that the extended context fits into the model's original angular range.
-        In dynamic mode this value is **ignored** at runtime; s is derived
-        from the actual sequence length.
-    original_max_position_embeddings : int
-        Model's original context length L.
-    dynamic : bool
-        False → static pre-cached mode.
-        True  → recompute on every forward pass with s = seq_len / original_L.
+    Implements linear position scaling where positions are divided by the
+    scaling factor to extend the context window. Supports both static and
+    dynamic scaling modes.
+
+    Attributes:
+        dim (int): Dimension of the embedding.
+        max_position_embeddings (int): Maximum sequence length for caching.
+        original_max_position_embeddings (int): Model's original context length.
+        base (int): Base frequency for computing inverse frequencies.
+        scaling_factor (float): Extension ratio for static mode.
+        dynamic (bool): Whether to use dynamic scaling.
+        inv_freq (torch.Tensor): Inverse frequency buffer.
+        cos_cached (torch.Tensor): Cached cosine values (static mode only).
+        sin_cached (torch.Tensor): Cached sine values (static mode only).
     """
 
     def __init__(
@@ -191,13 +206,21 @@ class LlamaLinearScalingRotaryEmbedding(nn.Module):
 
 
 class LlamaNTKAwareScaledRotaryEmbedding(nn.Module):
-    """
-    NTK-aware RoPE scaling.
+    """NTK-aware RoPE scaling with base frequency modification.
 
-    Static mode  : modifies the RoPE base as ``base' = base * s^(d/(d-2))``
-                   once at construction time and pre-caches frequencies.
-    Dynamic mode : recomputes ``base'`` on every forward pass using the
-                   actual scaling factor ``s = max(1, seq_len / original_L)``.
+    Modifies the RoPE base frequency to extend context length. The base is
+    scaled as base' = base * s^(d/(d-2)) where s is the scaling factor.
+
+    Attributes:
+        dim (int): Dimension of the embedding.
+        max_position_embeddings (int): Maximum sequence length for caching.
+        original_max_position_embeddings (int): Model's original context length.
+        base (int): Original base frequency.
+        scaling_factor (float): Extension ratio for static mode.
+        dynamic (bool): Whether to use dynamic scaling.
+        inv_freq (torch.Tensor): Inverse frequency buffer.
+        cos_cached (torch.Tensor): Cached cosine values (static mode only).
+        sin_cached (torch.Tensor): Cached sine values (static mode only).
     """
 
     def __init__(
@@ -269,29 +292,24 @@ class LlamaNTKAwareScaledRotaryEmbedding(nn.Module):
 
 
 class LlamaNTKByPartsScaledRotaryEmbedding(nn.Module):
-    """
-    NTK-by-parts RoPE scaling.
+    """NTK-by-parts RoPE scaling with piecewise frequency blending.
 
-    Dimensions are split into three groups based on how many full rotations
-    each dimension performs within the original training context ``original_L``:
+    Splits dimensions into three groups based on rotation frequency within
+    the original context: high-frequency (unchanged), low-frequency (linearly
+    interpolated), and transition region (smooth blend).
 
-    * High-frequency  (many rotations, ``r_d > beta``)  → kept unchanged (w=1)
-    * Low-frequency   (few rotations,  ``r_d < alpha``) → linearly interpolated
-      by dividing by s (w=0)
-    * Transition region → smooth linear blend between the two extremes
-
-    Parameters
-    ----------
-    alpha, beta : float
-        Boundary parameters for the piecewise blending.  The original YaRN
-        paper uses alpha=1 (≈ 1 full rotation) and beta=32 (≈ 32 full
-        rotations).
-    dynamic : bool
-        False → static pre-cached mode with fixed ``scaling_factor``.
-        True  → dynamic mode; ``scaling_factor`` recomputed each forward pass
-                as ``s = max(1, seq_len / original_L)``.  In dynamic mode, the
-                blending weights ``w_ext`` AND ``inv_freq`` are both fully
-                recomputed on every call (Method A).
+    Attributes:
+        dim (int): Dimension of the embedding.
+        max_position_embeddings (int): Maximum sequence length for caching.
+        original_max_position_embeddings (int): Model's original context length.
+        base (int): Base frequency for computing inverse frequencies.
+        scaling_factor (float): Extension ratio for static mode.
+        alpha_ntk (float): Lower boundary for frequency blending.
+        beta_ntk (float): Upper boundary for frequency blending.
+        dynamic (bool): Whether to use dynamic scaling.
+        inv_freq (torch.Tensor): Inverse frequency buffer.
+        cos_cached (torch.Tensor): Cached cosine values (static mode only).
+        sin_cached (torch.Tensor): Cached sine values (static mode only).
     """
 
     def __init__(
@@ -373,15 +391,14 @@ class LlamaNTKByPartsScaledRotaryEmbedding(nn.Module):
 
 
 class LlamaYarnScaledRotaryEmbedding(LlamaNTKByPartsScaledRotaryEmbedding):
-    """
-    YaRN = NTK-by-parts + attention temperature scaling.
+    """YaRN (Yet Another RoPE extensioN) with attention temperature scaling.
 
-    The attention temperature scale is ``t = 1 + 0.1 * ln(s)`` and is
-    multiplied into the cached (or on-the-fly) cos/sin values so that
-    downstream attention dot-products are automatically re-scaled.
+    Combines NTK-by-parts frequency blending with attention temperature
+    scaling (t = 1 + 0.1 * ln(s)) to improve extrapolation performance.
 
-    In static mode the scale is a fixed scalar baked into the cache.
-    In dynamic mode the scale is recomputed from the runtime ``s``.
+    Attributes:
+        attention_scaling (float): Temperature scaling factor (static mode).
+        Inherits all attributes from LlamaNTKByPartsScaledRotaryEmbedding.
     """
 
     def __init__(
@@ -461,15 +478,19 @@ def _layer_aware_attn_scale(
     seq_len: int,
     original_max_position_embeddings: int,
 ) -> float:
-    """
-    Layer-dependent attention amplitude scalar (inverted-U profile).
+    """Compute layer-dependent attention amplitude scalar with inverted-U profile.
 
-    Middle layers receive a weaker correction (u_norm → 1, layer_alpha → 0);
-    first and last layers receive a stronger correction (u_norm → 0,
-    layer_alpha → 0.1).
+    Middle layers receive weaker correction (u_norm approaches 1, layer_alpha approaches 0),
+    while first and last layers receive stronger correction (u_norm approaches 0, layer_alpha approaches 0.1).
 
-    Returns a Python float suitable for direct multiplication with cos/sin
-    tensors or cached buffers.
+    Args:
+        layer_idx (int): Index of the current attention layer.
+        num_hidden_layers (int): Total number of transformer layers.
+        seq_len (int): Current sequence length.
+        original_max_position_embeddings (int): Model's original context length.
+
+    Returns:
+        float: Python float suitable for multiplication with cos/sin tensors.
     """
     layer_norm = 2.0 * layer_idx / max(num_hidden_layers - 1, 1) - 1.0
     u_norm = 1.0 - layer_norm**2
@@ -495,26 +516,27 @@ def _layer_aware_attn_scale(
 
 
 class LlamaMyRotaryEmbedding(nn.Module):
-    """
-    Layer-aware My RoPE — position encoding only (no attention scaling).
+    """Layer-aware My RoPE with position encoding only.
 
-    Implements NTK-by-parts frequency blending with layer-adaptive α/β boundaries
-    (inverted-U profile across layers).  Attention temperature correction is
-    intentionally absent; use ``LlamaMyScaledRotaryEmbedding`` for the full
-    YaRN-style variant that also applies a layer-aware attention scalar.
+    Implements NTK-by-parts frequency blending with layer-adaptive alpha/beta
+    boundaries using an inverted-U profile across layers. Does not apply
+    attention temperature correction.
 
-    Parameters
-    ----------
-    scaling_factor : float
-        Static extension ratio s > 1.0.  Used only when ``dynamic=False``.
-    dynamic : bool
-        False (default) — static mode: cos/sin pre-cached at init.
-        True            — dynamic mode: S = max(seq_len, L) / L at runtime.
-
-    Internals
-    ---------
-    * Inverted-U α/β: middle layers use wider transition bands; first/last
-      layers use tighter bands (closer to standard NTK-by-parts).
+    Attributes:
+        dim (int): Dimension of the embedding.
+        max_position_embeddings (int): Maximum sequence length for caching.
+        base (int): Base frequency for computing inverse frequencies.
+        scaling_factor (float): Extension ratio for static mode.
+        N (int): Total number of transformer layers.
+        original_max_position_embeddings (int): Model's original context length.
+        layer_idx (int): Index of this attention layer.
+        alpha (float): Alpha parameter for layer adaptation.
+        dynamic (bool): Whether to use dynamic scaling.
+        inv_freq (torch.Tensor): Inverse frequency buffer (static mode).
+        inv_freq_base (torch.Tensor): Base inverse frequency (dynamic mode).
+        w_ext (torch.Tensor): Blending weights (dynamic mode).
+        cos_cached (torch.Tensor): Cached cosine values (static mode only).
+        sin_cached (torch.Tensor): Cached sine values (static mode only).
     """
 
     def __init__(
@@ -592,7 +614,7 @@ class LlamaMyRotaryEmbedding(nn.Module):
         )
 
     def _build_w_ext(self):
-        """Pre-compute the per-dimension blending mask (layer-adaptive)."""
+        """Pre-compute the per-dimension blending mask with layer-adaptive parameters."""
         theta_d = self.inv_freq_base
         lambda_d = 2 * math.pi / theta_d
         r_d = self.original_max_position_embeddings / lambda_d
@@ -636,20 +658,13 @@ class LlamaMyRotaryEmbedding(nn.Module):
 
 
 class LlamaMyScaledRotaryEmbedding(LlamaMyRotaryEmbedding):
-    """
-    Layer-aware My RoPE + attention temperature scaling.
+    """Layer-aware My RoPE with attention temperature scaling.
 
-    Inherits all position-encoding logic from ``LlamaMyRotaryEmbedding`` and
-    multiplies the resulting cos/sin values by a layer-dependent global scalar:
+    Inherits position encoding from LlamaMyRotaryEmbedding and applies a
+    layer-dependent attention temperature scalar with inverted-U profile.
 
-        scale = 1 + layer_alpha * log(max(1, seq_len / L_0))
-        layer_alpha = 0.1 * (1 - u_norm),  u_norm = 1 - layer_norm^2
-
-    This mirrors the relationship between ``LlamaNTKByPartsScaledRotaryEmbedding``
-    (base) and ``LlamaYarnScaledRotaryEmbedding`` (scaled).
-
-    In static mode the scalar is baked into the cos/sin cache at construction.
-    In dynamic mode it is recomputed on every forward pass.
+    Attributes:
+        Inherits all attributes from LlamaMyRotaryEmbedding.
     """
 
     def _set_cos_sin_cache(self, seq_len, device, dtype):
@@ -694,26 +709,26 @@ class LlamaMyScaledRotaryEmbedding(LlamaMyRotaryEmbedding):
 
 
 class LlamaMyRotaryEmbedding2(nn.Module):
-    """
-    Multi-scale My RoPE — position encoding only (no attention scaling).
+    """Multi-scale My RoPE with position encoding only.
 
-    Splits the head dimension into three sub-spaces tuned for local (40 %),
-    paragraph (30 %), and document (30 %) scales, each with its own NTK-by-parts
-    parameters and base frequency.  Attention temperature correction is
-    intentionally absent; use ``LlamaMyScaledRotaryEmbedding2`` for the
-    YaRN-style variant with layer-aware attention scaling.
+    Splits the head dimension into three sub-spaces for local, paragraph, and
+    document scales, each with its own NTK-by-parts parameters and base frequency.
+    Does not apply attention temperature correction.
 
-    Parameters
-    ----------
-    scaling_factor : float
-        Static extension ratio s > 1.0.  Used only when ``dynamic=False``.
-        Each sub-space blends its inv_freq using the shared ``scaling_factor``
-        as the denominator (same NTK-by-parts formula as the other classes).
-    dynamic : bool
-        False (default) — static mode: each sub-space is scaled by the fixed
-                          ``scaling_factor``; combined cos/sin are pre-cached.
-        True            — dynamic mode: each sub-space derives its own scaling
-                          factor from ``seq_len`` at runtime (original behaviour).
+    Attributes:
+        dim (int): Dimension of the embedding.
+        base (int): Base frequency for computing inverse frequencies.
+        max_position_embeddings (int): Maximum sequence length for caching.
+        original_max_position_embeddings (int): Model's original context length.
+        scaling_factor (float): Extension ratio for static mode.
+        alpha (float): Alpha parameter for scaling.
+        dynamic (bool): Whether to use dynamic scaling.
+        layer_idx (int): Index of this attention layer.
+        N (int): Total number of transformer layers.
+        scales (list): Configuration for each sub-space scale.
+        scale_buffers (list): Buffers for each sub-space.
+        cos_cached (torch.Tensor): Cached cosine values (static mode only).
+        sin_cached (torch.Tensor): Cached sine values (static mode only).
     """
 
     def __init__(
@@ -776,7 +791,15 @@ class LlamaMyRotaryEmbedding2(nn.Module):
             )
 
     def _get_scale_inv_freq_static(self, scale_idx: int, device):
-        """Compute blended inv_freq for one sub-space using the fixed scaling_factor."""
+        """Compute blended inv_freq for one sub-space using fixed scaling_factor.
+
+        Args:
+            scale_idx (int): Index of the sub-space scale.
+            device: Device for tensor operations.
+
+        Returns:
+            torch.Tensor: Blended inverse frequencies for the sub-space.
+        """
         buffer = self.scale_buffers[scale_idx]
         theta_d = buffer["inv_freq"].to(device=device)
         window = buffer["window"]
@@ -812,7 +835,16 @@ class LlamaMyRotaryEmbedding2(nn.Module):
         self.register_buffer("sin_cached", sin_final.to(dtype), persistent=False)
 
     def _get_scale_inv_freq_dynamic(self, scale_idx: int, seq_len: int, device):
-        """Compute blended inv_freq for one sub-space using the runtime seq_len."""
+        """Compute blended inv_freq for one sub-space using runtime seq_len.
+
+        Args:
+            scale_idx (int): Index of the sub-space scale.
+            seq_len (int): Current sequence length.
+            device: Device for tensor operations.
+
+        Returns:
+            torch.Tensor: Blended inverse frequencies for the sub-space.
+        """
         buffer = self.scale_buffers[scale_idx]
         theta_d = buffer["inv_freq"]
         window = buffer["window"]
@@ -864,17 +896,13 @@ class LlamaMyRotaryEmbedding2(nn.Module):
 
 
 class LlamaMyScaledRotaryEmbedding2(LlamaMyRotaryEmbedding2):
-    """
-    Multi-scale My RoPE 2 + attention temperature scaling.
+    """Multi-scale My RoPE 2 with attention temperature scaling.
 
-    Inherits all position-encoding logic from ``LlamaMyRotaryEmbedding2`` and
-    multiplies the resulting cos/sin values by the same layer-dependent global
-    scalar used by ``LlamaMyScaledRotaryEmbedding``:
+    Inherits position encoding from LlamaMyRotaryEmbedding2 and applies the
+    same layer-dependent attention temperature scalar.
 
-        scale = 1 + layer_alpha * log(max(1, seq_len / L_0))
-
-    In static mode the scalar is baked into the cos/sin cache at construction.
-    In dynamic mode it is recomputed on every forward pass.
+    Attributes:
+        Inherits all attributes from LlamaMyRotaryEmbedding2.
     """
 
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
@@ -917,70 +945,26 @@ class LlamaMyScaledRotaryEmbedding2(LlamaMyRotaryEmbedding2):
 
 
 class LlamaBlockLayeredRotaryEmbedding(nn.Module):
-    """
-    Block-Layered RoPE — position encoding only (no attention scaling).
+    """Block-Layered RoPE with position encoding only.
 
-    Core idea
-    ---------
-    For each RoPE dimension i, an effective position index is computed as:
+    Implements quantized effective position indices using per-dimension block
+    sizes that grow exponentially with dimension index. Prevents angular value
+    out-of-distribution when extending beyond original context length.
 
-        t_eff(i) = floor(t / b_i)
-
-    where b_i is a per-dimension block size that grows exponentially with i:
-
-        b_i = S^(i / i*)        for i < i*    (high-frequency region)
-        b_i = S                  for i >= i*   (low-frequency region)
-
-    i* is the *critical dimension*: the first dimension whose wavelength
-    lambda_i = 2π / θ_i exceeds the original context length L_0, i.e. the
-    first dimension that never completes a full rotation within L_0.
-
-        i* = min{ i : L_0 / λ_i  < 1 }
-
-    Physical interpretation
-    -----------------------
-    * i < i*  (high-frequency, r_i = L_0/λ_i ≥ 1):
-        Block size grows from b_0=1 (full resolution, standard RoPE) toward
-        b_{i*-1} ≈ S (mild compression).  These dimensions resolve *local /
-        within-block* token order.
-
-    * i >= i*  (low-frequency, r_i < 1):
-        Block size is fixed at S.  Effective positions are compressed to
-        [0, ceil(N/S)], which stays within the original angular range
-        [0, L_0 * θ_i] — preventing the angular value OOD that would
-        otherwise occur when t > L_0.  These dimensions resolve *long-range /
-        cross-block* structure.
-
-    Block-size schedule
-    -------------------
-    Exponential growth (b_i = S^(i/i*)) is chosen because RoPE frequencies
-    θ_i themselves decay geometrically with i.  An exponential b_i schedule
-    keeps the effective angular range N*θ_i/b_i approximately uniform across
-    all dimensions, matching the geometric structure of the frequency grid.
-
-    Degradation
-    -----------
-    When seq_len <= original_L:  S = 1  →  b_i = 1 for all i  →  standard RoPE.
-
-    Attention scaling
-    -----------------
-    Layer-dependent inverted-U global scalar, identical to LlamaMyRotaryEmbedding:
-
-        layer_alpha = 0.1 * (1 - u_norm),   u_norm = 1 - layer_norm^2
-        scale = 1 + layer_alpha * log(max(1, seq_len / L_0))
-
-    Parameters
-    ----------
-    scaling_factor : float
-        Static extension ratio S > 1.0.  Ignored in dynamic mode.
-    dynamic : bool
-        False (default) — static mode: b_i and cos/sin pre-cached at init.
-        True            — dynamic mode: S = max(1, seq_len / L_0) at runtime.
-    layer_idx : int
-        Index of this attention layer (0-based).  Stored for use by
-        ``LlamaBlockLayeredScaledRotaryEmbedding``; not used in this base class.
-    num_hidden_layers : int
-        Total number of transformer layers.  Stored for use by the scaled subclass.
+    Attributes:
+        dim (int): Dimension of the embedding.
+        base (int): Base frequency for computing inverse frequencies.
+        max_position_embeddings (int): Maximum sequence length for caching.
+        original_max_position_embeddings (int): Model's original context length.
+        scaling_factor (float): Extension ratio for static mode.
+        layer_idx (int): Index of this attention layer.
+        N (int): Total number of transformer layers.
+        dynamic (bool): Whether to use dynamic scaling.
+        i_star (int): Critical dimension index.
+        inv_freq (torch.Tensor): Inverse frequency buffer.
+        block_sizes (torch.Tensor): Per-dimension block sizes (static mode).
+        cos_cached (torch.Tensor): Cached cosine values (static mode only).
+        sin_cached (torch.Tensor): Cached sine values (static mode only).
     """
 
     def __init__(
@@ -1033,14 +1017,17 @@ class LlamaBlockLayeredRotaryEmbedding(nn.Module):
     # ------------------------------------------------------------------ #
 
     def _compute_block_sizes(self, S: float, device=None) -> torch.Tensor:
-        """
-        Per-dimension block sizes for extension ratio S.
+        """Compute per-dimension block sizes for extension ratio S.
 
-        b_i = clamp(S^(i / i*), 1, S)   for i < i*   (exponential, 1 → S)
-        b_i = S                           for i >= i*  (full compression)
+        Block sizes grow exponentially: b_i = clamp(S^(i / i*), 1, S) for i < i*,
+        and b_i = S for i >= i*. When S = 1.0, all b_i = 1.0 (standard RoPE).
 
-        Returns float32 tensor of shape [dim//2].
-        S = 1.0  →  all b_i = 1.0  (standard RoPE).
+        Args:
+            S (float): Extension ratio for scaling.
+            device: Device for tensor creation.
+
+        Returns:
+            torch.Tensor: Float32 tensor of shape [dim//2] containing block sizes.
         """
         half_dim = self.dim // 2
         indices = torch.arange(half_dim, device=device, dtype=torch.float32)
@@ -1094,18 +1081,13 @@ class LlamaBlockLayeredRotaryEmbedding(nn.Module):
 
 
 class LlamaBlockLayeredScaledRotaryEmbedding(LlamaBlockLayeredRotaryEmbedding):
-    """
-    Block-Layered RoPE + attention temperature scaling.
+    """Block-Layered RoPE with attention temperature scaling.
 
-    Inherits all position-encoding logic from ``LlamaBlockLayeredRotaryEmbedding``
-    and multiplies the resulting cos/sin values by the same layer-dependent global
-    scalar used throughout the My RoPE family:
+    Inherits position encoding from LlamaBlockLayeredRotaryEmbedding and
+    applies a layer-dependent attention temperature scalar with inverted-U profile.
 
-        scale = 1 + layer_alpha * log(max(1, seq_len / L_0))
-        layer_alpha = 0.1 * (1 - u_norm),  u_norm = 1 - layer_norm^2
-
-    In static mode the scalar is baked into the cos/sin cache at construction.
-    In dynamic mode it is recomputed on every forward pass.
+    Attributes:
+        Inherits all attributes from LlamaBlockLayeredRotaryEmbedding.
     """
 
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
@@ -1148,77 +1130,27 @@ class LlamaBlockLayeredScaledRotaryEmbedding(LlamaBlockLayeredRotaryEmbedding):
 
 
 class LlamaFreqSmoothRotaryEmbedding(nn.Module):
-    """
-    Freq-Smooth Block RoPE — position encoding only (no attention scaling).
+    """Freq-Smooth Block RoPE with position encoding only.
 
-    Core idea
-    ---------
-    Like Block-Layered RoPE, each RoPE dimension i uses a quantised effective
-    position index:
+    Implements quantized effective position indices using a quadratic block-size
+    schedule derived from normalized RoPE base frequencies. Provides C1 smoothness
+    at the critical dimension boundary.
 
-        t_eff(i) = floor(t / b_i)
-
-    The block-size schedule b_i is derived from the RoPE base frequency θ_i
-    via a **normalised quadratic** that satisfies three design requirements
-    simultaneously:
-
-    Requirements
-    ------------
-    (R1) Value range  : b_i ∈ [1, S] for all i, with b_0 = 1 and b_i = S
-         for all i ≥ i*.
-    (R2) Strong freq-correlation : b_i is a monotone function of θ_i, with
-         rate of change proportional to θ_i (decelerating, matching θ_i decay).
-    (R3) C¹ smooth at i*  : db_i/di → 0 as i → i*⁻, matching the zero
-         derivative of the constant S plateau on the right.
-
-    Formula
-    -------
-    Let i* be the critical dimension — the first index where r_i < 1, i.e.
-    the dimension whose wavelength first exceeds the original context L_0:
-
-        θ_i   = base^{−2i/d}              (RoPE base frequency; θ_0 = 1)
-        r_i   = L_0 · θ_i / (2π)          (rotations within L_0)
-        i*    = min{ i : r_i < 1 }
-
-    Normalised frequency (maps θ_0 → 1, θ_{i*} → 0):
-
-        θ̂_i  = (θ_i − θ_{i*}) / (1 − θ_{i*})
-
-    Block-size schedule:
-
-        b_i = S − (S − 1) · θ̂_i²    for i < i*
-        b_i = S                        for i ≥ i*
-
-    Why the quadratic?
-    ------------------
-    Because θ̂_{i*} = 0, the derivative dθ̂²/di|_{i*} = 2θ̂_{i*}·dθ̂/di = 0
-    regardless of dθ̂/di, so b_i meets S with zero slope — C¹ continuity is
-    a purely algebraic consequence, not a heuristic patch.
-
-    Behaviour by zone
-    -----------------
-    i = 0      : b_0 = S − (S−1)·1 = 1  (full resolution)
-    0 < i < i* : b_i grows with decelerating speed, tracking θ̂_i² ∝ θ_i²
-    i = i*−1   : db_{i*-1}/di ≈ 0  (smooth approach to S)
-    i ≥ i*     : b_i = S exactly  (full compression, no OOD angles)
-
-    Degradation
-    -----------
-    S = 1  →  b_i = 1 for all i  (standard RoPE, no quantisation).
-    seq_len ≤ original_L (dynamic mode)  →  S = 1  →  same.
-
-    Parameters
-    ----------
-    scaling_factor : float
-        Static extension ratio S > 1.0.  Ignored in dynamic mode.
-    dynamic : bool
-        False (default) — static mode: b_i and cos/sin pre-cached at init.
-        True            — dynamic mode: S = max(1, seq_len / L_0) at runtime.
-    layer_idx : int
-        0-based index of this attention layer.  Stored for use by
-        ``LlamaFreqSmoothScaledRotaryEmbedding``; not used in this base class.
-    num_hidden_layers : int
-        Total transformer layers.  Stored for use by the scaled subclass.
+    Attributes:
+        dim (int): Dimension of the embedding.
+        base (int): Base frequency for computing inverse frequencies.
+        max_position_embeddings (int): Maximum sequence length for caching.
+        original_max_position_embeddings (int): Model's original context length.
+        scaling_factor (float): Extension ratio for static mode.
+        layer_idx (int): Index of this attention layer.
+        N (int): Total number of transformer layers.
+        dynamic (bool): Whether to use dynamic scaling.
+        i_star (int): Critical dimension index.
+        theta_istar (float): Theta value at critical dimension.
+        inv_freq (torch.Tensor): Inverse frequency buffer.
+        block_sizes (torch.Tensor): Per-dimension block sizes (static mode).
+        cos_cached (torch.Tensor): Cached cosine values (static mode only).
+        sin_cached (torch.Tensor): Cached sine values (static mode only).
     """
 
     def __init__(
@@ -1273,21 +1205,17 @@ class LlamaFreqSmoothRotaryEmbedding(nn.Module):
     # ------------------------------------------------------------------ #
 
     def _compute_block_sizes(self, S: float, device=None) -> torch.Tensor:
-        """
-        Per-dimension block sizes for extension ratio S.
+        """Compute per-dimension block sizes using quadratic schedule.
 
-        Formula
-        -------
-        θ̂_i = clamp( (θ_i − θ_{i*}) / (1 − θ_{i*}), 0, 1 )
-        b_i  = S − (S−1) · θ̂_i²          (i < i*:  quadratic, 1 → S)
-        b_i  = S                            (i ≥ i*:  constant S)
-        b_i  = clamp(b_i, 1, S)            (numerical safety)
+        Uses normalized frequency to compute block sizes with C1 smoothness
+        at the critical dimension boundary.
 
-        The clamp on θ̂_i is redundant by construction (θ_i is monotone and
-        θ_{i*} is its value at the boundary) but guards against floating-point
-        edge cases.
+        Args:
+            S (float): Extension ratio for scaling.
+            device: Device for tensor creation.
 
-        S = 1.0  →  b_i = 1 for all i  (standard RoPE).
+        Returns:
+            torch.Tensor: Float32 tensor of shape [dim//2] containing block sizes.
         """
         theta = self.inv_freq.to(device=device)  # [d//2]
         S = float(S)
@@ -1354,25 +1282,13 @@ class LlamaFreqSmoothRotaryEmbedding(nn.Module):
 
 
 class LlamaFreqSmoothScaledRotaryEmbedding(LlamaFreqSmoothRotaryEmbedding):
-    """
-    Freq-Smooth Block RoPE + attention temperature scaling.
+    """Freq-Smooth Block RoPE with attention temperature scaling.
 
-    Inherits all position-encoding logic from
-    ``LlamaFreqSmoothRotaryEmbedding`` and multiplies the resulting cos/sin
-    values by the layer-dependent global scalar shared across the My RoPE /
-    Block-Layered family:
+    Inherits position encoding from LlamaFreqSmoothRotaryEmbedding and applies
+    a layer-dependent attention temperature scalar with inverted-U profile.
 
-        scale       = 1 + layer_alpha · log(max(1, seq_len / L_0))
-        layer_alpha = 0.1 · (1 − u_norm)
-        u_norm      = 1 − layer_norm²
-        layer_norm  = 2 · layer_idx / (N − 1) − 1
-
-    The inverted-U profile gives stronger correction to the first and last
-    transformer layers (low attention entropy) and weaker correction to the
-    middle layers (high attention entropy).
-
-    In static mode the scalar is baked into the cos/sin cache at construction.
-    In dynamic mode it is recomputed on every forward pass.
+    Attributes:
+        Inherits all attributes from LlamaFreqSmoothRotaryEmbedding.
     """
 
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
@@ -1530,23 +1446,17 @@ class LlamaFreqReciprocalRotaryEmbedding(nn.Module):
     # ------------------------------------------------------------------ #
 
     def _compute_block_sizes(self, S: float, device=None) -> torch.Tensor:
-        """
-        Per-dimension block sizes for extension ratio S.
+        """Compute per-dimension block sizes using reciprocal frequency schedule.
 
-        Formula
-        -------
-        inv_θ_i  = 1 / θ_i = base^{2i/d}           (reciprocal frequency)
-        K        = (S − 1) / (inv_θ_{i*} − 1)       (normalisation constant)
-        b_i      = 1 + K · (inv_θ_i − 1)            (i < i*: linear in 1/θ_i)
-        b_i      = S                                  (i ≥ i*: exact, hard-set)
-        b_i      = clamp(b_i, 1, S)                  (numerical safety)
+        Block sizes follow a linear relationship with reciprocal frequency,
+        ensuring constant product between block size rate and frequency decay rate.
 
-        Rate properties
-        ---------------
-        db_i/di = K · (2·ln·base/d) · inv_θ_i  →  accelerating (∝ 1/θ_i)
-        db_i/di · |dθ_i/di| = K · (2·ln·base/d)²  →  constant for all i < i*
+        Args:
+            S (float): Extension ratio for scaling.
+            device: Device for tensor creation.
 
-        S = 1.0  →  K = 0  →  b_i = 1 for all i  (standard RoPE).
+        Returns:
+            torch.Tensor: Float32 tensor of shape [dim//2] containing block sizes.
         """
         S = float(S)
 
@@ -1614,25 +1524,15 @@ class LlamaFreqReciprocalRotaryEmbedding(nn.Module):
 
 
 class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbedding):
-    """
-    Freq-Reciprocal Block RoPE + power-law attention temperature scaling.
+    """Freq-Reciprocal Block RoPE with power-law attention temperature scaling.
 
-    Inherits all position-encoding logic from
-    ``LlamaFreqReciprocalRotaryEmbedding`` and multiplies the resulting cos/sin
-    values by a power-law attention temperature:
+    Inherits position encoding from LlamaFreqReciprocalRotaryEmbedding and
+    applies a power-law attention temperature scaling with layer-dependent factors.
 
-        scale = √(head_dim) × S^α × (1 + β × (layer_idx / N))
-
-    where:
-        - head_dim: dimension of each attention head
-        - S: sequence length extension ratio = max(1, seq_len / L_0)
-        - α (alpha): exponent for scaling factor S
-        - β (beta): layer-dependent scaling coefficient
-        - layer_idx: 0-based index of this attention layer
-        - N: total number of transformer layers
-
-    In static mode the scalar is baked into the cos/sin cache at construction.
-    In dynamic mode it is recomputed on every forward pass.
+    Attributes:
+        alpha (float): Exponent for scaling factor S.
+        beta (float): Layer-dependent scaling coefficient.
+        Inherits all attributes from LlamaFreqReciprocalRotaryEmbedding.
     """
 
     def __init__(
@@ -1664,18 +1564,16 @@ class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbeddin
         self.beta = beta
 
     def _compute_attn_scale(self, seq_len: int, device):
-        """
-        Compute power-law attention temperature scaling.
+        """Compute power-law attention temperature scaling.
 
-        The scaling factor combines position and depth factors:
-            S_t = 1 + 0.1 * log(t) * (1 + depth_factor)
+        Combines position and depth factors for attention temperature adjustment.
 
-        where:
-            - t: normalized position factor, max(1, pos / L_0)
-            - depth_factor: layer-aware factor, exp(layer_idx / N) / e
+        Args:
+            seq_len (int): Sequence length for scaling computation.
+            device: Device for tensor creation.
 
         Returns:
-            Tensor of shape (seq_len, 1) for broadcasting with cos/sin caches.
+            torch.Tensor: Tensor of shape (seq_len, 1) for broadcasting with cos/sin caches.
         """
         t = torch.maximum(
             torch.tensor(1.0, device=device),
@@ -1717,25 +1615,15 @@ class LlamaFreqReciprocalScaledRotaryEmbedding(LlamaFreqReciprocalRotaryEmbeddin
 class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
     LlamaFreqReciprocalRotaryEmbedding
 ):
-    """
-    Freq-Reciprocal Block RoPE + power-law attention temperature scaling, no layer index.
+    """Freq-Reciprocal Block RoPE with power-law attention temperature scaling (no layer index).
 
-    Inherits all position-encoding logic from
-    ``LlamaFreqReciprocalRotaryEmbedding`` and multiplies the resulting cos/sin
-    values by a power-law attention temperature:
+    Inherits position encoding from LlamaFreqReciprocalRotaryEmbedding and
+    applies a power-law attention temperature scaling without layer-dependent factors.
 
-        scale = √(head_dim) × S^α × (1 + β × (layer_idx / N))
-
-    where:
-        - head_dim: dimension of each attention head
-        - S: sequence length extension ratio = max(1, seq_len / L_0)
-        - α (alpha): exponent for scaling factor S
-        - β (beta): layer-dependent scaling coefficient
-        - layer_idx: 0-based index of this attention layer
-        - N: total number of transformer layers
-
-    In static mode the scalar is baked into the cos/sin cache at construction.
-    In dynamic mode it is recomputed on every forward pass.
+    Attributes:
+        alpha (float): Exponent for scaling factor S.
+        beta (float): Layer-dependent scaling coefficient (unused in this variant).
+        Inherits all attributes from LlamaFreqReciprocalRotaryEmbedding.
     """
 
     def __init__(
@@ -1767,18 +1655,14 @@ class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
         self.beta = beta
 
     def _compute_attn_scale(self, seq_len: int, device):
-        """
-        Compute power-law attention temperature scaling.
+        """Compute power-law attention temperature scaling without layer index.
 
-        The scaling factor combines position and depth factors:
-            S_t = 1 + 0.1 * log(t)
-
-        where:
-            - t: normalized position factor, max(1, pos / L_0)
-            - depth_factor: layer-aware factor, exp(layer_idx / N) / e
+        Args:
+            seq_len (int): Sequence length for scaling computation.
+            device: Device for tensor creation.
 
         Returns:
-            Tensor of shape (seq_len, 1) for broadcasting with cos/sin caches.
+            torch.Tensor: Tensor of shape (seq_len, 1) for broadcasting with cos/sin caches.
         """
         t = torch.maximum(
             torch.tensor(1.0, device=device),
@@ -1820,6 +1704,18 @@ class LlamaFreqReciprocalScaledNoLayerRotaryEmbedding(
 class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
     LlamaFreqReciprocalRotaryEmbedding
 ):
+    """Freq-Reciprocal Block RoPE with adaptive attention temperature scaling.
+
+    Inherits position encoding from LlamaFreqReciprocalRotaryEmbedding and
+    applies an adaptive attention temperature scaling that considers both
+    position and dimension compression factors.
+
+    Attributes:
+        alpha (float): Exponent for scaling factor S.
+        beta (float): Layer-dependent scaling coefficient.
+        Inherits all attributes from LlamaFreqReciprocalRotaryEmbedding.
+    """
+
     def __init__(
         self,
         dim: int,
@@ -1849,6 +1745,19 @@ class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
         self.beta = beta
 
     def _compute_attn_scale(self, seq_len: int, block_sizes: torch.Tensor, device):
+        """Compute adaptive attention temperature scaling.
+
+        Considers both position and dimension compression factors for adaptive
+        temperature adjustment based on sequence length and block sizes.
+
+        Args:
+            seq_len (int): Sequence length for scaling computation.
+            block_sizes (torch.Tensor): Per-dimension block sizes.
+            device: Device for tensor creation.
+
+        Returns:
+            torch.Tensor: Tensor of shape (seq_len, 1) for broadcasting with cos/sin caches.
+        """
         """
         t = torch.maximum(
             torch.tensor(1.0, device=device),
@@ -1864,34 +1773,34 @@ class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
         ) * math.log(max(1.0, seq_len / self.original_max_position_embeddings))
         S_t = torch.clamp(scale, min=1.0).unsqueeze(-1)
         """
-        # 获取位置索引 (从1开始，因为RoPE的position从1开始)
+        # Get position indices (starting from 1, as RoPE positions start from 1)
         t = torch.arange(seq_len, device=device, dtype=torch.float32) + 1.0
 
-        # 计算动态扩展比例 s(m)
+        # Compute dynamic extension ratio s(m)
         s = torch.clamp(t / self.original_max_position_embeddings, min=1.0)  # [seq_len]
 
-        # 基础温度项：继承YaRN的对数温度公式
+        # Base temperature term: inherits YaRN's logarithmic temperature formula
         # t_base = 0.1 * ln(s) + 1
         t_base = 1.0 + 0.15 * torch.log(s)  # [seq_len]
 
-        # 维度压缩补偿项：
-        # 当seq_len超过预训练长度时，考虑平均块大小的影响
+        # Dimension compression compensation term:
+        # When seq_len exceeds pre-training length, consider the impact of average block size
         if seq_len > self.original_max_position_embeddings:
-            # 计算平均压缩比例：block_sizes的平均值反映了位置编码的整体压缩程度
+            # Compute average compression ratio: the mean of block_sizes reflects the overall compression degree of position encoding
             s = seq_len / self.original_max_position_embeddings
             d_half = block_sizes.shape[0]
             block_mean = block_sizes.mean().item()
-            # 维度补偿项
+            # Dimension compensation term
             dim_compensation = 0.1 * math.log(block_mean)
             t_scale = t_base + dim_compensation
         else:
             t_scale = t_base
 
-        # 确保缩放因子至少为1
+        # Ensure scaling factor is at least 1
         t_scale = torch.clamp(t_scale, min=1.0)
 
-        # 缩放因子应用于cos和sin，需要开平方根
-        # 因为 cos(θ) * sqrt(t) 和 sin(θ) * sqrt(t) 会导致注意力分数放大 t 倍
+        # Scaling factor is applied to cos and sin
+        # Note: cos(θ) * t and sin(θ) * t will amplify attention scores by factor t
         return t_scale.unsqueeze(-1)  # [seq_len, 1]
 
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):

@@ -9,63 +9,57 @@ LLAMA_PRETRAINED_CONFIG_ARCHIVE_MAP = {}
 
 class LlamaConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`LlamaModel`]. It is used to instantiate an LLaMA
-    model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
-    defaults will yield a similar configuration to that of the LLaMA-7B.
+    Configuration class for storing the configuration of a LlamaModel.
 
-    Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
-    documentation from [`PretrainedConfig`] for more information.
+    This class is used to instantiate a LLaMA model according to the specified arguments,
+    defining the model architecture. Instantiating a configuration with the defaults will
+    yield a similar configuration to that of the LLaMA-7B.
 
-    Args:
-        vocab_size (`int`, *optional*, defaults to 32000):
-            Vocabulary size of the LLaMA model.
-        hidden_size (`int`, *optional*, defaults to 4096):
-            Dimension of the hidden representations.
-        intermediate_size (`int`, *optional*, defaults to 11008):
-            Dimension of the MLP representations.
-        num_hidden_layers (`int`, *optional*, defaults to 32):
-            Number of hidden layers in the Transformer encoder.
-        num_attention_heads (`int`, *optional*, defaults to 32):
-            Number of attention heads for each attention layer in the Transformer encoder.
-        num_key_value_heads (`int`, *optional*):
-            Number of key_value heads for Grouped Query Attention. Defaults to `num_attention_heads`.
-        pretraining_tp (`int`, *optional*, defaults to `1`):
-            Tensor parallelism rank used during pretraining.
-        hidden_act (`str` or `function`, *optional*, defaults to `"silu"`):
-            The non-linear activation function in the decoder.
-        max_position_embeddings (`int`, *optional*, defaults to 2048):
-            The maximum sequence length that this model might ever be used with.
-        initializer_range (`float`, *optional*, defaults to 0.02):
-            The standard deviation of the truncated_normal_initializer for initializing all weight matrices.
-        rms_norm_eps (`float`, *optional*, defaults to 1e-6):
-            The epsilon used by the rms normalization layers.
-        use_cache (`bool`, *optional*, defaults to `True`):
-            Whether or not the model should return the last key/values attentions.
-        tie_word_embeddings(`bool`, *optional*, defaults to `False`):
-            Whether to tie weight embeddings.
-        rope_scaling (`Dict`, *optional*):
-            Dictionary containing the scaling configuration for the RoPE embeddings.
+    Configuration objects inherit from PretrainedConfig and can be used to control the model
+    outputs. Read the documentation from PretrainedConfig for more information.
 
-            Supported types: ``"linear"``, ``"ntk"``, ``"part-ntk"``, ``"yarn"``,
-            ``"my-rope"``, ``"my-rope2"``, ``"block-layered"``,
-            ``"freq-smooth"``, ``"freq-smooth-scaled"``,
-            ``"freq-reciprocal"``, ``"freq-reciprocal-scaled"``, ``"freq-reciprocal-scaled-no-layer"``.
+    Attributes:
+        vocab_size (int, optional): Vocabulary size of the LLaMA model. Defaults to 32000.
+        hidden_size (int, optional): Dimension of the hidden representations. Defaults to 4096.
+        intermediate_size (int, optional): Dimension of the MLP representations. Defaults to 11008.
+        num_hidden_layers (int, optional): Number of hidden layers in the Transformer encoder.
+            Defaults to 32.
+        num_attention_heads (int, optional): Number of attention heads for each attention layer
+            in the Transformer encoder. Defaults to 32.
+        num_key_value_heads (int, optional): Number of key_value heads for Grouped Query Attention.
+            Defaults to num_attention_heads.
+        pretraining_tp (int, optional): Tensor parallelism rank used during pretraining.
+            Defaults to 1.
+        hidden_act (str or function, optional): The non-linear activation function in the decoder.
+            Defaults to "silu".
+        max_position_embeddings (int, optional): The maximum sequence length that this model might
+            ever be used with. Defaults to 2048.
+        initializer_range (float, optional): The standard deviation of the truncated_normal_initializer
+            for initializing all weight matrices. Defaults to 0.02.
+        rms_norm_eps (float, optional): The epsilon used by the rms normalization layers.
+            Defaults to 1e-6.
+        use_cache (bool, optional): Whether or not the model should return the last key/values
+            attentions. Defaults to True.
+        tie_word_embeddings (bool, optional): Whether to tie weight embeddings. Defaults to False.
+        rope_scaling (dict, optional): Dictionary containing the scaling configuration for the RoPE
+            embeddings. Supported types: "linear", "ntk", "part-ntk", "yarn", "my-rope",
+            "my-rope-scaled", "my-rope2", "my-rope2-scaled", "block-layered", "block-layered-scaled",
+            "freq-smooth", "freq-smooth-scaled", "freq-reciprocal", "freq-reciprocal-scaled",
+            "freq-reciprocal-scaled-no-layer", "freq-reciprocal-scaled-adaptive".
 
-            All six types support the same mutually exclusive ``"factor"`` /
-            ``"dynamic"`` interface:
+            All types support the same mutually exclusive "factor" / "dynamic" interface:
 
-            * ``"factor"`` (float > 1.0) — static mode: the scaling factor is fixed at
-              initialisation and frequencies are pre-cached up to
-              ``max_position_embeddings``.  Use when the target context length is known
-              ahead of time.
-            * ``"dynamic": true`` — dynamic mode: the effective scaling factor is computed
-              on every forward pass as ``max(1, seq_len / original_L)``, so the model
-              adapts automatically to any sequence length without reloading weights.
+            * "factor" (float > 1.0) - static mode: the scaling factor is fixed at initialisation
+              and frequencies are pre-cached up to max_position_embeddings. Use when the target
+              context length is known ahead of time.
+            * "dynamic": true - dynamic mode: the effective scaling factor is computed on every
+              forward pass as max(1, seq_len / original_L), so the model adapts automatically to
+              any sequence length without reloading weights.
 
-            If both ``"factor"`` and ``"dynamic"`` are supplied simultaneously,
-            ``"factor"`` takes priority and ``"dynamic"`` is ignored with a warning.
+            If both "factor" and "dynamic" are supplied simultaneously, "factor" takes priority
+            and "dynamic" is ignored with a warning.
 
-            Example (static YaRN, 4× extension)::
+            Example (static YaRN, 4x extension)::
 
                 rope_scaling = {"type": "yarn", "factor": 4.0}
 
@@ -73,10 +67,10 @@ class LlamaConfig(PretrainedConfig):
 
                 rope_scaling = {"type": "my-rope", "dynamic": True}
 
-        attention_bias (`bool`, *optional*, defaults to `False`):
-            Whether to use a bias in the query, key, value and output projection layers.
-        attention_dropout (`float`, *optional*, defaults to 0.0):
-            The dropout ratio for the attention probabilities.
+        attention_bias (bool, optional): Whether to use a bias in the query, key, value and output
+            projection layers. Defaults to False.
+        attention_dropout (float, optional): The dropout ratio for the attention probabilities.
+            Defaults to 0.0.
 
     Example::
 
@@ -146,41 +140,46 @@ class LlamaConfig(PretrainedConfig):
         )
 
     def _rope_scaling_validation(self):
-        """
-        Validate the ``rope_scaling`` configuration.
+        """Validate the rope_scaling configuration.
 
-        Valid ``type`` values
-        ---------------------
-        * ``"linear"``         — Position Interpolation (PI)
-        * ``"ntk"``            — NTK-aware scaling
-        * ``"part-ntk"``       — NTK-by-parts scaling
-        * ``"yarn"``           — YaRN
-        * ``"my-rope"``        — layer-aware custom RoPE
-        * ``"my-rope2"``       — multi-scale custom RoPE
-        * ``"block-layered"``  — Block-Layered RoPE
-        * ``"freq-smooth"``    — frequency smoothing RoPE
-        * ``"freq-smooth-scaled"`` — scaled frequency smoothing RoPE
-        * ``"freq-reciprocal"`` — reciprocal frequency RoPE
-        * ``"freq-reciprocal-scaled"`` — scaled reciprocal frequency RoPE
-        * ``"freq-reciprocal-scaled-no-layer"`` — scaled reciprocal frequency RoPE, no layer index
-        * ``"freq-reciprocal-scaled-adaptive"`` — scaled reciprocal frequency RoPE, adaptive scaling
+        Validates that the rope_scaling dictionary contains valid type and scaling mode
+        specifications. This method ensures that the RoPE scaling configuration follows
+        the expected format and constraints.
 
-        All seven types share the same ``"factor"`` / ``"dynamic"`` interface:
+        Valid type values:
+            - "linear": Position Interpolation (PI)
+            - "ntk": NTK-aware scaling
+            - "part-ntk": NTK-by-parts scaling
+            - "yarn": YaRN
+            - "my-rope": layer-aware custom RoPE
+            - "my-rope-scaled": scaled layer-aware custom RoPE
+            - "my-rope2": multi-scale custom RoPE
+            - "my-rope2-scaled": scaled multi-scale custom RoPE
+            - "block-layered": Block-Layered RoPE
+            - "block-layered-scaled": scaled Block-Layered RoPE
+            - "freq-smooth": frequency smoothing RoPE
+            - "freq-smooth-scaled": scaled frequency smoothing RoPE
+            - "freq-reciprocal": reciprocal frequency RoPE
+            - "freq-reciprocal-scaled": scaled reciprocal frequency RoPE
+            - "freq-reciprocal-scaled-no-layer": scaled reciprocal frequency RoPE, no layer index
+            - "freq-reciprocal-scaled-adaptive": scaled reciprocal frequency RoPE, adaptive scaling
 
-        * ``"factor"`` (float > 1.0) — static mode with a fixed scaling ratio.
-        * ``"dynamic": true``        — dynamic mode; ratio derived at runtime.
+        All types share the same "factor" / "dynamic" interface:
+            - "factor" (float > 1.0): static mode with a fixed scaling ratio.
+            - "dynamic": true: dynamic mode; ratio derived at runtime.
 
-        If both are supplied, ``"factor"`` wins and ``"dynamic"`` is dropped with
-        a warning.  At least one must be present.
+        If both are supplied, "factor" wins and "dynamic" is dropped with a warning.
+        At least one must be present.
 
-        Deprecated type strings
-        -----------------------
-        ``"dynamic-linear"``, ``"dynamic-ntk"``, ``"dynamic-part-ntk"``,
-        ``"dynamic-yarn"``, ``"dynamic-my-rope"``, ``"dynamic-my-rope2"``,
-        ``"dynamic-block-layered"``, ``"dynamic-freq-smooth"``,
-        ``"dynamic-freq-reciprocal"``, ``"dynamic-freq-reciprocal-scaled"``,
-        ``"dynamic-freq-reciprocal-scaled-no-layer"``,
-        are remapped to their base type with ``"dynamic": True``.
+        Deprecated type strings:
+            "dynamic-linear", "dynamic-ntk", "dynamic-part-ntk", "dynamic-yarn",
+            "dynamic-my-rope", "dynamic-my-rope-scaled", "dynamic-my-rope2",
+            "dynamic-my-rope2-scaled", "dynamic-block-layered",
+            "dynamic-block-layered-scaled", "dynamic-freq-smooth",
+            "dynamic-freq-smooth-scaled", "dynamic-freq-reciprocal",
+            "dynamic-freq-reciprocal-scaled", "dynamic-freq-reciprocal-scaled-no-layer",
+            "dynamic-freq-reciprocal-scaled-adaptive"
+            are remapped to their base type with "dynamic": True.
         """
         if self.rope_scaling is None:
             return
@@ -262,8 +261,8 @@ class LlamaConfig(PretrainedConfig):
             )
 
         # ------------------------------------------------------------------ #
-        # Mutual exclusivity: factor vs dynamic  (applies to all six types)  #
-        # Both present → factor wins; dynamic is stripped with a warning.    #
+        # Mutual exclusivity: factor vs dynamic (applies to all types)       #
+        # Both present -> factor wins; dynamic is stripped with a warning.   #
         # ------------------------------------------------------------------ #
         factor_present = rope_scaling_factor is not None
         dynamic_present = rope_scaling_dynamic is True

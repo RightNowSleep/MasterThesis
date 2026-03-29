@@ -1,8 +1,30 @@
+#!/bin/bash
+
+# =============================================================================
+# eval_harness.sh
+# -----------------------------------------------------------------------------
+# Purpose: Run lm-eval-harness evaluation for RoPE methods and fine-tuned adapters
+# -----------------------------------------------------------------------------
+# Description:
+#   This script performs a two-phase evaluation using lm-eval-harness:
+#   Phase 1: Evaluates base model with various dynamic RoPE methods
+#   Phase 2: Evaluates fine-tuned adapters trained with different RoPE methods
+# -----------------------------------------------------------------------------
+# Usage:
+#   bash eval_harness.sh
+# -----------------------------------------------------------------------------
+# Parameters: None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Output:
+#   Evaluation results saved to: results/harness/
+# =============================================================================
+
 PYTHONPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODEL_NAME="huggyllama/llama-7b"
 MAX_LENGTH=16384
 DTYPE="auto"
 
+# ── Evaluation Tasks Configuration ───────────────────────────────────────────
 TASKS="longbench2,arc_challenge,hellaswag,truthfulqa_mc1,mmlu"
 BATCH_SIZE=2
 OUTPUT_DIR="results/harness"
@@ -11,6 +33,7 @@ QUANT="--load-in-4bit"
 CUDA_DEVICES="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
+# ── RoPE Methods Configuration (Phase 1) ──────────────────────────────────────
 ROPE_METHODS=(
     "--rope-type none"
     "--rope-type linear --rope-dynamic"
@@ -21,6 +44,7 @@ ROPE_METHODS=(
     "--rope-type freq-reciprocal-scaled --rope-dynamic"
 )
 
+# ── Adapter Configuration (Phase 2) ───────────────────────────────────────────
 ADAPTER_DIR = "finetunes/continued_pretrain"
 ADAPTERS=(
     "none_20260315_003356"
@@ -45,6 +69,17 @@ echo "Adapter dir  : ${ADAPTER_DIR}"
 echo "Adapters     : ${#ADAPTERS[@]}"
 echo "=========================================="
 
+# -----------------------------------------------------------------------------
+# Function: run_eval
+# -----------------------------------------------------------------------------
+# Purpose: Execute lm-eval-harness evaluation with given arguments
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 - args: Additional command-line arguments (RoPE method or adapter path)
+# -----------------------------------------------------------------------------
+# Returns:
+#   0 on success, non-zero on failure
+# -----------------------------------------------------------------------------
 run_eval() {
     local args=$1
 
@@ -68,7 +103,7 @@ run_eval() {
     eval ${cmd}
 }
 
-# Phase 1: dynamic evaluation
+# ── Phase 1: Dynamic RoPE Evaluation ──────────────────────────────────────────
 echo ""
 echo "=========================================="
 echo "Phase 1: Dynamic evaluation"
@@ -78,7 +113,7 @@ for rope_method in "${ROPE_METHODS[@]}"; do
     run_eval "${rope_method}"
 done
 
-# Phase 2: fine-tuned adapters
+# ── Phase 2: Fine-tuned Adapter Evaluation ────────────────────────────────────
 if [ ${#ADAPTERS[@]} -gt 0 ]; then
     echo ""
     echo "=========================================="

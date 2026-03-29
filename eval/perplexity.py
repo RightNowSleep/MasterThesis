@@ -13,30 +13,33 @@ class PerplexityEvaluator:
     r"""
     Perplexity evaluator for computing language model perplexity on a given dataset.
 
-    Perplexity is an important metric for evaluating language model performance; lower values indicate better predictive capability.
-    This evaluator uses a sliding window approach to handle long texts, avoiding exceeding the model's maximum context length limit.
+    Perplexity is an important metric for evaluating language model performance;
+    lower values indicate better predictive capability. This evaluator uses a
+    sliding window approach to handle long texts, avoiding exceeding the model's
+    maximum context length limit.
 
-    Supports evaluating models at multiple different context lengths, e.g., 256, 512, 1024, 2048, 4096, 8192, etc.
+    Supports evaluating models at multiple different context lengths, e.g.,
+    256, 512, 1024, 2048, 4096, 8192, etc.
 
     Attributes:
-        model: Language model for computing perplexity
-        tokenizer: Tokenizer for processing text
-        dataset_path: Dataset path or name, default is "emozilla/proofpile-test-tokenized"
-        split: Dataset split, default is "test"
-        limit: Number of samples to evaluate, default is 100
-        device: Compute device (cuda/cpu)
-        add_start_token: Whether to add BOS token at the beginning of the sequence
-        max_length: Maximum sequence length
-        min_length: Minimum sequence length
-        length_step: Length step size; if None, uses exponential growth (multiply by 2 each time)
-        sliding_window: Sliding window size
-        truncate: Whether to truncate sequences exceeding max_length
-        aggressive_memory: Whether to enable aggressive memory management
-        max_tokenized_len: Maximum token length (considering BOS token)
-        dataset: Loaded dataset
-        length_list: List of lengths to evaluate
-        save_dir: Directory to save results, default is "results/perplexity"
-        save_file: Filename to save results, default is None
+        model: Language model for computing perplexity.
+        tokenizer: Tokenizer for processing text.
+        dataset_path: Dataset path or name, default is "emozilla/proofpile-test-tokenized".
+        split: Dataset split, default is "test".
+        limit: Number of samples to evaluate, default is 100.
+        device: Compute device (cuda/cpu).
+        add_start_token: Whether to add BOS token at the beginning of the sequence.
+        max_length: Maximum sequence length.
+        min_length: Minimum sequence length.
+        length_step: Length step size; if None, uses exponential growth (multiply by 2 each time).
+        sliding_window: Sliding window size.
+        truncate: Whether to truncate sequences exceeding max_length.
+        aggressive_memory: Whether to enable aggressive memory management.
+        max_tokenized_len: Maximum token length (considering BOS token).
+        dataset: Loaded dataset.
+        length_list: List of lengths to evaluate.
+        save_dir: Directory to save results, default is "results/perplexity".
+        save_file: Filename to save results, default is None.
     """
 
     def __init__(
@@ -61,32 +64,32 @@ class PerplexityEvaluator:
         Initialize the perplexity evaluator.
 
         Args:
-            model: Language model (required), pretrained model for computing perplexity
-            tokenizer: Tokenizer (required), tokenizer for processing text
-            dataset (str, optional): Dataset path or name, default is "emozilla/proofpile-test-tokenized"
-            split (str, optional): Dataset split, default is "test"
-            limit (int, optional): Number of samples to evaluate, default is 100
-            device (str, optional): Compute device, options are "gpu", "cpu", "cuda", default is None (auto-select)
-            add_start_token (bool, optional): Whether to add BOS token at sequence start, default is True
-                If set to True, the model must have a BOS token
-            max_length (int, optional): Maximum sequence length, default is 8192
-                Maximum context length for evaluation
-            min_length (int, optional): Minimum sequence length, default is 256
-                Minimum context length for evaluation
-            length_step (int, optional): Length step size, default is None
-                If set, grows at fixed step size (e.g., 256, 512, 768, 1024...)
-                If None, uses exponential growth (e.g., 256, 512, 1024, 2048...)
-            sliding_window (int, optional): Sliding window size, default is 256
-                Used for processing long texts; window size affects computational efficiency and memory usage
-            truncate (bool, optional): Whether to truncate sequences exceeding max_length, default is False
-                If set to True, parts exceeding max_length will be discarded
-            aggressive_memory (bool, optional): Whether to enable aggressive memory management, default is False
-                If set to True, memory is cleared after each window processing, reducing memory usage but potentially slowing down
-            save_dir (str, optional): Directory to save results, default is "results/perplexity"
-            save_file (str, optional): Filename to save results, default is None
+            model: Language model (required), pretrained model for computing perplexity.
+            tokenizer: Tokenizer (required), tokenizer for processing text.
+            dataset: Dataset path or name, default is "emozilla/proofpile-test-tokenized".
+            split: Dataset split, default is "test".
+            limit: Number of samples to evaluate, default is 100.
+            device: Compute device, options are "gpu", "cpu", "cuda", default is None (auto-select).
+            add_start_token: Whether to add BOS token at sequence start, default is True.
+                If set to True, the model must have a BOS token.
+            max_length: Maximum sequence length, default is 8192.
+                Maximum context length for evaluation.
+            min_length: Minimum sequence length, default is 256.
+                Minimum context length for evaluation.
+            length_step: Length step size, default is None.
+                If set, grows at fixed step size (e.g., 256, 512, 768, 1024...).
+                If None, uses exponential growth (e.g., 256, 512, 1024, 2048...).
+            sliding_window: Sliding window size, default is 256.
+                Used for processing long texts; window size affects computational efficiency and memory usage.
+            truncate: Whether to truncate sequences exceeding max_length, default is False.
+                If set to True, parts exceeding max_length will be discarded.
+            aggressive_memory: Whether to enable aggressive memory management, default is False.
+                If set to True, memory is cleared after each window processing, reducing memory usage but potentially slowing down.
+            save_dir: Directory to save results, default is "results/perplexity".
+            save_file: Filename to save results, default is None.
 
         Raises:
-            AssertionError: Raised when add_start_token=True but model has no BOS token
+            AssertionError: Raised when add_start_token=True but model has no BOS token.
         """
         self.model = model.eval()
         self.tokenizer = tokenizer
@@ -138,11 +141,11 @@ class PerplexityEvaluator:
         r"""
         Generate a list of lengths for evaluating the model at different context lengths.
 
-        If length_step is not None, grows at fixed step size (e.g., 256, 512, 768, 1024...)
-        If length_step is None, uses exponential growth (e.g., 256, 512, 1024, 2048...)
+        If length_step is not None, grows at fixed step size (e.g., 256, 512, 768, 1024...).
+        If length_step is None, uses exponential growth (e.g., 256, 512, 1024, 2048...).
 
         Returns:
-            list: List of lengths, e.g., [256, 512, 1024, 2048, 4096, 8192]
+            List of lengths, e.g., [256, 512, 1024, 2048, 4096, 8192].
         """
         if self.length_step is not None:
             length_list = [
@@ -164,10 +167,10 @@ class PerplexityEvaluator:
         Compute perplexity at a specified length.
 
         Args:
-            max_length (int): Maximum sequence length
+            max_length: Maximum sequence length.
 
         Returns:
-            float: Average perplexity at the specified length
+            Average perplexity at the specified length.
         """
         encoded_texts = self.dataset["input_ids"]
         attn_masks = self.dataset["attention_mask"]
@@ -258,17 +261,17 @@ class PerplexityEvaluator:
         Sliding windows can handle long texts that exceed the model's maximum context length.
 
         Computation process:
-        1. Generate a list of lengths (e.g., 256, 512, 1024, 2048, 4096, 8192)
-        2. For each length, split texts in the dataset into multiple sliding windows
-        3. Compute negative log likelihood (NLL) for each window, weighted by token count
-        4. Accumulate weighted NLL across all windows and divide by total token count
-        5. Compute perplexity: exp(weighted_mean(NLL))
-        6. Return perplexity results at all lengths
+            1. Generate a list of lengths (e.g., 256, 512, 1024, 2048, 4096, 8192).
+            2. For each length, split texts in the dataset into multiple sliding windows.
+            3. Compute negative log likelihood (NLL) for each window, weighted by token count.
+            4. Accumulate weighted NLL across all windows and divide by total token count.
+            5. Compute perplexity: exp(weighted_mean(NLL)).
+            6. Return perplexity results at all lengths.
 
         Returns:
-            dict: Dictionary containing perplexity at all lengths
-                - lengths (list): List of evaluated lengths, e.g., [256, 512, 1024, 2048, 4096, 8192]
-                - perplexities (list): List of perplexities at corresponding lengths
+            Dictionary containing perplexity at all lengths.
+                lengths: List of evaluated lengths, e.g., [256, 512, 1024, 2048, 4096, 8192].
+                perplexities: List of perplexities at corresponding lengths.
 
         Example:
             >>> evaluator = PerplexityEvaluator(model, tokenizer, max_length=8192)
@@ -321,7 +324,7 @@ def generate_save_filename(model_name, config):
         config: The configuration object.
 
     Returns:
-        str: The filename.
+        The filename.
 
     Examples:
         --rope-type none                              → llama-7b_none.json

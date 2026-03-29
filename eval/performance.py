@@ -17,16 +17,16 @@ class PerformanceEvaluator:
     files for further analysis.
 
     Attributes:
-        model: Language model to evaluate
-        tokenizer: Tokenizer for processing text
-        device: Compute device (cuda/cpu)
-        min_length: Minimum input length (token count)
-        max_length: Maximum input length (token count)
-        length_step: Input length step size
-        length_list: List of lengths to test
-        model_memory: GPU memory occupied by model weights (GB)
-        save_dir: Directory to save results
-        save_file: Filename to save results
+        model: Language model to evaluate.
+        tokenizer: Tokenizer for processing text.
+        device: Compute device (cuda/cpu).
+        min_length: Minimum input length (token count).
+        max_length: Maximum input length (token count).
+        length_step: Input length step size.
+        length_list: List of lengths to test.
+        model_memory: GPU memory occupied by model weights (GB).
+        save_dir: Directory to save results.
+        save_file: Filename to save results.
     """
 
     def __init__(
@@ -44,15 +44,15 @@ class PerformanceEvaluator:
         Initialize the performance evaluator.
 
         Args:
-            model: Language model to evaluate
-            tokenizer: Tokenizer for processing text
-            device (str, optional): Compute device, options are "gpu", "cpu", "cuda";
-                default is None (auto-select)
-            min_length (int, optional): Minimum input length in tokens, default is 256
-            max_length (int, optional): Maximum input length in tokens, default is 8192
-            length_step (int, optional): Input length step size in tokens, default is 256
-            save_dir (str, optional): Directory to save results, default is "results/performance"
-            save_file (str, optional): Filename to save results, default is None (auto-generate)
+            model: Language model to evaluate.
+            tokenizer: Tokenizer for processing text.
+            device: Compute device, options are "gpu", "cpu", "cuda";
+                default is None (auto-select).
+            min_length: Minimum input length in tokens, default is 256.
+            max_length: Maximum input length in tokens, default is 8192.
+            length_step: Input length step size in tokens, default is 256.
+            save_dir: Directory to save results, default is "results/performance".
+            save_file: Filename to save results, default is None (auto-generate).
         """
         self.model = model.eval()
         self.tokenizer = tokenizer
@@ -96,7 +96,7 @@ class PerformanceEvaluator:
         incremented by step_length each time.
 
         Returns:
-            list: List of input lengths to test, e.g., [256, 512, 768, ...]
+            List of input lengths to test, e.g., [256, 512, 768, ...].
         """
         if self.length_step is not None:
             length_list = [
@@ -117,8 +117,8 @@ class PerformanceEvaluator:
         Get total GPU memory usage across all devices.
 
         Returns:
-            float: Total GPU memory allocated in GB across all devices,
-                   or 0 if CUDA is not available.
+            Total GPU memory allocated in GB across all devices,
+            or 0 if CUDA is not available.
         """
         if not torch.cuda.is_available():
             return 0
@@ -137,10 +137,10 @@ class PerformanceEvaluator:
         desired input length.
 
         Args:
-            length (int): Target token length
+            length: Target token length.
 
         Returns:
-            list: List of token IDs with exactly the specified length
+            List of token IDs with exactly the specified length.
         """
         sample_text = "The quick brown fox jumps over the lazy dog. "
         tokens = self.tokenizer.encode(sample_text, add_special_tokens=False)
@@ -167,8 +167,8 @@ class PerformanceEvaluator:
         Get peak GPU memory across all devices since the last reset.
 
         Returns:
-            float: Sum of peak memory allocated (GB) across all CUDA devices,
-                   or 0 if CUDA is not available.
+            Sum of peak memory allocated (GB) across all CUDA devices,
+            or 0 if CUDA is not available.
         """
         if not torch.cuda.is_available():
             return 0.0
@@ -204,13 +204,13 @@ class PerformanceEvaluator:
         peak activation) for a single forward pass with the given input length.
 
         Args:
-            input_length (int): Input sequence length in tokens
+            input_length: Input sequence length in tokens.
 
         Returns:
-            tuple: (runtime, memory_usage)
-                - runtime (float): Inference time in seconds
-                - memory_usage (float): Total GPU memory in GB
-                  (model weights + peak activation during forward pass)
+            A tuple of (runtime, memory_usage).
+                runtime: Inference time in seconds.
+                memory_usage: Total GPU memory in GB
+                    (model weights + peak activation during forward pass).
         """
         # Clear cache before each test for a clean baseline
         torch.cuda.empty_cache()
@@ -265,10 +265,10 @@ class PerformanceEvaluator:
         memory usage for each, and saves results to a JSON file.
 
         Returns:
-            dict: Evaluation results containing:
-                - lengths (list): List of input sequence lengths
-                - runtimes (list): List of inference times in seconds
-                - memory_usages (list): List of total GPU memory in GB
+            Evaluation results containing:
+                lengths: List of input sequence lengths.
+                runtimes: List of inference times in seconds.
+                memory_usages: List of total GPU memory in GB.
         """
         self._warmup()
 
@@ -329,7 +329,7 @@ def generate_save_filename(model_name, config):
         config: The configuration object.
 
     Returns:
-        str: The filename.
+        The filename.
 
     Examples:
         --rope-type none                              → llama-7b_none.json
@@ -356,10 +356,10 @@ def add_args_performance(parser):
     Add performance testing related arguments to argument parser.
 
     Args:
-        parser: ArgumentParser object to add arguments to
+        parser: ArgumentParser object to add arguments to.
 
     Returns:
-        ArgumentParser: Parser with added arguments
+        Parser with added arguments.
     """
     parser.add_argument(
         "--length-step",

@@ -9,31 +9,79 @@ layer_indices = np.arange(0, 32, 1)  # layer_idx = 0,1,...,31
 
 # Calculate three types of l_norm
 def log_func1(layer_idx):
+    """Calculate normalized layer index using logarithmic function with k=2.0.
+
+    Args:
+        layer_idx: The layer index to normalize.
+
+    Returns:
+        float: Normalized layer index value in range [0, 1].
+    """
     k = 2.0
     return math.log(1.0 + k * layer_idx) / math.log(1.0 + k * (N - 1))
 
 
 def log_func2(layer_idx):
+    """Calculate normalized layer index using logarithmic function with k=6.0.
+
+    Args:
+        layer_idx: The layer index to normalize.
+
+    Returns:
+        float: Normalized layer index value in range [0, 1].
+    """
     k = 6.0
     return math.log(1.0 + k * layer_idx) / math.log(1.0 + k * (N - 1))
 
 
 def exp_func1(layer_idx):
+    """Calculate normalized layer index using exponential function with tau=0.2.
+
+    Args:
+        layer_idx: The layer index to normalize.
+
+    Returns:
+        float: Normalized layer index value in range [0, 1].
+    """
     tau = 0.2
     return (math.exp(tau * layer_idx) - 1) / (math.exp(tau * (N - 1)) - 1)
 
 
 def exp_func2(layer_idx):
+    """Calculate normalized layer index using exponential function with tau=2.0.
+
+    Args:
+        layer_idx: The layer index to normalize.
+
+    Returns:
+        float: Normalized layer index value in range [0, 1].
+    """
     tau = 2.0
     return (math.exp(tau * layer_idx) - 1) / (math.exp(tau * (N - 1)) - 1)
 
 
 def sigmoid1(layer_idx):
+    """Calculate normalized layer index using sigmoid function with standard parameters.
+
+    Args:
+        layer_idx: The layer index to normalize.
+
+    Returns:
+        float: Normalized layer index value in range [0, 1].
+    """
     x = 20 * (layer_idx / 31) - 10
     return 1 / (1 + math.exp(-x))
 
 
 def sigmoid2(layer_idx):
+    """Calculate normalized layer index using shifted sigmoid function.
+
+    Args:
+        layer_idx: The layer index to normalize.
+
+    Returns:
+        float: Normalized layer index value in range [0, 1].
+    """
     x = 20 * (layer_idx / 31) - 10
     return 1 / (1 + math.exp(3 - x))
 

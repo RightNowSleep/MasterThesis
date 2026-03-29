@@ -30,6 +30,11 @@ ROPE_TYPE_TO_CLASS = {
 
 
 def parse_args():
+    """Parse command-line arguments for RoPE position heatmap visualization.
+
+    Returns:
+        argparse.Namespace: Parsed arguments containing visualization parameters.
+    """
     parser = argparse.ArgumentParser(
         description="RoPE Position Heatmap Visualization",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -125,7 +130,16 @@ def parse_args():
 
 
 def create_rope_model(method, args, device):
-    """Create a RoPE model based on method name and arguments."""
+    """Create a RoPE model instance based on method name and arguments.
+
+    Args:
+        method: RoPE method name (e.g., 'rope', 'linear', 'ntk').
+        args: Parsed arguments containing model configuration.
+        device: Torch device to place the model on.
+
+    Returns:
+        RoPE embedding model instance configured with the specified parameters.
+    """
     cls = ROPE_TYPE_TO_CLASS[method]
 
     if method == "rope":
@@ -167,7 +181,15 @@ def create_rope_model(method, args, device):
 
 
 def generate_title(method, args):
-    """Generate subplot title."""
+    """Generate a formatted subplot title for a RoPE method.
+
+    Args:
+        method: RoPE method name.
+        args: Parsed arguments containing scaling factor and dynamic flag.
+
+    Returns:
+        Formatted title string with method name and scaling information.
+    """
     name_map = {
         "rope": "Standard RoPE",
         "linear": "Linear Scaling (PI)",
@@ -194,9 +216,13 @@ def generate_title(method, args):
 
 
 def draw_original_length_box(ax, original_L, dim_half, fontsize=10):
-    """
-    Draw a dashed rectangle to highlight the original length region.
-    X-axis is dimension, Y-axis is position.
+    """Draw a dashed rectangle to highlight the original length region on heatmap.
+
+    Args:
+        ax: Matplotlib axes object to draw on.
+        original_L: Original maximum position embedding length.
+        dim_half: Half of the RoPE dimension (number of frequency pairs).
+        fontsize: Font size for the annotation text.
     """
     rect = plt.Rectangle(
         (0, 0),
@@ -233,6 +259,11 @@ def draw_original_length_box(ax, original_L, dim_half, fontsize=10):
 
 
 def main():
+    """Main function to generate and save RoPE position heatmaps.
+
+    Parses command-line arguments, creates RoPE models for each specified method,
+    generates frequency heatmaps, and saves them to the output directory.
+    """
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float32

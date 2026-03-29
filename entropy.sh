@@ -1,16 +1,38 @@
 #!/bin/bash
 
+# =============================================================================
+# entropy.sh
+# -----------------------------------------------------------------------------
+# Purpose: Run entropy evaluation pipeline for RoPE method analysis
+# -----------------------------------------------------------------------------
+# Description:
+#   This script performs a two-part evaluation pipeline:
+#   Part 1: Computes attention entropy metrics for different RoPE methods
+#   Part 2: Generates visualization plots from the computed entropy data
+# -----------------------------------------------------------------------------
+# Usage:
+#   bash entropy.sh
+# -----------------------------------------------------------------------------
+# Parameters: None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Output:
+#   - Entropy data saved to: results/entropy/
+#   - Visualization plots saved to: results/entropy/plots/
+# =============================================================================
+
 CUDA_DEVICES="1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 set -e
 
+# ── Path Configuration ───────────────────────────────────────────────────────
 PROJECT_ROOT="/home/linzhen/workspace/MasterThesis"
 ENTROPY_SCRIPT="$PROJECT_ROOT/eval/entropy.py"
 PLOT_SCRIPT="$PROJECT_ROOT/eval/plot_entropy.py"
 SAVE_DIR="$PROJECT_ROOT/results/entropy"
 PLOT_DIR="$PROJECT_ROOT/results/entropy/plots"
 
+# ── Evaluation Parameters ─────────────────────────────────────────────────────
 MAX_LENGTH=3072
 NUM_SAMPLES=100
 LOAD_4BIT="--load-in-4bit"
@@ -18,6 +40,7 @@ DATASET="emozilla/proofpile-test-tokenized"
 ROPE_METHODS=("linear" "ntk" "part-ntk" "freq-reciprocal")
 DYNAMIC="--rope-dynamic"
 
+# ── Pipeline Control Flags ────────────────────────────────────────────────────
 PART1=false
 PART2=true
 
@@ -34,6 +57,7 @@ echo "RoPE Methods: ${ROPE_METHODS[*]}"
 echo "Save Directory: $SAVE_DIR"
 echo "=========================================="
 
+# ── Part 1: Entropy Evaluation ────────────────────────────────────────────────
 if [ $PART1 = true ]; then
     echo ""
     echo "========== Part 1: Running Entropy Evaluation =========="
@@ -62,6 +86,7 @@ if [ $PART1 = true ]; then
     echo ""
 fi
 
+# ── Part 2: Plot Generation ───────────────────────────────────────────────────
 if [ $PART2 = true ]; then
     echo "========== Part 2: Generating Plots =========="
     echo ""

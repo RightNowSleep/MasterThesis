@@ -4,22 +4,26 @@ import numpy as np
 
 
 def calculate_block_sum(S, d=128, L=2048, base=10000):
-    """
-    计算所有维度上的块大小总和 sum(b_i)。
+    """Calculate the sum of block sizes across all dimensions sum(b_i).
 
-    严格按照 LlamaFreqReciprocalRotaryEmbedding._compute_block_sizes 的逻辑，
-    逐步计算每个维度的 b_i，不使用求和公式的优化形式。
+    Follows the exact logic of LlamaFreqReciprocalRotaryEmbedding._compute_block_sizes,
+    computing each dimension's b_i step by step without using the optimized summation formula.
+
+    Args:
+        S: Context extension ratio, should be greater than 1.0.
+        d: RoPE dimension size. Defaults to 128.
+        L: Original maximum position embedding length. Defaults to 2048.
+        base: RoPE base frequency. Defaults to 10000.
+
+    Returns:
+        Logarithm of the total sum of block sizes across all dimensions.
     """
     if S <= 1.0:
         return d // 2 * 1.0
 
-    N = d // 2  # 维度数量
+    N = d // 2
 
-    # 1. 计算临界索引 i*
-    # r_i = L * theta_i / (2pi)
-    # theta_i = base^(-2i/d)
-    # 找到第一个 r_i < 1 的索引
-    i_star = N  # 默认值，如果所有维度都需要插值
+    i_star = N
 
     for i in range(N):
         theta_i = base ** (-2.0 * i / d)
@@ -28,29 +32,23 @@ def calculate_block_sum(S, d=128, L=2048, base=10000):
             i_star = i
             break
 
-    # 2. 计算 1/θ_{i*}
     inv_theta_istar = base ** (2.0 * i_star / d)
 
-    # 3. 计算归一化常数 K
     denom = inv_theta_istar - 1.0
     if abs(denom) < 1e-8:
         K = 0.0
     else:
         K = (S - 1.0) / denom
 
-    # 4. 逐步求和计算
     total_sum = 0.0
 
     for i in range(N):
         if i < i_star:
-            # b_i = 1 + K * (1/θ_i - 1)
             inv_theta_i = base ** (2.0 * i / d)
             b_i = 1.0 + K * (inv_theta_i - 1.0)
         else:
-            # b_i = S
             b_i = S
 
-        # 进行 clamp 处理，确保在 [1, S] 范围内
         b_i = max(1.0, min(b_i, S))
 
         total_sum += b_i / N
@@ -58,11 +56,6 @@ def calculate_block_sum(S, d=128, L=2048, base=10000):
     return math.log(total_sum)
 
 
-# ==========================================
-# 绘图部分
-# ==========================================
-
-# 设置 S 的取值范围
 S_values = np.linspace(1.1, 32, 100)
 sums = []
 
@@ -70,14 +63,12 @@ for S in S_values:
     val = calculate_block_sum(S)
     sums.append(val)
 
-# 打印关键点的数值
 print(f"{'Extension Ratio (S)':<20} | {'Total Block Sum':<20}")
 print("-" * 45)
 for S in [2, 4, 8, 16, 32]:
     val = calculate_block_sum(S)
     print(f"{S:<20} | {val:.4f}")
 
-# 绘制曲线
 plt.figure(figsize=(10, 6))
 plt.plot(
     S_values,
@@ -89,7 +80,6 @@ plt.plot(
     label="Sum of Block Sizes",
 )
 
-# 标注关键点
 for S in [2, 4, 8, 16, 32]:
     val = calculate_block_sum(S)
     plt.scatter(S, val, color="red", zorder=5)

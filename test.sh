@@ -1,10 +1,32 @@
+#!/bin/bash
+
+# =============================================================================
+# test.sh
+# -----------------------------------------------------------------------------
+# Purpose: Run evaluation tests across all RoPE methods for long-context models
+# -----------------------------------------------------------------------------
+# Description:
+#   This script runs multiple evaluation types (perplexity, passkey, performance)
+#   on a LLaMA-7b model with various RoPE scaling methods. It uses dynamic
+#   scaling mode to allow the model to self-adapt across all sequence lengths.
+# -----------------------------------------------------------------------------
+# Usage:
+#   bash test.sh
+# -----------------------------------------------------------------------------
+# Parameters: None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Output:
+#   Evaluation results printed to console and saved to respective output files
+# =============================================================================
+
 export DISABLE_FLASH_ATTN=1
 CUDA_DEVICES="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
-# Model
+
+# ── Model Configuration ──────────────────────────────────────────────────────
 MODEL="--model-name huggyllama/llama-7b --load-in-4bit --min-length 2048 --max-length 65536"
 
-# RoPE method
+# ── RoPE Methods Configuration ───────────────────────────────────────────────
 # NOTE: --rope-factor and --rope-dynamic are mutually exclusive.
 #   --rope-dynamic only  → runtime scaling (s = seq_len / original_L), no fixed ratio
 #   --rope-factor F only → static scaling with a fixed ratio F > 1.0
@@ -19,7 +41,7 @@ ROPE_METHODS=(
     "--rope-type freq-reciprocal-scaled --rope-dynamic"
 )
 
-# Evaluation type
+# ── Test Types Configuration ─────────────────────────────────────────────────
 TEST_TYPES=(
     "perplexity"
     "passkey"
@@ -36,6 +58,18 @@ echo "Test types: ${TEST_TYPES[*]}"
 echo "RoPE methods: ${#ROPE_METHODS[@]}"
 echo "=========================================="
 
+# -----------------------------------------------------------------------------
+# Function: run_test
+# -----------------------------------------------------------------------------
+# Purpose: Execute a specific test type with a given RoPE method
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 - test_type: The type of test to run (perplexity, passkey, or performance)
+#   $2 - rope_method: The RoPE configuration string
+# -----------------------------------------------------------------------------
+# Returns:
+#   0 on success, non-zero on failure
+# -----------------------------------------------------------------------------
 run_test() {
     local test_type=$1
     local rope_method=$2

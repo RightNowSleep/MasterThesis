@@ -160,23 +160,32 @@ class QualityEvaluator:
     r"""
     MCQ quality evaluator for long-context models.
 
-    Supports two datasets
-    ---------------------
-    * **LongBench-v2** (``zai-org/LongBench-v2``) — default dataset, single split "train".
-    * **QuALITY** (``emozilla/quality``) — SCROLLS/QuALITY benchmark, splits "train"/"validation".
+    Supports two datasets:
+        * LongBench-v2 (zai-org/LongBench-v2): default dataset, single split "train".
+        * QuALITY (emozilla/quality): SCROLLS/QuALITY benchmark, splits "train"/"validation".
 
-    Scoring modes
-    -------------
-    * ``"logit"`` *(default)* — reads the raw next-token logit for each of the four
-      choice letters.  Robust against instruction-following failures; never produces
-      a parse error.  Not compatible with COT/RAG (those require text generation).
-    * ``"text"`` — generates up to 128 tokens and extracts the answer via regex.
-      Required for COT / RAG modes; prone to high parse-failure rates on base models.
+    Scoring modes:
+        * "logit" (default): reads the raw next-token logit for each of the four
+          choice letters. Robust against instruction-following failures; never produces
+          a parse error. Not compatible with COT/RAG (those require text generation).
+        * "text": generates up to 128 tokens and extracts the answer via regex.
+          Required for COT / RAG modes; prone to high parse-failure rates on base models.
 
-    Attributes
-    ----------
-    model, tokenizer, dataset_name, subset, split, limit, max_length,
-    aggressive_memory, cot, no_context, rag, scoring_mode, save_dir, save_file
+    Attributes:
+        model: The language model to evaluate.
+        tokenizer: The tokenizer for processing text.
+        dataset_name: Name of the dataset to use.
+        subset: Subset of the dataset to use.
+        split: Split of the dataset to use.
+        limit: Number of examples to evaluate.
+        max_length: Maximum length of the input sequence.
+        aggressive_memory: Whether to use aggressive memory management.
+        cot: Whether to use Chain-of-Thought mode.
+        no_context: Whether to evaluate without the long context.
+        rag: Number of retrieved chunks to use.
+        scoring_mode: The scoring mode to use ("logit" or "text").
+        save_dir: Directory to save the results.
+        save_file: Filename to save the results to.
     """
 
     def __init__(
@@ -298,10 +307,10 @@ class QualityEvaluator:
 
     def _get_choice_tokens(self) -> list:
         """
-        Get the choice letters ('A choice letters ('A'/'B'/'C'/'D').
+        Get the token IDs for the choice letters ('A'/'B'/'C'/'D').
 
         Returns:
-            choice_tokens: The token IDs for the choice letters ('A'/'B'/'C'/'D').
+            The token IDs for the choice letters ('A'/'B'/'C'/'D').
         """
         return [self.tokenizer.encode(c, add_special_tokens=False)[0] for c in CHOICES]
 
@@ -338,13 +347,14 @@ class QualityEvaluator:
         """
         Get the correct answer letter ('A'/'B'/'C'/'D') for a sample.
 
+        LongBench-v2 stores the answer as a letter string already.
+        QuALITY stores the answer as an integer index 0-3.
+
         Args:
             sample: The sample from the dataset.
 
         Returns:
-            answer_label: The correct answer letter ('A'/'B'/'C'/'D').
-        LongBench-v2 stores the answer as a letter string already.
-        QuALITY stores the answer as an integer index 0-3.
+            The correct answer letter ('A'/'B'/'C'/'D').
         """
         if self.dataset_type == "quality":
             return CHOICES[int(sample["answer"])]
@@ -395,12 +405,11 @@ class QualityEvaluator:
             sample: The sample from the dataset.
 
         Returns:
-            dict: A dictionary with the model's prediction, correctness, and response.
-                - prediction: The model's prediction ('A'/'B'/'C'/'D').
-                - correct: Whether the model's prediction is correct.
-                - parse_failed: Whether the model's response failed to be parsed.
-                - response: The model's response, formatted as "[logit] A={v:.2f} B={v:.2f} C={v:.2f} D={v:.2f}]"
-                    - False otherwise.
+            A dictionary with the model's prediction, correctness, and response.
+                prediction: The model's prediction ('A'/'B'/'C'/'D').
+                correct: Whether the model's prediction is correct.
+                parse_failed: Whether the model's response failed to be parsed.
+                response: The model's response, formatted as "[logit] A={v:.2f} B={v:.2f} C={v:.2f} D={v:.2f}".
         """
         prompt = self._prepare_logit_prompt(sample)
 
@@ -446,10 +455,10 @@ class QualityEvaluator:
 
         Args:
             sample: The sample from the dataset.
-            cot_response: The COT response to use for the prompt, if None otherwise.
+            cot_response: The COT response to use for the prompt, if available.
 
         Returns:
-            str: The prompt prompt string.
+            The prompt string.
         """
         prompt_type = "0shot_cot_ans" if cot_response else self.prompt_type
 
@@ -530,13 +539,12 @@ class QualityEvaluator:
             sample: The sample from the dataset.
 
         Returns:
-            dict: A dictionary with the model's prediction, correctness, and response.
-                - prediction: The model's prediction ('A'/'B'/'C'/'D').
-                - correct: Whether the model's prediction is correct.
-                - parse_failed: Whether the model's response failed to be parsed.
-                - response: The model's response, formatted as "The correct answer is (A-D)".
-                - response_cot: The model's response, formatted as "The correct answer is (A-D)".
-                    - None otherwise.
+            A dictionary with the model's prediction, correctness, and response.
+                prediction: The model's prediction ('A'/'B'/'C'/'D').
+                correct: Whether the model's prediction is correct.
+                parse_failed: Whether the model's response failed to be parsed.
+                response: The model's response, formatted as "The correct answer is (A-D)".
+                response_cot: The model's COT response, if available.
         """
         prompt = self._prepare_text_prompt(sample)
         cot_response = None
@@ -586,13 +594,12 @@ class QualityEvaluator:
             sample: The sample from the dataset.
 
         Returns:
-            dict: A dictionary with the model's prediction, correctness, and response.
-                - prediction: The model's prediction ('A'/'B'/'C'/'D').
-                - correct: Whether the model's prediction is correct.
-                - parse_failed: Whether the model's response failed to be parsed.
-                - response: The model's response, formatted as "The correct answer is (A-D)".
-                - response_cot: The model's response, formatted as "The correct answer is (A-D)".
-                    - None otherwise.
+            A dictionary with the model's prediction, correctness, and response.
+                prediction: The model's prediction ('A'/'B'/'C'/'D').
+                correct: Whether the model's prediction is correct.
+                parse_failed: Whether the model's response failed to be parsed.
+                response: The model's response, formatted as "The correct answer is (A-D)".
+                response_cot: The model's COT response, if available.
         """
         if self.scoring_mode == "logit":
             return self._evaluate_logit(sample)
@@ -603,10 +610,8 @@ class QualityEvaluator:
         r"""
         Run the full evaluation over the loaded dataset.
 
-        Returns
-        -------
-        dict
-            summary dict with keys: accuracy, correct_count, total_samples,
+        Returns:
+            Summary dict with keys: accuracy, correct_count, total_samples,
             wrong_count, parse_fail_count, skip_count.
         """
         correct_count = 0
@@ -700,14 +705,14 @@ class QualityEvaluator:
 
 def generate_save_filename(model_name, config) -> str:
     """
-    Generate the filename filename for saving the evaluation results.
+    Generate the filename for saving the evaluation results.
 
     Args:
         model_name: The name of the model.
         config: The configuration object.
 
     Returns:
-        str: The filename.
+        The filename.
     """
     model_name = model_name.split("/")[-1]
     rope_scaling = config.rope_scaling

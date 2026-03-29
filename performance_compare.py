@@ -41,6 +41,11 @@ bars2 = ax.bar(
 
 # Add data labels
 def add_labels(bars):
+    """Add value labels on top of each bar in the chart.
+
+    Args:
+        bars: A collection of bar objects from matplotlib bar chart.
+    """
     for bar in bars:
         height = bar.get_height()
         ax.annotate(
