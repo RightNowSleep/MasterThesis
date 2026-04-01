@@ -67,7 +67,8 @@ ROPE_METHODS=(
     # "--rope-type yarn --rope-factor $ROPE_FACTOR"
     # "--rope-type freq-reciprocal --rope-factor $ROPE_FACTOR"
     # "--rope-type freq-reciprocal-scaled --rope-factor $ROPE_FACTOR"
-    "--rope-type freq-reciprocal-scaled-no-layer --rope-factor $ROPE_FACTOR"
+    # "--rope-type freq-reciprocal-scaled-no-layer --rope-factor $ROPE_FACTOR"
+    "--rope-type dual-rope --rope-factor $ROPE_FACTOR"
 )
 
 # ── Build Shared Argument String ─────────────────────────────────────────────

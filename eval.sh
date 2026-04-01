@@ -31,7 +31,7 @@ export DISABLE_FLASH_ATTN=1
 export USE_FLASH_ATTN=0
 export HF_ALLOW_CODE_EVAL=1
 
-CUDA_DEVICES="0,1,2,3"
+CUDA_DEVICES="1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 # ── Model Configuration ──────────────────────────────────────────────────────
@@ -41,12 +41,12 @@ QUANT="--load-in-4bit"
 
 MAX_LENGTH=65536
 MIN_LENGTH=2048
-BATCH_SIZE=2
+BATCH_SIZE=1
 OUTPUT_DIR="results"
 
 # ── Evaluation Mode Flags ────────────────────────────────────────────────────
-ROPE=false
-ADAPTER=true
+ROPE=true
+ADAPTER=false
 ADAPTER_DIR="finetunes/continued_pretrain"
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
@@ -59,19 +59,21 @@ ROPE_METHODS=(
     # "--rope-type freq-reciprocal --rope-dynamic"
     # "--rope-type freq-reciprocal-scaled --rope-dynamic"
     # "--rope-type freq-reciprocal-scaled-no-layer --rope-dynamic"
-    "--rope-type freq-reciprocal-scaled-adaptive --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled-adaptive --rope-dynamic"
+    "--rope-type dual-rope --rope-dynamic"
+    # "--rope-type dual-rope-scaled --rope-dynamic"
 )
 
 # ── Adapter Paths Configuration ──────────────────────────────────────────────
 ADAPTER_PATHS=(
+    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
+    "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
+    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
+    "--adapter-path ${ADAPTER_DIR}/part-ntk_20260315_233845"
     "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
     "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
     "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
-    "--adapter-path ${ADAPTER_DIR}/part-ntk_20260315_233845"
-    "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
-    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
     "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
-    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
 )
 
 # ── Build Methods List ───────────────────────────────────────────────────────
@@ -84,10 +86,10 @@ if [ $ADAPTER = true ]; then
 fi
 
 # ── Evaluation Type Flags ────────────────────────────────────────────────────
-PERPLEXITY=false
+PERPLEXITY=true
 PERFORMANCE=false
 PASSKEY=false
-EVAL_HARNESS=true
+EVAL_HARNESS=false
 
 # ── Evaluation Arguments ─────────────────────────────────────────────────────
 PERPLEXITY_ARGS="--dataset-name emozilla/proofpile-test-tokenized \

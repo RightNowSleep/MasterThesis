@@ -1,0 +1,4 @@
+- [x] pe_llama.py 中维度计算正确
+- [x] model_loader.py 添加 dual-rope 和 dual-rope-scaled 类型
+- [x] modeling_llama.py 添加双重RoPE初始化逻辑
+- [x] 可以通过 --rope-type dual-rope 加载模型

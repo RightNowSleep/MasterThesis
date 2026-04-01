@@ -1,0 +1,660 @@
+{
+  "args": {
+    "model_name": "huggyllama/llama-7b",
+    "adapter_path": null,
+    "device": null,
+    "dtype": "auto",
+    "load_in_8bit": false,
+    "load_in_4bit": true,
+    "use_cache": false,
+    "gradient_checkpointing": false,
+    "max_length": 65536,
+    "min_length": 2048,
+    "rope_type": "freq-reciprocal-scaled-adaptive",
+    "rope_factor": null,
+    "rope_dynamic": true,
+    "search_method": "adaptive",
+    "attn_scale_base_min": 0.8,
+    "attn_scale_base_max": 1.5,
+    "attn_scale_base_steps": 8,
+    "attn_scale_coef_min": 0.05,
+    "attn_scale_coef_max": 0.2,
+    "attn_scale_coef_steps": 8,
+    "random_samples": 30,
+    "bayesian_iterations": 40,
+    "adaptive_stages": 3,
+    "adaptive_refinement_factor": 0.3,
+    "eval_length": 65536,
+    "eval_dataset": "emozilla/proofpile-test-tokenized",
+    "eval_split": "test",
+    "eval_limit": 100,
+    "output_dir": "results/param_search",
+    "resume": null
+  },
+  "results": [
+    {
+      "attn_scale_base": 0.6499999761581421,
+      "attn_scale_coef": 0.02500000037252903,
+      "perplexity": 431.3602600097656,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.6499999761581421,
+      "attn_scale_coef": 0.04642856866121292,
+      "perplexity": 428.9767761230469,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.6499999761581421,
+      "attn_scale_coef": 0.06785713881254196,
+      "perplexity": 425.6423034667969,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.6499999761581421,
+      "attn_scale_coef": 0.089285708963871,
+      "perplexity": 420.463623046875,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.6499999761581421,
+      "attn_scale_coef": 0.11071428656578064,
+      "perplexity": 415.2129211425781,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.6499999761581421,
+      "attn_scale_coef": 0.13214285671710968,
+      "perplexity": 405.28692626953125,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.6499999761581421,
+      "attn_scale_coef": 0.15357142686843872,
+      "perplexity": 396.5224914550781,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.6499999761581421,
+      "attn_scale_coef": 0.17499999701976776,
+      "perplexity": 386.7922058105469,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.75,
+      "attn_scale_coef": 0.02500000037252903,
+      "perplexity": 417.22198486328125,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.75,
+      "attn_scale_coef": 0.04642856866121292,
+      "perplexity": 411.8766174316406,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.75,
+      "attn_scale_coef": 0.06785713881254196,
+      "perplexity": 405.1209411621094,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.75,
+      "attn_scale_coef": 0.089285708963871,
+      "perplexity": 395.7682189941406,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.75,
+      "attn_scale_coef": 0.11071428656578064,
+      "perplexity": 380.70733642578125,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.75,
+      "attn_scale_coef": 0.13214285671710968,
+      "perplexity": 366.0964660644531,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.75,
+      "attn_scale_coef": 0.15357142686843872,
+      "perplexity": 354.1448974609375,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.75,
+      "attn_scale_coef": 0.17499999701976776,
+      "perplexity": 344.3435974121094,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.8500000238418579,
+      "attn_scale_coef": 0.02500000037252903,
+      "perplexity": 119.44852447509766,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.8500000238418579,
+      "attn_scale_coef": 0.04642856866121292,
+      "perplexity": 112.89132690429688,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.8500000238418579,
+      "attn_scale_coef": 0.06785713881254196,
+      "perplexity": 105.48983764648438,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.8500000238418579,
+      "attn_scale_coef": 0.089285708963871,
+      "perplexity": 97.39486694335938,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.8500000238418579,
+      "attn_scale_coef": 0.11071428656578064,
+      "perplexity": 89.02361297607422,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.8500000238418579,
+      "attn_scale_coef": 0.13214285671710968,
+      "perplexity": 80.98123931884766,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.8500000238418579,
+      "attn_scale_coef": 0.15357142686843872,
+      "perplexity": 73.86653900146484,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.8500000238418579,
+      "attn_scale_coef": 0.17499999701976776,
+      "perplexity": 68.13700103759766,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.949999988079071,
+      "attn_scale_coef": 0.02500000037252903,
+      "perplexity": 29.39141082763672,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.949999988079071,
+      "attn_scale_coef": 0.04642856866121292,
+      "perplexity": 24.870851516723633,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.949999988079071,
+      "attn_scale_coef": 0.06785713881254196,
+      "perplexity": 21.068761825561523,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.949999988079071,
+      "attn_scale_coef": 0.089285708963871,
+      "perplexity": 18.341951370239258,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.949999988079071,
+      "attn_scale_coef": 0.11071428656578064,
+      "perplexity": 16.243301391601562,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.949999988079071,
+      "attn_scale_coef": 0.13214285671710968,
+      "perplexity": 14.835881233215332,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.949999988079071,
+      "attn_scale_coef": 0.15357142686843872,
+      "perplexity": 14.070489883422852,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 0.949999988079071,
+      "attn_scale_coef": 0.17499999701976776,
+      "perplexity": 13.816539764404297,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.0499999523162842,
+      "attn_scale_coef": 0.02500000037252903,
+      "perplexity": 9.478877067565918,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.0499999523162842,
+      "attn_scale_coef": 0.04642856866121292,
+      "perplexity": 7.131332874298096,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.0499999523162842,
+      "attn_scale_coef": 0.06785713881254196,
+      "perplexity": 6.0434417724609375,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.0499999523162842,
+      "attn_scale_coef": 0.089285708963871,
+      "perplexity": 5.6330413818359375,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.0499999523162842,
+      "attn_scale_coef": 0.11071428656578064,
+      "perplexity": 5.651268005371094,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.0499999523162842,
+      "attn_scale_coef": 0.13214285671710968,
+      "perplexity": 6.265105247497559,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.0499999523162842,
+      "attn_scale_coef": 0.15357142686843872,
+      "perplexity": 7.832310676574707,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.0499999523162842,
+      "attn_scale_coef": 0.17499999701976776,
+      "perplexity": 9.884793281555176,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.149999976158142,
+      "attn_scale_coef": 0.02500000037252903,
+      "perplexity": 4.076574325561523,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.149999976158142,
+      "attn_scale_coef": 0.04642856866121292,
+      "perplexity": 3.7293145656585693,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.149999976158142,
+      "attn_scale_coef": 0.06785713881254196,
+      "perplexity": 3.6135761737823486,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.149999976158142,
+      "attn_scale_coef": 0.089285708963871,
+      "perplexity": 3.6590795516967773,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.149999976158142,
+      "attn_scale_coef": 0.11071428656578064,
+      "perplexity": 4.005217552185059,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.149999976158142,
+      "attn_scale_coef": 0.13214285671710968,
+      "perplexity": 5.2425127029418945,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.149999976158142,
+      "attn_scale_coef": 0.15357142686843872,
+      "perplexity": 8.309551239013672,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.149999976158142,
+      "attn_scale_coef": 0.17499999701976776,
+      "perplexity": 11.9978609085083,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.25,
+      "attn_scale_coef": 0.02500000037252903,
+      "perplexity": 3.5504508018493652,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.25,
+      "attn_scale_coef": 0.04642856866121292,
+      "perplexity": 3.4631004333496094,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.25,
+      "attn_scale_coef": 0.06785713881254196,
+      "perplexity": 3.4615318775177,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.25,
+      "attn_scale_coef": 0.089285708963871,
+      "perplexity": 3.601809024810791,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.25,
+      "attn_scale_coef": 0.11071428656578064,
+      "perplexity": 4.305953025817871,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.25,
+      "attn_scale_coef": 0.13214285671710968,
+      "perplexity": 6.629087924957275,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.25,
+      "attn_scale_coef": 0.15357142686843872,
+      "perplexity": 10.579205513000488,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.25,
+      "attn_scale_coef": 0.17499999701976776,
+      "perplexity": 14.27975845336914,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.350000023841858,
+      "attn_scale_coef": 0.02500000037252903,
+      "perplexity": 3.7557923793792725,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.350000023841858,
+      "attn_scale_coef": 0.04642856866121292,
+      "perplexity": 3.7607197761535645,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.350000023841858,
+      "attn_scale_coef": 0.06785713881254196,
+      "perplexity": 3.885213613510132,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.350000023841858,
+      "attn_scale_coef": 0.089285708963871,
+      "perplexity": 4.396417140960693,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.350000023841858,
+      "attn_scale_coef": 0.11071428656578064,
+      "perplexity": 6.294618606567383,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.350000023841858,
+      "attn_scale_coef": 0.13214285671710968,
+      "perplexity": 9.59152603149414,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.350000023841858,
+      "attn_scale_coef": 0.15357142686843872,
+      "perplexity": 12.858807563781738,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.350000023841858,
+      "attn_scale_coef": 0.17499999701976776,
+      "perplexity": 16.163619995117188,
+      "status": "success",
+      "stage": 1
+    },
+    {
+      "attn_scale_base": 1.1449999809265137,
+      "attn_scale_coef": 0.04535713791847229,
+      "perplexity": 3.7855653762817383,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.1449999809265137,
+      "attn_scale_coef": 0.06035713851451874,
+      "perplexity": 3.66913104057312,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.1449999809265137,
+      "attn_scale_coef": 0.07535713911056519,
+      "perplexity": 3.639777183532715,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.1449999809265137,
+      "attn_scale_coef": 0.09035713970661163,
+      "perplexity": 3.6927852630615234,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.215000033378601,
+      "attn_scale_coef": 0.04535713791847229,
+      "perplexity": 3.4745912551879883,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.215000033378601,
+      "attn_scale_coef": 0.06035713851451874,
+      "perplexity": 3.4381515979766846,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.215000033378601,
+      "attn_scale_coef": 0.07535713911056519,
+      "perplexity": 3.4544692039489746,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.215000033378601,
+      "attn_scale_coef": 0.09035713970661163,
+      "perplexity": 3.5488779544830322,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.284999966621399,
+      "attn_scale_coef": 0.04535713791847229,
+      "perplexity": 3.5151877403259277,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.284999966621399,
+      "attn_scale_coef": 0.06035713851451874,
+      "perplexity": 3.5229599475860596,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.284999966621399,
+      "attn_scale_coef": 0.07535713911056519,
+      "perplexity": 3.585800886154175,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.284999966621399,
+      "attn_scale_coef": 0.09035713970661163,
+      "perplexity": 3.777674913406372,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.3550000190734863,
+      "attn_scale_coef": 0.04535713791847229,
+      "perplexity": 3.7863898277282715,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.3550000190734863,
+      "attn_scale_coef": 0.06035713851451874,
+      "perplexity": 3.857276678085327,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.3550000190734863,
+      "attn_scale_coef": 0.07535713911056519,
+      "perplexity": 4.029946327209473,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.3550000190734863,
+      "attn_scale_coef": 0.09035713970661163,
+      "perplexity": 4.527270793914795,
+      "status": "success",
+      "stage": 2
+    },
+    {
+      "attn_scale_base": 1.183500051498413,
+      "attn_scale_coef": 0.053607139736413956,
+      "perplexity": 3.5093026161193848,
+      "status": "success",
+      "stage": 3
+    },
+    {
+      "attn_scale_base": 1.183500051498413,
+      "attn_scale_coef": 0.06035713851451874,
+      "perplexity": 3.4890811443328857,
+      "status": "success",
+      "stage": 3
+    },
+    {
+      "attn_scale_base": 1.183500051498413,
+      "attn_scale_coef": 0.06710714101791382,
+      "perplexity": 3.4805986881256104,
+      "status": "success",
+      "stage": 3
+    },
+    {
+      "attn_scale_base": 1.215000033378601,
+      "attn_scale_coef": 0.053607139736413956,
+      "perplexity": 3.448702335357666,
+      "status": "success",
+      "stage": 3
+    },
+    {
+      "attn_scale_base": 1.215000033378601,
+      "attn_scale_coef": 0.06710714101791382,
+      "perplexity": 3.438619613647461,
+      "status": "success",
+      "stage": 3
+    },
+    {
+      "attn_scale_base": 1.246500015258789,
+      "attn_scale_coef": 0.053607139736413956,
+      "perplexity": 3.4490389823913574,
+      "status": "success",
+      "stage": 3
+    },
+    {
+      "attn_scale_base": 1.246500015258789,
+      "attn_scale_coef": 0.06035713851451874,
+      "perplexity": 3.447211503982544,
+      "status": "success",
+      "stage": 3
+    },
+    {
+      "attn_scale_base": 1.246500015258789,
+      "attn_scale_coef": 0.06710714101791382,
+      "perplexity": 3.454871654510498,
+      "status": "success",
+      "stage": 3
+    }
+  ],
+  "best_result": {
+    "attn_scale_base": 1.215000033378601,
+    "attn_scale_coef": 0.06035713851451874,
+    "perplexity": 3.4381515979766846,
+    "status": "success",
+    "stage": 2
+  },
+  "timestamp": "20260331_071505"
+}

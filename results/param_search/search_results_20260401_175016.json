@@ -1,0 +1,752 @@
+{
+  "args": {
+    "model_name": "huggyllama/llama-7b",
+    "adapter_path": null,
+    "device": null,
+    "dtype": "auto",
+    "load_in_8bit": false,
+    "load_in_4bit": true,
+    "use_cache": false,
+    "gradient_checkpointing": false,
+    "max_length": 65536,
+    "min_length": 2048,
+    "rope_type": "freq-reciprocal-scaled-adaptive",
+    "rope_factor": null,
+    "rope_dynamic": true,
+    "search_method": "bohb",
+    "attn_scale_coef_min": 0.01,
+    "attn_scale_coef_max": 0.3,
+    "attn_scale_coef_steps": 100,
+    "random_samples": 50,
+    "bayesian_iterations": 100,
+    "bohb_initial_samples": 25,
+    "bohb_iterations": 100,
+    "bohb_early_stop_factor": 3,
+    "adaptive_stages": 6,
+    "adaptive_refinement_factor": 0.3,
+    "eval_min_length": 4096,
+    "eval_max_length": 65536,
+    "eval_dataset": "emozilla/proofpile-test-tokenized",
+    "eval_split": "test",
+    "eval_limit": 50,
+    "output_dir": "results/param_search",
+    "resume": null
+  },
+  "results": [
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.163,
+      "perplexity": 23.977973261187152,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019784450531006,
+        3.688551187515259,
+        5.283495903015137,
+        19.468442916870117,
+        34.68992233276367
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.225,
+      "perplexity": 21.44533283479752,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019735336303711,
+        3.664736270904541,
+        4.985231876373291,
+        17.09902000427246,
+        31.045188903808594
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.261,
+      "perplexity": 20.181470378752678,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020012855529785,
+        3.6528420448303223,
+        4.851620674133301,
+        15.977802276611328,
+        29.191936492919922
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.057,
+      "perplexity": 28.860444007381318,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020210266113281,
+        3.737764835357666,
+        6.210483551025391,
+        24.446491241455078,
+        41.422760009765625
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.261,
+      "perplexity": 20.181470378752678,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020012855529785,
+        3.6528420448303223,
+        4.851620674133301,
+        15.977802276611328,
+        29.191936492919922
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.103,
+      "perplexity": 26.654632568359375,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019889831542969,
+        3.71530818939209,
+        5.7200608253479,
+        22.187541961669922,
+        38.403907775878906
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.122,
+      "perplexity": 25.783876926668228,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019790172576904,
+        3.7065110206604004,
+        5.560947895050049,
+        21.29108238220215,
+        37.2059326171875
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.285,
+      "perplexity": 19.44875226482268,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.02017068862915,
+        3.645380973815918,
+        4.767208099365234,
+        15.34604263305664,
+        28.110200881958008
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.02,
+      "perplexity": 30.73884804018082,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020438194274902,
+        3.756082057952881,
+        6.690444469451904,
+        26.351133346557617,
+        43.987552642822266
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.056,
+      "perplexity": 28.910348507665816,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020180702209473,
+        3.738172769546509,
+        6.223240852355957,
+        24.49295997619629,
+        41.492977142333984
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.274,
+      "perplexity": 19.776349252270112,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020086288452148,
+        3.6487345695495605,
+        4.805298805236816,
+        15.628883361816406,
+        28.593563079833984
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.24,
+      "perplexity": 20.89408565336658,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019882678985596,
+        3.659607410430908,
+        4.9276299476623535,
+        16.606721878051758,
+        30.23832893371582
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.121,
+      "perplexity": 25.827807949435325,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019781589508057,
+        3.7069919109344482,
+        5.569056034088135,
+        21.338985443115234,
+        37.265010833740234
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.129,
+      "perplexity": 25.467482797561154,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019783020019531,
+        3.703310251235962,
+        5.507658958435059,
+        20.967653274536133,
+        36.76835632324219
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.29,
+      "perplexity": 19.301882851508356,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020055770874023,
+        3.643864870071411,
+        4.749944686889648,
+        15.21802043914795,
+        27.8941650390625
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.242,
+      "perplexity": 20.824231270820864,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019890785217285,
+        3.658946990966797,
+        4.9201979637146,
+        16.543338775634766,
+        30.13661766052246
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.271,
+      "perplexity": 19.867789437693936,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020058631896973,
+        3.649635076522827,
+        4.816077709197998,
+        15.709906578063965,
+        28.7274112701416
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.102,
+      "perplexity": 26.69924875997728,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019974708557129,
+        3.71584153175354,
+        5.729298114776611,
+        22.23670196533203,
+        38.4633903503418
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.158,
+      "perplexity": 24.195498481873543,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019746780395508,
+        3.6906402111053467,
+        5.314472675323486,
+        19.68287467956543,
+        34.996158599853516
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.052,
+      "perplexity": 29.108462856661887,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.0201239585876465,
+        3.7401440143585205,
+        6.275222301483154,
+        24.700454711914062,
+        41.75983810424805
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.1,
+      "perplexity": 26.792695522308346,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019908428192139,
+        3.7167744636535645,
+        5.748924732208252,
+        22.329111099243164,
+        38.59321975708008
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.056,
+      "perplexity": 28.910348507665816,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020180702209473,
+        3.738172769546509,
+        6.223240852355957,
+        24.49295997619629,
+        41.492977142333984
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.049,
+      "perplexity": 29.259297509347235,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.020241737365723,
+        3.7416861057281494,
+        6.311794757843018,
+        24.850183486938477,
+        41.967872619628906
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.264,
+      "perplexity": 20.083599798140988,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019968509674072,
+        3.6518871784210205,
+        4.840674877166748,
+        15.897144317626953,
+        29.045499801635742
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.107,
+      "perplexity": 26.467530619713564,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.019811153411865,
+        3.713392972946167,
+        5.684736251831055,
+        21.99727439880371,
+        38.145606994628906
+      ],
+      "status": "success",
+      "fidelity": "low"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.29,
+      "perplexity": 12.40815867147138,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.573164939880371,
+        4.090888023376465,
+        4.928199291229248,
+        10.870929718017578,
+        16.576108932495117
+      ],
+      "status": "success",
+      "fidelity": "high"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.285,
+      "perplexity": 12.495224183605563,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.5732421875,
+        4.092099189758301,
+        4.9449357986450195,
+        10.955159187316895,
+        16.69834327697754
+      ],
+      "status": "success",
+      "fidelity": "high"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.274,
+      "perplexity": 12.687083521196918,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.573233604431152,
+        4.09486722946167,
+        4.982307434082031,
+        11.139442443847656,
+        16.96824073791504
+      ],
+      "status": "success",
+      "fidelity": "high"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.271,
+      "perplexity": 12.7392518443446,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.57321834564209,
+        4.095628261566162,
+        4.992833137512207,
+        11.190330505371094,
+        17.041147232055664
+      ],
+      "status": "success",
+      "fidelity": "high"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.264,
+      "perplexity": 12.865257540056781,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.573158264160156,
+        4.0974249839782715,
+        5.018533229827881,
+        11.311539649963379,
+        17.218032836914062
+      ],
+      "status": "success",
+      "fidelity": "high"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.261,
+      "perplexity": 12.921786846653108,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.57316255569458,
+        4.098217964172363,
+        5.030157089233398,
+        11.364072799682617,
+        17.29828643798828
+      ],
+      "status": "success",
+      "fidelity": "high"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.261,
+      "perplexity": 12.921786846653108,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.57316255569458,
+        4.098217964172363,
+        5.030157089233398,
+        11.364072799682617,
+        17.29828643798828
+      ],
+      "status": "success",
+      "fidelity": "high"
+    },
+    {
+      "attn_scale_base": 1.0,
+      "attn_scale_coef": 0.242,
+      "perplexity": 13.286095942220381,
+      "lengths": [
+        4096,
+        8192,
+        16384,
+        32768,
+        65536
+      ],
+      "perplexities": [
+        4.57314920425415,
+        4.103315830230713,
+        5.105954647064209,
+        11.716938018798828,
+        17.808116912841797
+      ],
+      "status": "success",
+      "fidelity": "high"
+    }
+  ],
+  "best_result": {
+    "attn_scale_base": 1.0,
+    "attn_scale_coef": 0.29,
+    "perplexity": 12.40815867147138,
+    "lengths": [
+      4096,
+      8192,
+      16384,
+      32768,
+      65536
+    ],
+    "perplexities": [
+      4.573164939880371,
+      4.090888023376465,
+      4.928199291229248,
+      10.870929718017578,
+      16.576108932495117
+    ],
+    "status": "success",
+    "fidelity": "high"
+  },
+  "timestamp": "20260401_175016"
+}
