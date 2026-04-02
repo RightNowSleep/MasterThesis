@@ -660,6 +660,26 @@ class LlamaAttention(nn.Module):
                 dynamic=dynamic,
             )
 
+        elif scaling_type == "inverse-dual-rope":
+            self.rotary_emb = LlamaInverseDualRoPEEmbedding(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                dynamic=dynamic,
+            )
+
+        elif scaling_type == "inverse-dual-rope-scaled":
+            self.rotary_emb = LlamaInverseDualRoPEScaledEmbedding(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                dynamic=dynamic,
+            )
+
         else:
             raise ValueError(
                 f"Unknown RoPE scaling type '{scaling_type}'. "
@@ -669,7 +689,8 @@ class LlamaAttention(nn.Module):
                 "freq-smooth, freq-smooth-scaled, "
                 "freq-reciprocal, freq-reciprocal-scaled, "
                 "freq-reciprocal-scaled-no-layer, freq-reciprocal-scaled-adaptive, "
-                "dual-rope, dual-rope-scaled."
+                "dual-rope, dual-rope-scaled, "
+                "inverse-dual-rope, inverse-dual-rope-scaled."
             )
 
     # ------------------------------------------------------------------ #

@@ -450,21 +450,41 @@ def add_args_entropy(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
 
 def generate_save_filename(args) -> str:
     """
-    Generate filename based on model and RoPE configuration.
+    Generate filename based on model, adapter, and RoPE configuration.
 
     Args:
-        args: Arguments object with model_name, rope_type, rope_factor, and rope_dynamic.
+        args: Arguments object with model_name, adapter_path (optional), rope_type,
+              rope_factor, and rope_dynamic.
 
     Returns:
-        Filename string (e.g., 'llama-7b_none.json', 'llama-7b_linear_dynamic.json').
+        Filename string. Examples:
+            - Adapter-only: 'llama-7b_adapter_dual-rope_20260402_113443.json'
+            - RoPE-only: 'llama-7b_linear_dynamic.json'
+            - Adapter+RoPE: 'llama-7b_adapter_dual-rope_20260402_113443_linear_dynamic.json'
+            - No adapter or RoPE: 'llama-7b_none.json'
     """
     model_name = args.model_name.split("/")[-1]
-    parts = [model_name, args.rope_type]
-    if args.rope_type != "none":
-        if args.rope_factor is not None:
-            parts.append(f"factor{str(args.rope_factor).replace('.', '_')}")
-        elif args.rope_dynamic:
+    parts = [model_name]
+
+    if hasattr(args, "adapter_path") and args.adapter_path:
+        adapter_id = os.path.basename(args.adapter_path.rstrip("/"))
+        parts.append("adapter")
+        parts.append(adapter_id)
+
+    rope_type = getattr(args, "rope_type", "none")
+    if rope_type != "none":
+        parts.append(rope_type)
+        rope_factor = getattr(args, "rope_factor", None)
+        rope_dynamic = getattr(args, "rope_dynamic", False)
+
+        if rope_factor is not None:
+            parts.append(f"factor{str(rope_factor).replace('.', '_')}")
+        elif rope_dynamic:
             parts.append("dynamic")
+    else:
+        if not (hasattr(args, "adapter_path") and args.adapter_path):
+            parts.append("none")
+
     return "_".join(parts) + ".json"
 
 

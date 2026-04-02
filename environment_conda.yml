@@ -1,0 +1,10 @@
+name: LLMs
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - mpi4py
+  - gxx_linux-64=11.2.0
+  - flask
+  - flask-cors
+  - openmpi

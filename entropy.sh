@@ -20,28 +20,53 @@
 #   - Visualization plots saved to: results/entropy/plots/
 # =============================================================================
 
-CUDA_DEVICES="1,2,3"
+CUDA_DEVICES="0,1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 set -e
 
 # ── Path Configuration ───────────────────────────────────────────────────────
-PROJECT_ROOT="/home/linzhen/workspace/MasterThesis"
-ENTROPY_SCRIPT="$PROJECT_ROOT/eval/entropy.py"
-PLOT_SCRIPT="$PROJECT_ROOT/eval/plot_entropy.py"
-SAVE_DIR="$PROJECT_ROOT/results/entropy"
-PLOT_DIR="$PROJECT_ROOT/results/entropy/plots"
+ENTROPY_SCRIPT="eval/entropy.py"
+PLOT_SCRIPT="eval/plot_entropy.py"
+SAVE_DIR="results/entropy"
+PLOT_DIR="results/entropy/plots"
 
 # ── Evaluation Parameters ─────────────────────────────────────────────────────
 MAX_LENGTH=3072
 NUM_SAMPLES=100
 LOAD_4BIT="--load-in-4bit"
 DATASET="emozilla/proofpile-test-tokenized"
-ROPE_METHODS=("linear" "ntk" "part-ntk" "freq-reciprocal")
-DYNAMIC="--rope-dynamic"
+
+# ── Evaluation Mode Flags ─────────────────────────────────────────────────────
+ROPE=false
+ADAPTER=true
+ADAPTER_DIR="finetunes/continued_pretrain"
+
+# ── RoPE Methods Configuration ───────────────────────────────────────────────
+ROPE_METHODS=(
+    # "--rope-type linear --rope-dynamic"
+    # "--rope-type ntk --rope-dynamic"
+    # "--rope-type part-ntk --rope-dynamic"
+    # "--rope-type freq-reciprocal --rope-dynamic"
+    "--rope-type dual-rope --rope-dynamic"
+)
+
+# ── Adapter Paths Configuration ──────────────────────────────────────────────
+ADAPTER_PATHS=(
+    "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
+)
+
+# ── Build Methods List ───────────────────────────────────────────────────────
+METHODS=()
+if [ $ROPE = true ]; then
+    METHODS+=("${ROPE_METHODS[@]}")
+fi
+if [ $ADAPTER = true ]; then
+    METHODS+=("${ADAPTER_PATHS[@]}")
+fi
 
 # ── Pipeline Control Flags ────────────────────────────────────────────────────
-PART1=false
+PART1=true
 PART2=true
 
 mkdir -p "$SAVE_DIR"
@@ -53,7 +78,9 @@ echo "=========================================="
 echo "Max Length: $MAX_LENGTH"
 echo "Num Samples: $NUM_SAMPLES"
 echo "4-bit Quantization: $LOAD_4BIT"
-echo "RoPE Methods: ${ROPE_METHODS[*]}"
+echo "Methods: ${#METHODS[@]}"
+echo "ROPE: ${ROPE}"
+echo "ADAPTER: ${ADAPTER}"
 echo "Save Directory: $SAVE_DIR"
 echo "=========================================="
 
@@ -63,15 +90,14 @@ if [ $PART1 = true ]; then
     echo "========== Part 1: Running Entropy Evaluation =========="
     echo ""
 
-    for method in "${ROPE_METHODS[@]}"; do
+    for method in "${METHODS[@]}"; do
         echo "--------------------------------------------------"
-        echo "Processing RoPE method: $method"
+        echo "Processing method: $method"
         echo "--------------------------------------------------"
         
         python "$ENTROPY_SCRIPT" \
             --model-name "huggyllama/llama-7b" \
-            --rope-type "$method" \
-            $DYNAMIC \
+            $method \
             --max-length "$MAX_LENGTH" \
             $LOAD_4BIT \
             --num-samples "$NUM_SAMPLES" \

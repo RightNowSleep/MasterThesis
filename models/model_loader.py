@@ -29,6 +29,8 @@ _ROPE_TYPES_WITH_DYNAMIC_FLAG = {
     "freq-reciprocal-scaled-adaptive",
     "dual-rope",
     "dual-rope-scaled",
+    "inverse-dual-rope",
+    "inverse-dual-rope-scaled",
 }
 _ROPE_TYPE_NONE = "none"
 
@@ -356,6 +358,8 @@ def add_args_model(parser):
             "  freq-reciprocal-scaled-adaptive — Freq-Reciprocal RoPE + adaptive attention temperature\n"
             "  dual-rope               — Dual RoPE (position only)\n"
             "  dual-rope-scaled        — Dual RoPE + attention temperature\n"
+            "  inverse-dual-rope          — Inverse-Dual RoPE (position only)\n"
+            "  inverse-dual-rope-scaled    — Inverse-Dual RoPE + attention temperature\n"
             "\n"
             "All types except 'none' require exactly ONE of:\n"
             "  --rope-factor F   static scaling with fixed ratio F > 1.0\n"

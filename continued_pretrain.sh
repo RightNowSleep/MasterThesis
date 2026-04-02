@@ -21,16 +21,16 @@
 
 # ── Model Configuration ──────────────────────────────────────────────────────
 MODEL_NAME="huggyllama/llama-7b"
-MAX_LENGTH=16384
+MAX_LENGTH=4096
 DTYPE="bfloat16"
-ROPE_FACTOR=8.0
+ROPE_FACTOR=1.0
 
 # ── Training Hyperparameters ─────────────────────────────────────────────────
-BATCH_SIZE=1
+BATCH_SIZE=2
 GRADIENT_ACCUMULATE_EVERY=2
 MAX_TRAIN_STEPS=400
 WARMUP_STEPS=40
-LEARNING_RATE=2e-4
+LEARNING_RATE=2e-2
 WEIGHT_DECAY=0.01
 GRAD_NORM=1.0
 LR_SCHEDULE="cosine"
@@ -53,6 +53,11 @@ export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 OUTPUT_DIR="finetunes/continued_pretrain"
 WANDB=""                # Set to a WandB project name to enable, e.g. "my-project"
+
+# ── Progressive Length Training ──────────────────────────────────────────────
+# Enable progressive length training for gradual context extension.
+# When enabled, training goes through [2048, 4096, 8192, ..., MAX_LENGTH]
+PROGRESSIVE_LENGTH=false
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
 # NOTE: --rope-factor and --rope-dynamic are mutually exclusive.
@@ -97,6 +102,10 @@ if [ -n "$WANDB" ]; then
     BASE_ARGS="$BASE_ARGS --wandb $WANDB"
 fi
 
+if [ "$PROGRESSIVE_LENGTH" = true ]; then
+    BASE_ARGS="$BASE_ARGS --progressive-length"
+fi
+
 echo "=========================================="
 echo "Running Continued Pretraining"
 echo "=========================================="
@@ -106,6 +115,7 @@ echo "Steps      : $MAX_TRAIN_STEPS  (warmup: $WARMUP_STEPS)"
 echo "LR         : $LEARNING_RATE  (schedule: $LR_SCHEDULE)"
 echo "Quantization: $QUANTIZATION  |  LoRA r=$LORA_R / alpha=$LORA_ALPHA"
 echo "RoPE methods: ${#ROPE_METHODS[@]}"
+echo "Progressive : $PROGRESSIVE_LENGTH"
 echo "Output dir : $OUTPUT_DIR"
 echo "=========================================="
 

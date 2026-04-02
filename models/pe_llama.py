@@ -29,6 +29,9 @@ __all__ = [
     # Dual RoPE family
     "LlamaDualRoPEEmbedding",
     "LlamaDualRoPEScaledEmbedding",
+    # Inverse Dual RoPE family
+    "LlamaInverseDualRoPEEmbedding",
+    "LlamaInverseDualRoPEScaledEmbedding",
 ]
 
 # ================================================================================== #
@@ -1862,14 +1865,14 @@ class LlamaFreqReciprocalScaledAdaptiveRotaryEmbedding(
 #  Dual RoPE Family                                                                  #
 #                                                                                    #
 #  A novel dual-position encoding approach:                                          #
-#  - First half dimensions: position index = t % S (modulo operation)               #
-#  - Second half dimensions: position index = t // S (integer division)             #
+#  - First half dimensions: position index = t % S (modulo operation)                #
+#  - Second half dimensions: position index = t // S (integer division)              #
 #                                                                                    #
-#  Key design: inv_freq remains complete (size = dim // 2), only position           #
+#  Key design: inv_freq remains complete (size = dim // 2), only position            #
 #  indices are split into two parts.                                                 #
 #                                                                                    #
-#  LlamaDualRoPEEmbedding         (Dual RoPE, position only)                        #
-#  LlamaDualRoPEScaledEmbedding   (Dual RoPE + attention temperature)               #
+#  LlamaDualRoPEEmbedding         (Dual RoPE, position only)                         #
+#  LlamaDualRoPEScaledEmbedding   (Dual RoPE + attention temperature)                #
 # ================================================================================== #
 
 
@@ -1917,6 +1920,7 @@ class LlamaDualRoPEEmbedding(nn.Module):
         self.max_position_embeddings = max_position_embeddings
         self.base = base
         self.scaling_factor = max(1.0, scaling_factor)
+        self.S = max(self.scaling_factor, original_max_position_embeddings)
         self.original_max_position_embeddings = original_max_position_embeddings
         self.dynamic = dynamic
 
@@ -1942,7 +1946,7 @@ class LlamaDualRoPEEmbedding(nn.Module):
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
         self.max_seq_len_cached = seq_len
 
-        S = self.scaling_factor
+        S = self.S
         t = torch.arange(seq_len, device=device, dtype=torch.float32)
 
         pos_1 = t % S
@@ -1971,7 +1975,8 @@ class LlamaDualRoPEEmbedding(nn.Module):
             seq_len = x.shape[2]
 
         if self.dynamic:
-            S = max(1.0, seq_len / self.original_max_position_embeddings)
+            scaling_factor = max(1.0, seq_len / self.original_max_position_embeddings)
+            S = max(scaling_factor, self.original_max_position_embeddings)
             t = torch.arange(seq_len, device=device, dtype=torch.float32)
 
             pos_1 = t % S
@@ -2005,8 +2010,11 @@ class LlamaDualRoPEScaledEmbedding(LlamaDualRoPEEmbedding):
     Inherits the dual-position encoding from LlamaDualRoPEEmbedding and
     adds adaptive attention temperature scaling for better long-context handling.
 
+    The attention scaling uses the formula: max(1.0, log_{L0}(t))
+    where L0 is the original_max_position_embeddings and t is the position index.
+    This is the entropy-based scaling formula that does not distinguish between dimensions.
+
     Attributes:
-        attn_scale_coef (float): Coefficient for attention temperature scaling.
         Inherits all attributes from LlamaDualRoPEEmbedding.
     """
 
@@ -2021,7 +2029,6 @@ class LlamaDualRoPEScaledEmbedding(LlamaDualRoPEEmbedding):
         dynamic: bool = False,
         attn_scale_coef: float = 0.1,
     ):
-        self.attn_scale_coef = attn_scale_coef
         super().__init__(
             dim=dim,
             max_position_embeddings=max_position_embeddings,
@@ -2032,43 +2039,36 @@ class LlamaDualRoPEScaledEmbedding(LlamaDualRoPEEmbedding):
             dynamic=dynamic,
         )
 
-    def _compute_attn_scale(self, t_eff: torch.Tensor):
+    def _compute_attn_scale(self, seq_len: int, device):
         """
-        Compute adaptive attention temperature scaling.
+        Compute attention temperature scaling using entropy-based formula.
 
-        Uses the formula: mscale = 1 + α * max(0, (ln(t) - ln(L0)) / ln(L0))
-        This ensures temperature = 1.0 when t <= L0.
+        Uses the formula: mscale = max(1.0, log_{L0}(t))
+        where log_{L0}(t) = ln(t) / ln(L0).
+
+        This ensures temperature = 1.0 when t <= L0, and scales logarithmically
+        when t > L0. The scaling is applied uniformly across all dimensions.
 
         Args:
-            t_eff (torch.Tensor): Effective position tensor.
+            seq_len (int): Sequence length.
+            device: Device for tensor creation.
 
         Returns:
-            torch.Tensor: Temperature scaling factor.
+            torch.Tensor: Temperature scaling factor of shape [seq_len, 1].
         """
-        t_clipped = torch.clamp(t_eff, min=1.0)
-        log_t = torch.log(t_clipped)
+        t = torch.arange(seq_len, device=device, dtype=torch.float32) + 1.0
+        log_t = torch.log(t)
         log_L0 = math.log(self.original_max_position_embeddings)
-        normalized_log = (log_t - log_L0) / log_L0
-        clipped_log = torch.clamp(normalized_log, min=0.0)
-        mscale = 1.0 + self.attn_scale_coef * clipped_log
-        return mscale
+        mscale = torch.maximum(
+            torch.tensor(1.0, device=device),
+            log_t / log_L0,
+        )
+        return mscale.unsqueeze(-1)
 
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
         super()._set_cos_sin_cache(seq_len, device, dtype)
 
-        pos_1 = self.pos_1_cached
-        pos_2 = self.pos_2_cached
-
-        attn_scale_1 = self._compute_attn_scale(pos_1)
-        attn_scale_2 = self._compute_attn_scale(pos_2)
-
-        attn_scale_1_expanded = attn_scale_1.unsqueeze(1).expand(-1, self.i_star)
-        attn_scale_2_expanded = attn_scale_2.unsqueeze(1).expand(
-            -1, self.dim // 2 - self.i_star
-        )
-        attn_scale = torch.cat(
-            [attn_scale_1_expanded, attn_scale_2_expanded], dim=1
-        ).repeat(1, 2)
+        attn_scale = self._compute_attn_scale(seq_len, device)
 
         self.register_buffer(
             "cos_cached",
@@ -2086,7 +2086,8 @@ class LlamaDualRoPEScaledEmbedding(LlamaDualRoPEEmbedding):
             if seq_len is None:
                 seq_len = x.shape[2]
 
-            S = max(1.0, seq_len / self.original_max_position_embeddings)
+            scaling_factor = max(1.0, seq_len / self.original_max_position_embeddings)
+            S = max(scaling_factor, self.original_max_position_embeddings)
             t = torch.arange(seq_len, device=x.device, dtype=torch.float32)
             pos_1 = t % S
             pos_2 = t // S
@@ -2102,15 +2103,208 @@ class LlamaDualRoPEScaledEmbedding(LlamaDualRoPEEmbedding):
             cos = freqs.cos().repeat(1, 2)
             sin = freqs.sin().repeat(1, 2)
 
-            attn_scale_1 = self._compute_attn_scale(pos_1)
-            attn_scale_2 = self._compute_attn_scale(pos_2)
-            attn_scale_1_expanded = attn_scale_1.unsqueeze(1).expand(-1, self.i_star)
-            attn_scale_2_expanded = attn_scale_2.unsqueeze(1).expand(
-                -1, self.dim // 2 - self.i_star
-            )
-            attn_scale = torch.cat(
-                [attn_scale_1_expanded, attn_scale_2_expanded], dim=1
-            ).repeat(1, 2)
+            attn_scale = self._compute_attn_scale(seq_len, x.device)
 
             return (cos * attn_scale).to(x.dtype), (sin * attn_scale).to(x.dtype)
         return super().forward(x, seq_len)
+
+
+# ================================================================================== #
+#  Inverse Dual RoPE family                                                           #
+#                                                                                    #
+#  LlamaInverseDualRoPEEmbedding       (Inverse-Dual-RoPE, position only)             #
+#  LlamaInverseDualRoPEScaledEmbedding (Inverse-Dual-RoPE + attention temperature)    #
+# ================================================================================== #
+
+
+class LlamaInverseDualRoPEEmbedding(nn.Module):
+    """
+    Inverse Dual RoPE Embedding.
+
+    A novel inverse dual-position encoding approach that splits position indices into
+    two parts based on the critical dimension i_star, while keeping inv_freq complete.
+    This is the INVERSE of LlamaDualRoPEEmbedding — the high/low frequency operations
+    are swapped:
+
+    - inv_freq: complete, size = dim // 2 (e.g., [f_0, f_1, f_2, ..., f_{dim//2-1}])
+    - High-frequency dimensions (i < i_star): position index = t // L_0 (global, monotonic)
+    - Low-frequency dimensions (i >= i_star): position index = t % L_0 (local, cyclic)
+
+    The critical dimension i_star is computed as the number of dimensions that complete
+    at least one full rotation within the original context window:
+        r_i = L_0 * θ_i / (2π),  i_star = first index where r_i < 1
+
+    Key difference from Dual-RoPE: denominator uses L_0 (original context length),
+    not S (scaled context length).
+
+    Attributes:
+        dim (int): Dimension of the embedding (head dimension).
+        max_position_embeddings (int): Maximum sequence length for caching.
+        base (int): Base frequency for computing inverse frequencies.
+        scaling_factor (float): Scaling factor for position interpolation.
+        original_max_position_embeddings (int): Original context window size.
+        dynamic (bool): Whether to dynamically recompute frequencies.
+        i_star (int): Critical dimension index for splitting position indices.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        dynamic: bool = False,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+        self.scaling_factor = max(1.0, scaling_factor)
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.dynamic = dynamic
+
+        inv_freq = 1.0 / (
+            self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
+        )
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        r = original_max_position_embeddings * inv_freq / (2.0 * math.pi)
+        i_star = int((r >= 1.0).sum().item())
+        self.i_star = max(1, min(i_star, dim // 2 - 1))
+
+        self.register_buffer("inv_freq_1", inv_freq[: self.i_star], persistent=False)
+        self.register_buffer("inv_freq_2", inv_freq[self.i_star :], persistent=False)
+
+        self._set_cos_sin_cache(
+            seq_len=max_position_embeddings,
+            device=self.inv_freq.device,
+            dtype=torch.get_default_dtype(),
+        )
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        self.max_seq_len_cached = seq_len
+
+        L_0 = self.original_max_position_embeddings
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+
+        pos_1 = t // L_0
+        pos_2 = t % L_0
+
+        self.register_buffer("pos_1_cached", pos_1, persistent=False)
+        self.register_buffer("pos_2_cached", pos_2, persistent=False)
+
+        inv_freq_1 = self.inv_freq_1.to(device=device)
+        inv_freq_2 = self.inv_freq_2.to(device=device)
+
+        freqs_1 = pos_1[:, None] * inv_freq_1[None, :]
+        freqs_2 = pos_2[:, None] * inv_freq_2[None, :]
+
+        freqs = torch.cat([freqs_1, freqs_2], dim=-1)
+
+        cos = freqs.cos().repeat(1, 2)
+        sin = freqs.sin().repeat(1, 2)
+
+        self.register_buffer("cos_cached", cos.to(dtype), persistent=False)
+        self.register_buffer("sin_cached", sin.to(dtype), persistent=False)
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        device, dtype = x.device, x.dtype
+        if seq_len is None:
+            seq_len = x.shape[2]
+
+        if seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len=seq_len, device=device, dtype=dtype)
+        return (
+            self.cos_cached[:seq_len].to(dtype),
+            self.sin_cached[:seq_len].to(dtype),
+        )
+
+
+class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
+    """
+    Inverse Dual RoPE Embedding with attention temperature scaling.
+
+    Inherits the inverse dual-position encoding from LlamaInverseDualRoPEEmbedding and
+    adds adaptive attention temperature scaling for better long-context handling.
+
+    The attention scaling uses the formula: mscale = max(1.0, ln(t) / ln(L_0))
+    where L_0 is the original_max_position_embeddings and t is the position index.
+
+    Attributes:
+        Inherits all attributes from LlamaInverseDualRoPEEmbedding.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        dynamic: bool = False,
+    ):
+        super().__init__(
+            dim=dim,
+            max_position_embeddings=max_position_embeddings,
+            base=base,
+            device=device,
+            scaling_factor=scaling_factor,
+            original_max_position_embeddings=original_max_position_embeddings,
+            dynamic=dynamic,
+        )
+
+    def _compute_attn_scale(self, seq_len: int, device):
+        """
+        Compute attention temperature scaling using entropy-based formula.
+
+        Uses the formula: mscale = max(1.0, ln(t) / ln(L_0))
+        where L_0 is the original_max_position_embeddings.
+
+        This ensures temperature = 1.0 when t <= L_0, and scales logarithmically
+        when t > L_0. The scaling is applied uniformly across all dimensions.
+
+        Args:
+            seq_len (int): Sequence length.
+            device: Device for tensor creation.
+
+        Returns:
+            torch.Tensor: Temperature scaling factor of shape [seq_len, 1].
+        """
+        t = torch.arange(seq_len, device=device, dtype=torch.float32) + 1.0
+        log_t = torch.log(t)
+        log_L0 = math.log(self.original_max_position_embeddings)
+        mscale = torch.maximum(
+            torch.tensor(1.0, device=device),
+            log_t / log_L0,
+        )
+        return mscale.unsqueeze(-1)
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        super()._set_cos_sin_cache(seq_len, device, dtype)
+
+        attn_scale = self._compute_attn_scale(seq_len, device)
+
+        self.register_buffer(
+            "cos_cached",
+            (self.cos_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+        self.register_buffer(
+            "sin_cached",
+            (self.sin_cached * attn_scale).to(dtype),
+            persistent=False,
+        )
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        if seq_len is None:
+            seq_len = x.shape[2]
+
+        if seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
+        return (
+            self.cos_cached[:seq_len].to(x.dtype),
+            self.sin_cached[:seq_len].to(x.dtype),
+        )

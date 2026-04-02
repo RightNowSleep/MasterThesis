@@ -119,6 +119,8 @@ def save_checkpoint(
     max_checkpoints: int,
     args=None,
     tokenizer=None,
+    stage_idx=None,
+    stage_length=None,
 ):
     """Save a training checkpoint with model state and training configuration.
 
@@ -172,6 +174,9 @@ def save_checkpoint(
             "rope_type": args.rope_type,
             "rope_factor": args.rope_factor,
             "rope_dynamic": args.rope_dynamic,
+            "progressive_length": args.progressive_length,
+            "current_stage": stage_idx,
+            "stage_length": stage_length,
         }
         torch.save(training_state, os.path.join(checkpoint_path, "training_args.pt"))
 
@@ -187,6 +192,30 @@ def save_checkpoint(
             shutil.rmtree(os.path.join(output_dir, old))
             accelerator.print(f"Removed old checkpoint: {old}")
         accelerator.print(f"Checkpoint saved → {checkpoint_path}")
+
+
+def generate_progressive_lengths(max_length: int, original_length: int):
+    """
+    生成渐进式训练的长度序列。
+
+    从原始长度开始，每次翻倍，直到达到或超过 max_length。
+
+    Args:
+        max_length: 目标最大序列长度
+        original_length: 原始上下文窗口大小
+
+    Returns:
+        list: 长度序列列表，例如 [2048, 4096, 8192, 16384]
+    """
+    lengths = []
+    current = original_length
+    while current <= max_length:
+        lengths.append(current)
+        current *= 2
+    # 确保最后一个值是 max_length（如果它不是2的幂次倍数）
+    if lengths and lengths[-1] != max_length:
+        lengths[-1] = max_length
+    return lengths
 
 
 def main(args):
@@ -284,6 +313,20 @@ def main(args):
     # Save config snapshot
     if hasattr(model_config, "save_pretrained"):
         model_config.save_pretrained(model_dir)
+
+    # ------------------------------------------------------------------
+    # Progressive length training setup
+    # ------------------------------------------------------------------
+    if args.progressive_length:
+        original_length = model_config.original_max_position_embeddings
+        progressive_lengths = generate_progressive_lengths(
+            args.max_length, original_length
+        )
+        accelerator.print(f"\nProgressive length training enabled!")
+        accelerator.print(f"Length stages: {progressive_lengths}")
+        accelerator.print(f"Total stages: {len(progressive_lengths)}\n")
+    else:
+        progressive_lengths = [args.max_length]
 
     # ------------------------------------------------------------------
     # Gradient checkpointing (must happen before LoRA wrapping)
@@ -426,71 +469,120 @@ def main(args):
         model.train()
         epoch = start_epoch
 
-        while completed_steps < args.max_train_steps:
-            set_seed(args.seed + epoch)
+        for stage_idx, stage_length in enumerate(progressive_lengths):
+            current_max_length = stage_length
+            steps_per_stage = args.max_train_steps // len(progressive_lengths)
 
-            if resume_batch_skip > 0:
-                data_iter = accelerator.skip_first_batches(
-                    train_loader,
-                    resume_batch_skip,
-                )
-                resume_batch_skip = 0
-            else:
-                data_iter = train_loader
+            accelerator.print(f"\n{'='*60}")
+            accelerator.print(
+                f"Stage {stage_idx + 1}/{len(progressive_lengths)}: "
+                f"training with max_length={stage_length}"
+            )
+            accelerator.print(f"Steps for this stage: {steps_per_stage}")
+            accelerator.print(f"{'='*60}\n")
 
-            for batch in data_iter:
-                with accelerator.accumulate(model):
-                    outputs = model(**batch)
-                    loss = outputs.loss
-                    accelerator.backward(loss)
+            collate_fn = make_collate_fn(stage_length)
+
+            num_workers = min(
+                4, max(os.cpu_count() // max(accelerator.num_processes, 1), 1)
+            )
+            train_loader = DataLoader(
+                train_dataset,
+                collate_fn=collate_fn,
+                shuffle=True,
+                batch_size=args.batch_size,
+                pin_memory=True,
+                num_workers=num_workers,
+                drop_last=True,
+            )
+            train_loader = accelerator.prepare(train_loader)
+
+            stage_completed = 0
+
+            while (
+                stage_completed < steps_per_stage
+                and completed_steps < args.max_train_steps
+            ):
+                set_seed(args.seed + epoch)
+
+                if resume_batch_skip > 0:
+                    data_iter = accelerator.skip_first_batches(
+                        train_loader,
+                        resume_batch_skip,
+                    )
+                    resume_batch_skip = 0
+                else:
+                    data_iter = train_loader
+
+                for batch in data_iter:
+                    with accelerator.accumulate(model):
+                        outputs = model(**batch)
+                        loss = outputs.loss
+                        accelerator.backward(loss)
+
+                        if accelerator.sync_gradients:
+                            avg_loss = accelerator.gather(loss.detach()).mean().item()
+                            if args.grad_norm is not None and args.grad_norm > 0:
+                                accelerator.clip_grad_norm_(
+                                    model.parameters(),
+                                    args.grad_norm,
+                                )
+
+                        optim.step()
+                        scheduler.step()
+                        optim.zero_grad()
 
                     if accelerator.sync_gradients:
-                        avg_loss = accelerator.gather(loss.detach()).mean().item()
-                        if args.grad_norm is not None and args.grad_norm > 0:
-                            accelerator.clip_grad_norm_(
-                                model.parameters(),
-                                args.grad_norm,
+                        completed_steps += 1
+                        stage_completed += 1
+                        current_lr = scheduler.get_last_lr()[0]
+                        log_data = {"loss": avg_loss, "lr": current_lr}
+
+                        progress_bar.update(1)
+                        progress_bar.set_postfix(
+                            {
+                                **log_data,
+                                "stage": f"{stage_idx+1}/{len(progressive_lengths)}",
+                                "length": stage_length,
+                            }
+                        )
+                        accelerator.log(log_data, step=completed_steps)
+
+                        if accelerator.is_main_process:
+                            loss_file.write(
+                                f"{time.time()},{completed_steps},{avg_loss},{current_lr}\n"
+                            )
+                            loss_file.flush()
+
+                        if (
+                            completed_steps > 0
+                            and completed_steps % args.checkpointing_steps == 0
+                        ):
+                            save_checkpoint(
+                                accelerator=accelerator,
+                                model=model,
+                                model_config=model_config,
+                                output_dir=checkpoint_dir,
+                                step=completed_steps,
+                                epoch=epoch,
+                                max_checkpoints=args.max_checkpoints,
+                                args=args,
+                                tokenizer=tokenizer,
+                                stage_idx=(
+                                    stage_idx if args.progressive_length else None
+                                ),
+                                stage_length=(
+                                    stage_length if args.progressive_length else None
+                                ),
                             )
 
-                    optim.step()
-                    scheduler.step()
-                    optim.zero_grad()
+                        if (
+                            completed_steps >= args.max_train_steps
+                            or stage_completed >= steps_per_stage
+                        ):
+                            break
 
-                if accelerator.sync_gradients:
-                    completed_steps += 1
-                    current_lr = scheduler.get_last_lr()[0]
-                    log_data = {"loss": avg_loss, "lr": current_lr}
-
-                    progress_bar.update(1)
-                    progress_bar.set_postfix(log_data)
-                    accelerator.log(log_data, step=completed_steps)
-
-                    if accelerator.is_main_process:
-                        loss_file.write(
-                            f"{time.time()},{completed_steps},{avg_loss},{current_lr}\n"
-                        )
-                        loss_file.flush()
-
-                    if (
-                        completed_steps > 0
-                        and completed_steps % args.checkpointing_steps == 0
-                    ):
-                        save_checkpoint(
-                            accelerator=accelerator,
-                            model=model,
-                            model_config=model_config,
-                            output_dir=checkpoint_dir,
-                            step=completed_steps,
-                            epoch=epoch,
-                            max_checkpoints=args.max_checkpoints,
-                            args=args,
-                            tokenizer=tokenizer,
-                        )
-
-                    if completed_steps >= args.max_train_steps:
-                        break
-
-            epoch += 1
+                epoch += 1
 
         accelerator.print("Training finished.")
         accelerator.end_training()
@@ -597,6 +689,16 @@ def add_args_continued_pretrain(parser):
         "--save-only",
         action="store_true",
         help="Save model without training (dry-run).",
+    )
+    parser.add_argument(
+        "--progressive-length",
+        action="store_true",
+        help=(
+            "Enable progressive length training for context extension. "
+            "When enabled, training progresses through increasing sequence lengths "
+            "(e.g., [2048, 4096, 8192, 16384]) instead of jumping directly to max_length. "
+            "This helps the model gradually adapt to longer contexts."
+        ),
     )
 
     return parser

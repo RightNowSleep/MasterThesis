@@ -45,7 +45,8 @@ class LlamaConfig(PretrainedConfig):
             embeddings. Supported types: "linear", "ntk", "part-ntk", "yarn", "my-rope",
             "my-rope-scaled", "my-rope2", "my-rope2-scaled", "block-layered", "block-layered-scaled",
             "freq-smooth", "freq-smooth-scaled", "freq-reciprocal", "freq-reciprocal-scaled",
-            "freq-reciprocal-scaled-no-layer", "freq-reciprocal-scaled-adaptive".
+            "freq-reciprocal-scaled-no-layer", "freq-reciprocal-scaled-adaptive",
+            "dual-rope", "dual-rope-scaled", "inverse-dual-rope", "inverse-dual-rope-scaled".
 
             All types support the same mutually exclusive "factor" / "dynamic" interface:
 
@@ -165,6 +166,8 @@ class LlamaConfig(PretrainedConfig):
             - "freq-reciprocal-scaled-adaptive": scaled reciprocal frequency RoPE, adaptive scaling
             - "dual-rope": dual RoPE (position only)
             - "dual-rope-scaled": dual RoPE + attention temperature
+            - "inverse-dual-rope": inverse dual RoPE (position only)
+            - "inverse-dual-rope-scaled": inverse dual RoPE + attention temperature
 
         All types share the same "factor" / "dynamic" interface:
             - "factor" (float > 1.0): static mode with a fixed scaling ratio.
@@ -211,9 +214,11 @@ class LlamaConfig(PretrainedConfig):
             "dynamic-freq-reciprocal": "freq-reciprocal",
             "dynamic-freq-reciprocal-scaled": "freq-reciprocal-scaled",
             "dynamic-freq-reciprocal-scaled-no-layer": "freq-reciprocal-scaled-no-layer",
-            "dynamic-freq-reciprocal-scaled-adaptive": "freq-reciprocal-scaled-adaptive",
+            "dynamic-freq-reciprocal-scaled-adaptive": "dynamic-freq-reciprocal-scaled-adaptive",
             "dynamic-dual-rope": "dual-rope",
             "dynamic-dual-rope-scaled": "dual-rope-scaled",
+            "dynamic-inverse-dual-rope": "inverse-dual-rope",
+            "dynamic-inverse-dual-rope-scaled": "inverse-dual-rope-scaled",
         }
         if rope_scaling_type in _deprecated_dynamic_map:
             new_type = _deprecated_dynamic_map[rope_scaling_type]
@@ -247,6 +252,8 @@ class LlamaConfig(PretrainedConfig):
             "freq-reciprocal-scaled-adaptive",
             "dual-rope",
             "dual-rope-scaled",
+            "inverse-dual-rope",
+            "inverse-dual-rope-scaled",
         ]
         if rope_scaling_type is None or rope_scaling_type not in valid_types:
             raise ValueError(
@@ -295,7 +302,7 @@ class LlamaConfig(PretrainedConfig):
         if factor_present:
             if (
                 not isinstance(rope_scaling_factor, (int, float))
-                or rope_scaling_factor <= 1.0
+                or rope_scaling_factor < 1.0
             ):
                 raise ValueError(
                     "`rope_scaling`'s 'factor' must be a float strictly greater than "
