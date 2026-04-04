@@ -3115,10 +3115,10 @@ class LlamaDualRoPEScaledEmbedding(LlamaDualRoPEEmbedding):
 
 
 # ================================================================================== #
-#  Inverse Dual RoPE family                                                           #
+#  Inverse Dual RoPE family                                                          #
 #                                                                                    #
-#  LlamaInverseDualRoPEEmbedding       (Inverse-Dual-RoPE, position only)             #
-#  LlamaInverseDualRoPEScaledEmbedding (Inverse-Dual-RoPE + attention temperature)    #
+#  LlamaInverseDualRoPEEmbedding       (Inverse-Dual-RoPE, position only)            #
+#  LlamaInverseDualRoPEScaledEmbedding (Inverse-Dual-RoPE + attention temperature)   #
 # ================================================================================== #
 
 
@@ -3131,7 +3131,7 @@ class LlamaInverseDualRoPEEmbedding(nn.Module):
     are swapped:
 
     - inv_freq: complete, size = dim // 2 (e.g., [f_0, f_1, f_2, ..., f_{dim//2-1}])
-    - High-frequency dimensions (i < i_star): position index = t // L_0 (global, monotonic)
+    - High-frequency dimensions (i < i_star): position index = t (global, monotonic)
     - Low-frequency dimensions (i >= i_star): position index = t % L_0 (local, cyclic)
 
     The critical dimension i_star is computed as the number of dimensions that complete
@@ -3211,8 +3211,8 @@ class LlamaInverseDualRoPEEmbedding(nn.Module):
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
         """Compute and cache cos/sin values with inverse dual position encoding.
 
-        Swaps the assignment compared to Dual-RoPE: high frequencies get monotonic
-        positions (div L_0) and low frequencies get cyclic positions (mod L_0).
+        Swaps the assignment compared to Dual-RoPE: high frequencies get raw position
+        indices (t, monotonic) and low frequencies get cyclic positions (mod L_0).
 
         Args:
             seq_len (int): Sequence length to cache embeddings for.
@@ -3225,9 +3225,8 @@ class LlamaInverseDualRoPEEmbedding(nn.Module):
         self.max_seq_len_cached = seq_len
         L_0 = self.original_max_position_embeddings
         t = torch.arange(seq_len, device=device, dtype=torch.float32)
-        divmod_result = torch.div(t, L_0, rounding_mode="floor")
-        pos_1 = divmod_result
-        pos_2 = t - divmod_result * L_0
+        pos_1 = t
+        pos_2 = t % L_0
         self.register_buffer("pos_1_cached", pos_1, persistent=False)
         self.register_buffer("pos_2_cached", pos_2, persistent=False)
         inv_freq_1 = self.inv_freq_1.to(device=device)
@@ -3353,9 +3352,8 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
         self.max_seq_len_cached = seq_len
         L_0 = self.original_max_position_embeddings
         t = torch.arange(seq_len, device=device, dtype=torch.float32)
-        divmod_result = torch.div(t, L_0, rounding_mode="floor")
-        pos_1 = divmod_result
-        pos_2 = t - divmod_result * L_0
+        pos_1 = t
+        pos_2 = t % L_0
         inv_freq_1 = self.inv_freq_1.to(device=device)
         inv_freq_2 = self.inv_freq_2.to(device=device)
         freqs_1 = pos_1.unsqueeze(1) * inv_freq_1.unsqueeze(0)
