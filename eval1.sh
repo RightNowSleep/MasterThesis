@@ -1,20 +1,32 @@
 #!/bin/bash
 
 # =============================================================================
-# eval.sh
+# eval1.sh
 # -----------------------------------------------------------------------------
 # Purpose: Comprehensive evaluation script for long-context language models
+#          (Variant 1: reasoning benchmarks on GPUs 0,1)
 # -----------------------------------------------------------------------------
 # Description:
 #   This script provides a unified evaluation framework that supports multiple
 #   evaluation types including perplexity, performance, passkey retrieval, and
 #   lm-eval-harness benchmarks. It can evaluate both base models with RoPE
 #   methods and fine-tuned adapters.
+#
+#   This variant runs reasoning tasks (arc_challenge, truthfulqa, hellaswag,
+#   mmlu) on GPU devices 0,1.
 # -----------------------------------------------------------------------------
 # Usage:
-#   bash eval.sh
+#   bash eval1.sh
 # -----------------------------------------------------------------------------
-# Parameters: None (all configuration is done via variables below)
+# Parameters:
+#   None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Globals:
+#   PYTHONPATH             - Project root added to Python module search path
+#   CUDA_VISIBLE_DEVICES   - GPU device IDs for computation (default: "0,1")
+#   DISABLE_FLASH_ATTN     - Disable flash attention (set to 1)
+#   USE_FLASH_ATTN         - Flash attention flag (set to 0)
+#   HF_ALLOW_CODE_EVAL     - Allow HuggingFace code evaluation (set to 1)
 # -----------------------------------------------------------------------------
 # Output:
 #   Evaluation results saved to: results/
@@ -115,7 +127,7 @@ PASSKEY_ARGS="--num-keys 5 \
 --restrict-tokens True \
 --save-dir ${OUTPUT_DIR}/passkey"
 
-# Available tasks: 
+# Available tasks:
 # long_context: longbench,longbench2,longcxt,passkey,ruler,babilong
 # reasoning: arc_challenge,truthfulqa,hellaswag,bbh,mmlu
 # math: gsm8k,aime,hendrycks_math
@@ -143,11 +155,12 @@ echo "=========================================="
 # -----------------------------------------------------------------------------
 # Purpose: Execute perplexity evaluation for a specific method
 # -----------------------------------------------------------------------------
-# Arguments:
+# Args:
 #   $1 - method: RoPE method string or adapter path
 # -----------------------------------------------------------------------------
 # Returns:
 #   0 on success, non-zero on failure
+#   Stdout: Evaluation progress and result messages
 # -----------------------------------------------------------------------------
 run_perplexity_eval() {
     local method=$1
@@ -156,7 +169,7 @@ run_perplexity_eval() {
     echo "------------------------------------------"
     echo "Eval: perplexity | Method: $method"
     echo "------------------------------------------"
-    
+
     local cmd="python eval/perplexity.py \
         --model-name ${MODEL_NAME} \
         ${method} \
@@ -165,10 +178,10 @@ run_perplexity_eval() {
         --dtype ${DTYPE} \
         ${QUANT} \
         ${PERPLEXITY_ARGS}"
-    
+
     echo "Executing: $cmd"
     eval $cmd
-    
+
     if [ $? -eq 0 ]; then
         echo "[SUCCESS] Perplexity eval completed: $method"
     else
@@ -181,11 +194,12 @@ run_perplexity_eval() {
 # -----------------------------------------------------------------------------
 # Purpose: Execute performance benchmark for a specific method
 # -----------------------------------------------------------------------------
-# Arguments:
+# Args:
 #   $1 - method: RoPE method string or adapter path
 # -----------------------------------------------------------------------------
 # Returns:
 #   0 on success, non-zero on failure
+#   Stdout: Benchmark progress and result messages
 # -----------------------------------------------------------------------------
 run_performance_eval() {
     local method=$1
@@ -194,7 +208,7 @@ run_performance_eval() {
     echo "------------------------------------------"
     echo "Eval: performance | Method: $method"
     echo "------------------------------------------"
-    
+
     local cmd="python eval/performance.py \
         --model-name ${MODEL_NAME} \
         ${method} \
@@ -203,10 +217,10 @@ run_performance_eval() {
         --dtype ${DTYPE} \
         ${QUANT} \
         ${PERFORMANCE_ARGS}"
-    
+
     echo "Executing: $cmd"
     eval $cmd
-    
+
     if [ $? -eq 0 ]; then
         echo "[SUCCESS] Performance eval completed: $method"
     else
@@ -219,11 +233,12 @@ run_performance_eval() {
 # -----------------------------------------------------------------------------
 # Purpose: Execute passkey retrieval evaluation for a specific method
 # -----------------------------------------------------------------------------
-# Arguments:
+# Args:
 #   $1 - method: RoPE method string or adapter path
 # -----------------------------------------------------------------------------
 # Returns:
 #   0 on success, non-zero on failure
+#   Stdout: Retrieval accuracy and result messages
 # -----------------------------------------------------------------------------
 run_passkey_eval() {
     local method=$1
@@ -232,7 +247,7 @@ run_passkey_eval() {
     echo "------------------------------------------"
     echo "Eval: passkey | Method: $method"
     echo "------------------------------------------"
-    
+
     local cmd="python eval/passkey.py \
         --model-name ${MODEL_NAME} \
         ${method} \
@@ -241,10 +256,10 @@ run_passkey_eval() {
         --dtype ${DTYPE} \
         ${QUANT} \
         ${PASSKEY_ARGS}"
-    
+
     echo "Executing: $cmd"
     eval $cmd
-    
+
     if [ $? -eq 0 ]; then
         echo "[SUCCESS] Passkey eval completed: $method"
     else
@@ -257,11 +272,12 @@ run_passkey_eval() {
 # -----------------------------------------------------------------------------
 # Purpose: Execute lm-eval-harness evaluation for a specific method
 # -----------------------------------------------------------------------------
-# Arguments:
+# Args:
 #   $1 - method: RoPE method string or adapter path
 # -----------------------------------------------------------------------------
 # Returns:
 #   0 on success, non-zero on failure
+#   Stdout: Harness benchmark scores and result messages
 # -----------------------------------------------------------------------------
 run_eval_harness_eval() {
     local method=$1
@@ -270,7 +286,7 @@ run_eval_harness_eval() {
     echo "------------------------------------------"
     echo "Eval: eval_harness | Method: $method"
     echo "------------------------------------------"
-    
+
     local cmd="python eval/eval_harness.py \
         --model-name ${MODEL_NAME} \
         ${method} \
@@ -279,10 +295,10 @@ run_eval_harness_eval() {
         --dtype ${DTYPE} \
         ${QUANT} \
         ${EVAL_HARNESS_ARGS}"
-    
+
     echo "Executing: $cmd"
     eval $cmd
-    
+
     if [ $? -eq 0 ]; then
         echo "[SUCCESS] Eval harness completed: $method"
     else
@@ -313,6 +329,7 @@ if [ "$PASSKEY" = true ]; then
 fi
 
 if [ "$EVAL_HARNESS" = true ]; then
+    # Cap max length at 16384 for eval harness to avoid OOM errors
     if [ $MAX_LENGTH -gt 16384 ]; then
         MAX_LENGTH=16384
         echo "Max length is greater than 16384, setting to 16384"

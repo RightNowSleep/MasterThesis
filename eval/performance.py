@@ -1,3 +1,19 @@
+"""
+eval/performance.py
+---------------------
+Performance evaluator for measuring model inference runtime and GPU memory usage.
+
+Tests a language model across a range of input sequence lengths, recording:
+    - Inference time (seconds) per forward pass.
+    - Total GPU memory consumption (GB), including model weights and peak activations.
+
+Results are saved as JSON for further analysis and comparison across different
+RoPE configurations or model variants.
+
+Usage:
+    python eval/performance.py --model-name huggyllama/llama-7b --max-length 8192
+"""
+
 import gc
 import torch
 import time
@@ -153,12 +169,30 @@ class PerformanceEvaluator:
         return repeated_tokens
 
     def _synchronize_all_devices(self):
-        """Synchronize all available CUDA devices."""
+        """
+        Synchronize all available CUDA devices.
+
+        Blocks the calling thread until all pending GPU operations on every
+        visible CUDA device have completed. Used to ensure accurate timing
+        measurements.
+
+        Returns:
+            None.
+        """
         for i in range(torch.cuda.device_count()):
             torch.cuda.synchronize(i)
 
     def _reset_peak_memory_stats_all_devices(self):
-        """Reset peak memory statistics on all available CUDA devices."""
+        """
+        Reset peak memory statistics on all available CUDA devices.
+
+        After calling this, max_memory_allocated() will only reflect
+        allocations that occur after the reset. Used before each forward
+        pass to isolate per-run activation memory.
+
+        Returns:
+            None.
+        """
         for i in range(torch.cuda.device_count()):
             torch.cuda.reset_peak_memory_stats(i)
 
@@ -182,7 +216,11 @@ class PerformanceEvaluator:
         Run a warmup forward pass to trigger CUDA kernel compilation and loading.
 
         Without warmup, the first real test point would include one-time CUDA
-        initialization overhead, making its runtime appear artificially high.
+        initialisation overhead, making its runtime appear artificially high.
+        Uses the minimum configured length for the warmup sequence.
+
+        Returns:
+            None.
         """
         print("Warming up...")
         with torch.no_grad():

@@ -1,3 +1,21 @@
+"""
+eval/passkey.py
+---------------
+Passkey retrieval evaluator for needle-in-a-haystack long-context testing.
+
+Implements the "Passkey Retrieval" benchmark: a random numeric pass key is hidden
+within a long document (either synthetic repeated text or real corpus samples), and
+the model must retrieve it at the end of the document. Success rate is measured
+across multiple context lengths to assess the model's effective context window.
+
+Supports two data modes:
+    - Synthetic: Repeated garbage text with injected pass keys.
+    - Real: Text sampled from a HuggingFace dataset (e.g., RedPajama).
+
+Usage:
+    python eval/passkey.py --model-name huggyllama/llama-7b --data-mode real --max-length 32768
+"""
+
 import re
 import torch
 import random
@@ -478,9 +496,14 @@ class PasskeyEvaluator:
 
     def _setup_pipeline(self):
         """
-        Set up text generation pipeline.
+        Set up the text-generation pipeline for passkey retrieval.
 
-        If restrict_tokens is True, restrict model to only output digit tokens.
+        If restrict_tokens is True, registers a forward hook on the model
+        that masks out all non-digit token logits, forcing the model to only
+        output numeric characters (plus EOS). This improves extraction reliability.
+
+        Returns:
+            transformers.pipeline: The configured text-generation pipeline.
         """
         if self.restrict_tokens:
             vocab = self.tokenizer.get_vocab()
@@ -644,6 +667,18 @@ def generate_save_filename(model_name, config):
 
 
 def add_args_passkey(parser):
+    """
+    Register passkey-evaluation CLI arguments.
+
+    Adds arguments for data mode, number of keys, iterations, dataset selection,
+    length configuration, memory management, token restriction, and output paths.
+
+    Args:
+        parser: ArgumentParser to add arguments to.
+
+    Returns:
+        The same parser with added arguments.
+    """
     parser.add_argument("--num-keys", type=int, default=5, help="Number of pass keys.")
     parser.add_argument(
         "--iterations",

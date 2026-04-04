@@ -1,24 +1,32 @@
+"""Performance comparison bar chart generator for context extension methods.
+
+Generates a grouped bar chart comparing accuracy scores between YaRN and the
+proposed method across three benchmark datasets (ARC-c, Hellaswag, MMLU) at
+a 64K context window. The chart includes data labels, performance difference
+annotations, and is saved as a high-resolution PNG.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Set Chinese font for matplotlib
+# Configure Chinese font support for matplotlib
 plt.rcParams["font.sans-serif"] = ["SimHei", "Arial Unicode MS", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
-# Prepare data
+# Define comparison data
 methods = ["YaRN", "Our Method"]
 datasets = ["ARC_c", "Hellaswag", "MMLU"]
 yarn_values = [39.85, 54.52, 24.18]
 my_method_values = [41.04, 54.94, 25.17]
 
-# Set bar chart parameters
-x = np.arange(len(datasets))  # Dataset positions
-width = 0.35  # Bar width
+# Set up bar positions and width
+x = np.arange(len(datasets))  # Dataset label positions on x-axis
+width = 0.35  # Width of each bar
 
-# Create figure
+# Create figure and axes
 fig, ax = plt.subplots(figsize=(10, 6))
 
-# Create bar chart
+# Draw grouped bars for both methods
 bars1 = ax.bar(
     x - width / 2,
     yarn_values,
@@ -39,19 +47,21 @@ bars2 = ax.bar(
 )
 
 
-# Add data labels
 def add_labels(bars):
-    """Add value labels on top of each bar in the chart.
+    """Add numeric value labels on top of each bar.
 
     Args:
-        bars: A collection of bar objects from matplotlib bar chart.
+        bars: Matplotlib BarContainer object returned by ``ax.bar``.
+
+    Returns:
+        None
     """
     for bar in bars:
         height = bar.get_height()
         ax.annotate(
             f"{height:.2f}%",
             xy=(bar.get_x() + bar.get_width() / 2, height),
-            xytext=(0, 3),  # 3 points vertical offset
+            xytext=(0, 3),  # 3-point vertical offset
             textcoords="offset points",
             ha="center",
             va="bottom",
@@ -62,7 +72,7 @@ def add_labels(bars):
 add_labels(bars1)
 add_labels(bars2)
 
-# Set chart title and labels
+# Configure chart title and axis labels
 ax.set_title(
     "Performance Comparison of Different Context Extension Methods at 64k Context Window",
     fontsize=16,
@@ -75,15 +85,15 @@ ax.set_xticks(x)
 ax.set_xticklabels(datasets, fontsize=12)
 ax.legend(fontsize=12, loc="upper right")
 
-# Set y-axis range for clearer difference display
+# Adjust y-axis range to make differences more visible
 min_val = min(min(yarn_values), min(my_method_values)) - 2
 max_val = max(max(yarn_values), max(my_method_values)) + 2
 ax.set_ylim(min_val, max_val)
 
-# Add grid lines
+# Add horizontal grid lines for readability
 ax.grid(axis="y", linestyle="--", alpha=0.7)
 
-# Add performance difference annotations
+# Annotate performance improvement where our method outperforms YaRN
 for i in range(len(datasets)):
     diff = my_method_values[i] - yarn_values[i]
     if diff > 0:
@@ -97,9 +107,8 @@ for i in range(len(datasets)):
             color="red",
         )
 
-# Optimize layout
+# Finalize layout and save
 plt.tight_layout()
-
 plt.savefig("performance_comparison.png", dpi=300, bbox_inches="tight")
 
 print(

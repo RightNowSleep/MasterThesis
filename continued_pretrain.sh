@@ -13,7 +13,12 @@
 # Usage:
 #   bash continued_pretrain.sh
 # -----------------------------------------------------------------------------
-# Parameters: None (all configuration is done via variables below)
+# Parameters:
+#   None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Globals:
+#   CUDA_VISIBLE_DEVICES  - GPU device IDs for computation (default: "0,1,2,3")
+#   WANDB                 - WandB project name for experiment tracking (empty = disabled)
 # -----------------------------------------------------------------------------
 # Output:
 #   Pretrained model checkpoints saved to: finetunes/continued_pretrain/
@@ -61,9 +66,9 @@ PROGRESSIVE_LENGTH=false
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
 # NOTE: --rope-factor and --rope-dynamic are mutually exclusive.
-#   --rope-factor F only → static scaling with fixed ratio F > 1.0  (used here:
+#   --rope-factor F only -> static scaling with fixed ratio F > 1.0  (used here:
 #                          pretraining targets a known max length, static is preferred)
-#   --rope-dynamic only  → runtime scaling, no fixed ratio
+#   --rope-dynamic only  -> runtime scaling, no fixed ratio
 ROPE_METHODS=(
     # "--rope-type none"
     # "--rope-type linear --rope-factor $ROPE_FACTOR"
@@ -98,6 +103,7 @@ BASE_ARGS="--model-name $MODEL_NAME \
   --seed $SEED \
   --output-dir $OUTPUT_DIR"
 
+# Conditionally append optional arguments to the base command string
 if [ -n "$WANDB" ]; then
     BASE_ARGS="$BASE_ARGS --wandb $WANDB"
 fi
@@ -124,11 +130,12 @@ echo "=========================================="
 # -----------------------------------------------------------------------------
 # Purpose: Execute continued pretraining for a specific RoPE method
 # -----------------------------------------------------------------------------
-# Arguments:
+# Args:
 #   $1 - rope_method: The RoPE configuration string (e.g., "--rope-type linear")
 # -----------------------------------------------------------------------------
 # Returns:
 #   0 on success, non-zero on failure
+#   Stdout: Training progress and result messages
 # -----------------------------------------------------------------------------
 run_pretrain() {
     local rope_method=$1
@@ -152,6 +159,7 @@ run_pretrain() {
     fi
 }
 
+# Iterate over each configured RoPE method and run pretraining
 for rope_method in "${ROPE_METHODS[@]}"; do
     run_pretrain "$rope_method"
 done

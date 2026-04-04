@@ -1,3 +1,22 @@
+"""Unified evaluation test runner for context-extended language models.
+
+Provides a CLI entry point that dispatches to one of four evaluation backends:
+
+    - **perplexity**: Length-stratified perplexity evaluation across multiple
+      context lengths to measure language modeling quality after extension.
+    - **passkey**: Passkey retrieval test measuring the model's ability to find
+      a hidden key at various positions within a long context.
+    - **quality**: Multi-task benchmark evaluation (e.g., MMLU, ARC, Hellaswag)
+      assessing downstream task performance.
+    - **performance**: Inference profiling measuring throughput (tokens/sec) and
+      GPU memory consumption across increasing sequence lengths.
+
+Each subcommand accepts its own set of hyperparameters and produces a JSON result
+file named automatically based on the model name and RoPE configuration::
+
+    llama-7b_linear_factor4_0.json
+"""
+
 import argparse
 import os
 
@@ -11,21 +30,26 @@ from eval.performance import PerformanceEvaluator, add_args_performance
 
 
 def generate_save_filename(model_name, config):
-    """
-    Generate filename based on model and RoPE configuration.
+    """Generate a deterministic result filename from model name and RoPE config.
+
+    Encodes the RoPE scaling type and parameters into the filename so that results
+    from different configurations never overwrite each other.
 
     Args:
-        model_name: The name of the model.
-        config: The configuration object.
+        model_name: Full HuggingFace model identifier (e.g.,
+            ``"meta-llama/Llama-2-7b-hf"``).
+        config: Model configuration object with a ``rope_scaling`` attribute.
 
     Returns:
-        str: The filename.
+        str: Filename string without directory path, ending in ``.json``.
 
     Examples:
-        --rope-type none                              → llama-7b_none.json
-        --rope-type linear --rope-dynamic             → llama-7b_linear_dynamic.json
-        --rope-type linear --rope-factor 4.0          → llama-7b_linear_factor4_0.json
-        --rope-type ntk --rope-factor 2.5             → llama-7b_ntk_factor2_5.json
+        >>> generate_save_filename("meta-llama/Llama-2-7b-hf", cfg_none)
+        'llama-7b_none.json'
+        >>> generate_save_filename("meta-llama/Llama-2-7b-hf", cfg_dyn)
+        'llama-7b_linear_dynamic.json'
+        >>> generate_save_filename("meta-llama/Llama-2-7b-hf", cfg_fac)
+        'llama-7b_linear_factor4_0.json'
     """
     model_name = model_name.split("/")[-1]
     rope_scaling = config.rope_scaling
@@ -42,6 +66,19 @@ def generate_save_filename(model_name, config):
 
 
 def test_perplexity(args):
+    """Run perplexity evaluation and print results.
+
+    Loads the model and tokenizer, instantiates a :class:`PerplexityEvaluator`
+    with parameters drawn from *args*, runs the evaluation, and prints the
+    resulting metrics dictionary.
+
+    Args:
+        args: Parsed CLI arguments containing model, dataset, and perplexity
+            evaluation settings.
+
+    Returns:
+        None
+    """
     model, config = load_model(args)
     tokenizer = load_tokenizer(args)
     args.save_file = args.save_file or generate_save_filename(args.model_name, config)
@@ -67,6 +104,18 @@ def test_perplexity(args):
 
 
 def test_passkey(args):
+    """Run passkey retrieval evaluation and print results.
+
+    Loads the model and tokenizer, instantiates a :class:`PasskeyEvaluator`,
+    runs the passkey test across multiple context lengths, and prints the results.
+
+    Args:
+        args: Parsed CLI arguments containing model, passkey-specific parameters
+            (number of keys, iterations, data mode, etc.), and output settings.
+
+    Returns:
+        None
+    """
     model, config = load_model(args)
     tokenizer = load_tokenizer(args)
     args.save_file = args.save_file or generate_save_filename(args.model_name, config)
@@ -91,6 +140,18 @@ def test_passkey(args):
 
 
 def test_quality(args):
+    """Run quality benchmark evaluation and print results.
+
+    Loads the model and tokenizer, instantiates a :class:`QualityEvaluator` for
+    multi-task assessment, runs the evaluation, and prints the results.
+
+    Args:
+        args: Parsed CLI arguments containing model, benchmark subset selection,
+            chain-of-thought options, and output settings.
+
+    Returns:
+        None
+    """
     model, config = load_model(args)
     tokenizer = load_tokenizer(args)
     args.save_file = args.save_file or generate_save_filename(args.model_name, config)
@@ -115,6 +176,18 @@ def test_quality(args):
 
 
 def test_performance(args):
+    """Run inference performance profiling and print results.
+
+    Measures inference latency and GPU memory usage at multiple sequence lengths
+    to characterize the computational cost of the context-extended model.
+
+    Args:
+        args: Parsed CLI arguments containing model, device, length range, and
+            output settings.
+
+    Returns:
+        None
+    """
     model, config = load_model(args)
     tokenizer = load_tokenizer(args)
     args.save_file = args.save_file or generate_save_filename(args.model_name, config)

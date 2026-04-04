@@ -13,7 +13,12 @@
 # Usage:
 #   bash finetune.sh
 # -----------------------------------------------------------------------------
-# Parameters: None (all configuration is done via variables below)
+# Parameters:
+#   None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Globals:
+#   CUDA_VISIBLE_DEVICES  - GPU device IDs for computation (default: "0,1,2,3")
+#   WANDB                 - WandB project name for experiment tracking (empty = disabled)
 # -----------------------------------------------------------------------------
 # Output:
 #   Fine-tuned model checkpoints saved to: finetunes/finetune/
@@ -54,9 +59,9 @@ WANDB=""                # Set to a WandB project name to enable, e.g. "my-projec
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
 # NOTE: --rope-factor and --rope-dynamic are mutually exclusive.
-#   --rope-factor F only → static scaling with fixed ratio F > 1.0  (used here:
+#   --rope-factor F only -> static scaling with fixed ratio F > 1.0  (used here:
 #                          fine-tuning targets a known max length, static is preferred)
-#   --rope-dynamic only  → runtime scaling, no fixed ratio
+#   --rope-dynamic only  -> runtime scaling, no fixed ratio
 ROPE_METHODS=(
     "--rope-type none"
     "--rope-type linear --rope-factor 4.0"
@@ -97,6 +102,7 @@ BASE_ARGS="--model-name $MODEL_NAME \
   --seed $SEED \
   --output-dir $OUTPUT_DIR"
 
+# Conditionally append optional WandB argument if project name is set
 if [ -n "$WANDB" ]; then
     BASE_ARGS="$BASE_ARGS --wandb $WANDB"
 fi
@@ -118,11 +124,12 @@ echo "=========================================="
 # -----------------------------------------------------------------------------
 # Purpose: Execute fine-tuning for a specific RoPE method
 # -----------------------------------------------------------------------------
-# Arguments:
+# Args:
 #   $1 - rope_method: The RoPE configuration string (e.g., "--rope-type linear")
 # -----------------------------------------------------------------------------
 # Returns:
 #   0 on success, non-zero on failure
+#   Stdout: Training progress and result messages
 # -----------------------------------------------------------------------------
 run_finetune() {
     local rope_method=$1
@@ -146,6 +153,7 @@ run_finetune() {
     fi
 }
 
+# Iterate over each configured RoPE method and run fine-tuning
 for rope_method in "${ROPE_METHODS[@]}"; do
     run_finetune "$rope_method"
 done

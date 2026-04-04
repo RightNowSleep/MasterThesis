@@ -13,11 +13,14 @@
 # Usage:
 #   bash permission.sh
 # -----------------------------------------------------------------------------
-# Parameters: None
+# Parameters:
+#   None
+# -----------------------------------------------------------------------------
+# Globals:
+#   None
 # -----------------------------------------------------------------------------
 # Notes:
 #   - Requires sudo privileges to change ownership
 #   - Use with caution as it modifies permissions for all files recursively
 # =============================================================================
-
 sudo chown -R $(whoami):$(id -gn) . && chmod -R u+rwx .

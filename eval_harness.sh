@@ -13,7 +13,12 @@
 # Usage:
 #   bash eval_harness.sh
 # -----------------------------------------------------------------------------
-# Parameters: None (all configuration is done via variables below)
+# Parameters:
+#   None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Globals:
+#   PYTHONPATH             - Project parent directory added to Python module search path
+#   CUDA_VISIBLE_DEVICES   - GPU device IDs for computation (default: "0,1,2,3")
 # -----------------------------------------------------------------------------
 # Output:
 #   Evaluation results saved to: results/harness/
@@ -45,7 +50,7 @@ ROPE_METHODS=(
 )
 
 # ── Adapter Configuration (Phase 2) ───────────────────────────────────────────
-ADAPTER_DIR = "finetunes/continued_pretrain"
+ADAPTER_DIR="finetunes/continued_pretrain"
 ADAPTERS=(
     "none_20260315_003356"
     "linear_20260315_081529"
@@ -74,11 +79,12 @@ echo "=========================================="
 # -----------------------------------------------------------------------------
 # Purpose: Execute lm-eval-harness evaluation with given arguments
 # -----------------------------------------------------------------------------
-# Arguments:
+# Args:
 #   $1 - args: Additional command-line arguments (RoPE method or adapter path)
 # -----------------------------------------------------------------------------
 # Returns:
 #   0 on success, non-zero on failure
+#   Stdout: Evaluation progress and benchmark scores
 # -----------------------------------------------------------------------------
 run_eval() {
     local args=$1

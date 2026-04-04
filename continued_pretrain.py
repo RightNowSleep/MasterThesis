@@ -1,3 +1,29 @@
+"""Continued pretraining script for large language models with LoRA/QLoRA.
+
+This module implements a full continued pretraining pipeline that extends the context
+window of transformer-based language models using Low-Rank Adaptation (LoRA) or
+Quantized LoRA (QLoRA). It supports:
+
+    - Progressive length training: Gradually increases sequence length across stages
+      to help the model adapt to longer contexts (e.g., [2048, 4096, 8192, 16384]).
+    - Multiple RoPE scaling types: linear, NTK-aware, YaRN, and dynamic scaling.
+    - Distributed training via Hugging Face Accelerate with mixed precision.
+    - Checkpoint management with automatic rotation and resume capability.
+    - Integration with Weights & Biases for experiment tracking.
+
+The training loop follows a standard pretraining paradigm: load model -> wrap with
+LoRA -> iterate over dataset with gradient accumulation -> save checkpoints at
+regular intervals.
+
+Typical usage::
+
+    python continued_pretrain.py \\
+        --model-name meta-llama/Llama-2-7b-hf \\
+        --rope-type linear --rope-factor 4.0 \\
+        --max-length 16384 --progressive-length \\
+        --quantization 4bit --lora-r 64
+"""
+
 import argparse
 import torch
 import os
@@ -30,11 +56,15 @@ warnings.filterwarnings("ignore")
 def find_all_linear_names(model):
     """Find all linear layer names in the model for LoRA targeting.
 
+    Inspects all modules in the model and collects unique final layer name
+    components that correspond to linear layers (including quantized variants).
+
     Args:
         model: The PyTorch model to inspect for linear layers.
 
     Returns:
-        List of unique linear layer names suitable for LoRA targeting.
+        list[str]: List of unique linear layer names suitable for LoRA targeting,
+            excluding ``lm_head`` which is typically not adapted.
     """
     linear_cls = (torch.nn.Linear,)
     try:
@@ -54,11 +84,15 @@ def find_all_linear_names(model):
 def make_collate_fn(max_length: int):
     """Create a collate function for batching dataset examples.
 
+    Produces a closure that truncates sequences to *max_length*, stacks them
+    into tensors, and returns a batch dictionary.
+
     Args:
         max_length: Maximum sequence length for truncation.
 
     Returns:
-        A collate function that batches examples and truncates to max_length.
+        Callable: A collate function that accepts a list of example dictionaries
+            and returns a single batched dictionary with stacked tensor values.
     """
 
     def collate_fn(examples):
@@ -80,12 +114,17 @@ def make_collate_fn(max_length: int):
 def get_optimizer_param_groups(model, weight_decay: float):
     """Create parameter groups for optimizer with selective weight decay.
 
+    Splits model parameters into two groups: those that should receive weight
+    decay (e.g., attention/dense weights) and those that should not (e.g.,
+    biases, layer norms, embeddings).
+
     Args:
         model: The model whose parameters will be grouped.
         weight_decay: Weight decay coefficient for applicable parameters.
 
     Returns:
-        List of parameter group dictionaries with weight_decay settings.
+        list[dict]: List of parameter group dictionaries, each containing
+            ``params`` and ``weight_decay`` keys.
     """
     no_decay_keywords = [
         "bias",
@@ -124,16 +163,27 @@ def save_checkpoint(
 ):
     """Save a training checkpoint with model state and training configuration.
 
+    Persists the LoRA adapter weights, accelerator state, model config,
+    tokenizer (if provided), and training arguments. Automatically rotates
+    old checkpoints when the count exceeds *max_checkpoints*.
+
     Args:
         accelerator: The Accelerator instance managing distributed training.
-        model: The model to save.
-        model_config: The model configuration to save.
+        model: The model to save (will be unwrapped before saving).
+        model_config: The model configuration object to persist alongside weights.
         output_dir: Directory path for saving checkpoints.
-        step: Current training step number.
+        step: Current training step number (used in checkpoint directory name).
         epoch: Current epoch number.
-        max_checkpoints: Maximum number of checkpoints to retain.
-        args: Optional training arguments to save.
-        tokenizer: Optional tokenizer to save.
+        max_checkpoints: Maximum number of checkpoints to retain; older ones
+            are deleted automatically.
+        args: Optional training arguments namespace whose hyperparameters are
+            serialized into ``training_args.pt``.
+        tokenizer: Optional tokenizer to save alongside the model.
+        stage_idx: Optional current progressive stage index for multi-stage training.
+        stage_length: Optional current stage's max sequence length.
+
+    Returns:
+        None
     """
     checkpoint_path = os.path.join(output_dir, f"checkpoint_step_{step:06d}")
     os.makedirs(checkpoint_path, exist_ok=True)
@@ -195,24 +245,29 @@ def save_checkpoint(
 
 
 def generate_progressive_lengths(max_length: int, original_length: int):
-    """
-    生成渐进式训练的长度序列。
+    """Generate a progressive length schedule for staged context extension.
 
-    从原始长度开始，每次翻倍，直到达到或超过 max_length。
+    Starting from *original_length*, each subsequent stage doubles the sequence
+    length until reaching or exceeding *max_length*. The last value is clamped
+    to exactly *max_length* to ensure the target is always included.
+
+    For example, with ``max_length=16384`` and ``original_length=2048``, this
+    produces ``[2048, 4096, 8192, 16384]``.
 
     Args:
-        max_length: 目标最大序列长度
-        original_length: 原始上下文窗口大小
+        max_length: Target maximum sequence length to reach.
+        original_length: Original model context window size (starting point).
 
     Returns:
-        list: 长度序列列表，例如 [2048, 4096, 8192, 16384]
+        list[int]: Monotonically increasing list of sequence lengths for each
+            training stage.
     """
     lengths = []
     current = original_length
     while current <= max_length:
         lengths.append(current)
         current *= 2
-    # 确保最后一个值是 max_length（如果它不是2的幂次倍数）
+    # Ensure the last value equals max_length (when it is not an exact power-of-2 multiple)
     if lengths and lengths[-1] != max_length:
         lengths[-1] = max_length
     return lengths
@@ -221,13 +276,21 @@ def generate_progressive_lengths(max_length: int, original_length: int):
 def main(args):
     """Execute the continued pretraining pipeline with LoRA/QLoRA.
 
+    Orchestrates the entire training workflow including environment setup,
+    model loading with optional quantization, LoRA wrapping, dataset preparation,
+    optimizer/scheduler construction, the progressive-length training loop,
+    periodic checkpointing, and final model serialization.
+
     Args:
         args: Parsed arguments containing all training configuration including
             model settings, optimization parameters, LoRA configuration,
             quantization options, and output settings.
+
+    Returns:
+        None
     """
     # ------------------------------------------------------------------
-    # Derive experiment tag
+    # Derive experiment tag from RoPE type
     # ------------------------------------------------------------------
     _tag = args.rope_type
 
@@ -275,7 +338,7 @@ def main(args):
     accelerator.print(f"Visible    : {os.environ.get('CUDA_VISIBLE_DEVICES', 'all')}")
 
     # ------------------------------------------------------------------
-    # Build QLoRA-grade quantization config if requested.
+    # Build QLoRA-grade quantization config if requested
     # ------------------------------------------------------------------
     quantization_config = None
     if args.quantization in ("4bit", "8bit"):
@@ -292,10 +355,10 @@ def main(args):
 
     # ------------------------------------------------------------------
     # Patch args so load_model behaves correctly for training:
-    #   • use_cache=False          – required during training
-    #   • gradient_checkpointing=False – handled manually below
-    #   • adapter_path=None        – training creates LoRA, not loads one
-    #   • load_in_4bit / 8bit      – aligned with --quantization
+    #   - use_cache=False          – required during training
+    #   - gradient_checkpointing=False – handled manually below
+    #   - adapter_path=None        – training creates LoRA, not loads one
+    #   - load_in_4bit / 8bit      – aligned with --quantization
     # ------------------------------------------------------------------
     args.use_cache = False
     args.gradient_checkpointing = False  # handled below, after LoRA wrapping
@@ -605,11 +668,16 @@ def main(args):
 def add_args_continued_pretrain(parser):
     """Add continued pretraining specific arguments to the argument parser.
 
+    Registers all CLI flags related to dataset selection, optimization
+    hyperparameters, LoRA configuration, quantization mode, checkpointing
+    strategy, and infrastructure options (WandB, progressive length, etc.).
+
     Args:
         parser: The argparse.ArgumentParser instance to add arguments to.
 
     Returns:
-        The modified argument parser with continued pretraining arguments.
+        argparse.ArgumentParser: The modified argument parser with continued
+            pretraining arguments registered.
     """
     # ── Dataset ──────────────────────────────────────────────────────────────
     parser.add_argument(
@@ -623,7 +691,12 @@ def add_args_continued_pretrain(parser):
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-train-steps", type=int, default=600)
     parser.add_argument("--warmup-steps", type=int, default=60)
-    parser.add_argument("--batch-size", type=int, default=1, help="Per-GPU batch size.")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Per-GPU batch size.",
+    )
     parser.add_argument("--gradient-accumulate-every", type=int, default=8)
     parser.add_argument("--learning-rate", type=float, default=2e-4)
     parser.add_argument("--weight-decay", type=float, default=0.01)

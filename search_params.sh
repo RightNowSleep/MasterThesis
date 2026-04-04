@@ -3,15 +3,32 @@
 # =============================================================================
 # search_params.sh
 # -----------------------------------------------------------------------------
-# Purpose: Run attention scale parameter search
+# Purpose: Run attention scale parameter search for RoPE scaling optimization
 # -----------------------------------------------------------------------------
 # Description:
 #   This script searches for optimal parameters in the attention scaling formula:
-#       mscale_i(t) = 1 + α * max(0, (ln(max(1, floor(t/b_i))) - ln(L_0)) / ln(L_0))
-#   
-#   where α (attn_scale_coef) is the parameter to optimize.
-#   The optimization objective is to minimize perplexity across multiple context lengths.
+#       mscale_i(t) = 1 + alpha * max(0, (ln(max(1, floor(t/b_i))) - ln(L_0)) / ln(L_0))
+#
+#   where alpha (attn_scale_coef) is the parameter to optimize.
+#   The optimization objective is to minimize perplexity across multiple context
+#   lengths using configurable search strategies (grid, random, Bayesian, BOHB,
+#   or adaptive).
 # -----------------------------------------------------------------------------
+# Usage:
+#   bash search_params.sh
+# -----------------------------------------------------------------------------
+# Parameters:
+#   None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Globals:
+#   PYTHONPATH             - Project root added to Python module search path
+#   CUDA_VISIBLE_DEVICES   - GPU device IDs for computation (default: "1,2,3")
+#   DISABLE_FLASH_ATTN     - Disable flash attention (set to 1)
+#   USE_FLASH_ATTN         - Flash attention flag (set to 0)
+# -----------------------------------------------------------------------------
+# Output:
+#   Search results saved to: results/param_search/
+# =============================================================================
 
 echo "=========================================="
 echo "Attention Scale Parameter Search"
@@ -85,6 +102,8 @@ echo "Parameter Space:"
 echo "  base         : 1.0 (fixed)"
 echo "  coef         : [${COEF_MIN}, ${COEF_MAX}] (steps: ${COEF_STEPS})"
 echo "  Known optimal: 0.0707, 0.1"
+
+# Print method-specific configuration details
 if [ "$SEARCH_METHOD" = "adaptive" ]; then
     echo "Adaptive Config:"
     echo "  Stages       : ${ADAPTIVE_STAGES}"

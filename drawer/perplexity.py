@@ -1,3 +1,31 @@
+"""Paper-quality perplexity visualization for RoPE context extension experiments.
+
+This module provides a command-line tool for generating publication-ready plots
+that compare the perplexity performance of various Rotary Position Embedding
+(RoPE) extension methods across different context lengths. It is designed to
+produce figures suitable for academic papers (IEEE, ACL, NeurIPS style).
+
+Supported visualization modes:
+
+    - Combined overlay plot: Compares the five primary dynamic-scaling methods
+      (RoPE, Linear, NTK, NTK-by-Parts, Freq-Reciprocal) in a single figure.
+    - Per-family multi-panel plot: Shows each RoPE method family in its own
+      subplot against the Standard RoPE baseline, useful for comparing static
+      vs. dynamic scaling within each family.
+    - Delta-perplexity plot: Displays PPL(method) - PPL(RoPE) to highlight
+      relative improvements without absolute scale dominance.
+
+The module parses JSON result files produced by perplexity evaluation scripts,
+extracts metadata from filenames (model name, rope type, scaling mode, factor),
+and applies consistent styling including typography, color palette, and marker
+schemes across all generated figures.
+
+Usage:
+    python drawer/perplexity.py --result-dir results/perplexity --fmt png pdf
+
+Output files are saved to drawer/perplexity/ by default.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -19,7 +47,7 @@ matplotlib.use("Agg")
 #  Global style constants                                                      #
 # ============================================================================ #
 
-# --- Typography (matches most IEEE / ACL / NeurIPS templates) ---
+# --- Typography settings matching IEEE / ACL / NeurIPS template conventions ---
 plt.rcParams.update(
     {
         "font.family": "serif",
@@ -47,24 +75,24 @@ plt.rcParams.update(
 )
 
 # --- Color palette: 16 perceptually distinct, print-safe colors ---
-# Ordered by visual contrast; first entries reserved for "canonical" methods
+# Ordered by visual contrast; first entries reserved for canonical methods
 _PALETTE: List[str] = [
-    "#2166AC",  # 0  deep blue       → Standard RoPE (baseline)
-    "#D6604D",  # 1  brick red       → Linear (PI)
-    "#4DAF4A",  # 2  forest green    → NTK-aware
-    "#984EA3",  # 3  purple          → NTK-by-parts
-    "#FF7F00",  # 4  orange          → YaRN
-    "#A65628",  # 5  brown           → My-RoPE
-    "#F781BF",  # 6  pink            → My-RoPE (scaled)
-    "#999999",  # 7  grey            → My-RoPE2
-    "#66C2A5",  # 8  mint            → My-RoPE2 (scaled)
-    "#FC8D62",  # 9  salmon          → Block-Layered
-    "#8DA0CB",  # 10 steel blue      → Block-Layered (scaled)
-    "#E78AC3",  # 11 mauve           → Freq-Smooth
-    "#A6D854",  # 12 lime            → Freq-Smooth (scaled)
-    "#E41A1C",  # 13 bright red      → Freq-Reciprocal (changed from dark green)
-    "#762A83",  # 14 dark purple     → Freq-Reciprocal (scaled)
-    "#4393C3",  # 15 sky blue        → Freq-Reciprocal-NoLayer
+    "#2166AC",  # 0  deep blue       -> Standard RoPE (baseline)
+    "#D6604D",  # 1  brick red       -> Linear (PI)
+    "#4DAF4A",  # 2  forest green    -> NTK-aware
+    "#984EA3",  # 3  purple          -> NTK-by-parts
+    "#FF7F00",  # 4  orange          -> YaRN
+    "#A65628",  # 5  brown           -> My-RoPE
+    "#F781BF",  # 6  pink            -> My-RoPE (scaled)
+    "#999999",  # 7  grey            -> My-RoPE2
+    "#66C2A5",  # 8  mint            -> My-RoPE2 (scaled)
+    "#FC8D62",  # 9  salmon          -> Block-Layered
+    "#8DA0CB",  # 10 steel blue      -> Block-Layered (scaled)
+    "#E78AC3",  # 11 mauve           -> Freq-Smooth
+    "#A6D854",  # 12 lime            -> Freq-Smooth (scaled)
+    "#E41A1C",  # 13 bright red      -> Freq-Reciprocal
+    "#762A83",  # 14 dark purple     -> Freq-Reciprocal (scaled)
+    "#4393C3",  # 15 sky blue        -> Freq-Reciprocal-NoLayer
 ]
 
 _MARKERS: List[str] = [
@@ -86,7 +114,7 @@ _MARKERS: List[str] = [
     "+",
 ]
 
-# --- Canonical ordering for legend: none first, then grouped by family ---
+# --- Canonical ordering for legend: baseline first, then grouped by family ---
 _ROPE_DISPLAY_ORDER: List[str] = [
     "none",
     "linear",
@@ -107,15 +135,13 @@ _ROPE_DISPLAY_ORDER: List[str] = [
     "freq-reciprocal-scaled-adaptive",
 ]
 
-# Map rope_type → (palette_index, display_name)
-# Display names follow the paper convention:
-#   none              → "RoPE"               (vanilla baseline)
-#   linear            → "Linear"             (Position Interpolation)
-#   ntk               → "NTK"               (NTK-aware scaling)
-#   part-ntk          → "NTK-by-Parts"       (NTK-by-parts)
-#   yarn              → "YaRN"
-#   freq-reciprocal   → "Freq-Reciprocal"    (proposed family)
-#   … etc.
+# Map rope_type to (palette_index, display_name) following paper conventions:
+#   none              -> "RoPE"               (vanilla baseline)
+#   linear            -> "Linear"             (Position Interpolation)
+#   ntk               -> "NTK"               (NTK-aware scaling)
+#   part-ntk          -> "NTK-by-Parts"       (NTK-by-parts)
+#   yarn              -> "YaRN"
+#   freq-reciprocal   -> "Freq-Reciprocal"    (proposed family)
 _ROPE_META: Dict[str, Tuple[int, str]] = {
     "none": (0, "RoPE"),
     "linear": (1, "Linear"),
@@ -136,7 +162,7 @@ _ROPE_META: Dict[str, Tuple[int, str]] = {
     "freq-reciprocal-scaled-adaptive": (0, "Freq-Reciprocal (adaptive)"),
 }
 
-# Known default training lengths per model name fragment
+# Known default training context lengths per model name fragment
 _TRAIN_LENGTHS: Dict[str, int] = {
     "llama": 2048,
     "llama2": 4096,
@@ -151,21 +177,28 @@ _TRAIN_LENGTHS: Dict[str, int] = {
 
 
 def _parse_filename(path: Path) -> Optional[Dict]:
-    """
-    Parse a perplexity result filename into structured metadata.
+    """Parse a perplexity result filename into structured metadata.
 
-    Handles the three filename formats produced by generate_save_filename:
+    Handles three filename formats produced by generate_save_filename:
+
         - {model}_{rope_type}.json
         - {model}_{rope_type}_dynamic.json
         - {model}_{rope_type}_factor{X_Y}.json
 
     Args:
-        path: Path object pointing to the JSON file.
+        path (Path): Path object pointing to the JSON result file.
 
     Returns:
-        A dictionary containing parsed metadata with keys: model_name, rope_type,
-        scaling_mode, factor, display_label, color, marker, order_key; or None
-        if the filename cannot be parsed.
+        Optional[Dict]: A dictionary containing parsed metadata with keys:
+            model_name (str): Extracted model identifier.
+            rope_type (str): RoPE method type string.
+            scaling_mode (str): One of 'none', 'static', or 'dynamic'.
+            factor (Optional[float]): Scaling factor if present in filename.
+            display_label (str): Human-readable label for legend.
+            color (str): Hex color code from palette.
+            marker (str): Matplotlib marker style.
+            order_key (Tuple): Sorting key for consistent legend ordering.
+            Returns None if the filename cannot be parsed.
     """
     stem = path.stem
     sorted_types = sorted(_ROPE_META.keys(), key=len, reverse=True)
@@ -223,7 +256,7 @@ def _parse_filename(path: Path) -> Optional[Dict]:
     if scaling_mode == "dynamic":
         suffix_label = " (dyn.)"
     elif factor is not None:
-        suffix_label = f" (×{factor:.3g})"
+        suffix_label = f" (x{factor:.3g})"
     else:
         suffix_label = ""
 
@@ -256,21 +289,25 @@ def _parse_filename(path: Path) -> Optional[Dict]:
 
 
 def load_results(paths: List[Path]) -> List[Dict]:
-    """
-    Load JSON result files and attach parsed metadata.
+    """Load JSON result files and attach parsed metadata.
+
+    Reads each JSON file containing perplexity evaluation data, parses its
+    filename for metadata using _parse_filename, and merges the two into
+    a unified record dictionary.
 
     Args:
-        paths: List of Path objects pointing to JSON result files.
+        paths (List[Path]): List of Path objects pointing to JSON result files.
 
     Returns:
-        List of dictionaries, each containing metadata and perplexity data
-        from a single result file.
+        List[Dict]: List of dictionaries, each containing metadata and perplexity
+            data from a single result file. Files that cannot be parsed or loaded
+            are skipped with a warning message.
     """
     records = []
     for p in paths:
         meta = _parse_filename(p)
         if meta is None:
-            print(f"  [WARN] Cannot parse filename: {p.name} — skipping.")
+            print(f"  [WARN] Cannot parse filename: {p.name} -- skipping.")
             continue
         try:
             with open(p, "r") as f:
@@ -284,14 +321,19 @@ def load_results(paths: List[Path]) -> List[Dict]:
 
 
 def _infer_train_length(model_name: str) -> Optional[int]:
-    """
-    Infer the original training context length from the model name.
+    """Infer the original training context length from the model name.
+
+    Matches known model family fragments against the model name to determine
+    the default training context length. Falls back to 2048 tokens for
+    LLaMA-family models when no match is found.
 
     Args:
-        model_name: The model identifier string (e.g., "llama-7b", "mistral-7b").
+        model_name (str): The model identifier string (e.g., "llama-7b",
+            "mistral-7b").
 
     Returns:
-        The inferred training length in tokens, or 2048 as fallback.
+        int: The inferred training context length in tokens. Returns 2048 as
+            a conservative default for unrecognized models.
     """
     low = model_name.lower()
     for key, val in sorted(
@@ -299,7 +341,7 @@ def _infer_train_length(model_name: str) -> Optional[int]:
     ):
         if key in low:
             return val
-    return 2048  # conservative fallback for LLaMA-family models
+    return 2048  # Conservative fallback for LLaMA-family models
 
 
 # ============================================================================ #
@@ -308,15 +350,17 @@ def _infer_train_length(model_name: str) -> Optional[int]:
 
 
 def _format_length(x: float, _pos=None) -> str:
-    """
-    Format token counts as human-readable strings.
+    """Format token counts as human-readable strings.
+
+    Converts large token counts to abbreviated K notation for cleaner axis labels.
 
     Args:
-        x: The token count value to format.
-        _pos: Position parameter (unused, for matplotlib compatibility).
+        x (float): The token count value to format.
+        _pos: Position parameter (unused, required for matplotlib FuncFormatter
+            compatibility).
 
     Returns:
-        Formatted string (e.g., 8192 → '8K', 2048 → '2K').
+        str: Formatted string (e.g., 8192 -> '8K', 2048 -> '2K', 512 -> '512').
     """
     x = int(x)
     if x >= 1024 and x % 1024 == 0:
@@ -325,12 +369,16 @@ def _format_length(x: float, _pos=None) -> str:
 
 
 def _draw_train_boundary(ax: plt.Axes, train_length: int) -> None:
-    """
-    Draw a vertical dashed line at the training context boundary.
+    """Draw a vertical dashed line at the training context boundary.
+
+    Renders a subtle dashed line at the original training context length to
+    visually separate in-distribution from out-of-distribution regions on
+    the perplexity plot.
 
     Args:
-        ax: Matplotlib Axes object to draw on.
-        train_length: The training context length in tokens.
+        ax (plt.Axes): Matplotlib Axes object to draw on.
+        train_length (int): The training context length in tokens where the
+            boundary line will be placed.
 
     Returns:
         None
@@ -339,7 +387,7 @@ def _draw_train_boundary(ax: plt.Axes, train_length: int) -> None:
         train_length,
         color="#555555",
         linewidth=1.1,
-        linestyle=(0, (4, 3)),  # loosely dashed
+        linestyle=(0, (4, 3)),  # Loosely dashed pattern
         alpha=0.70,
         zorder=1,
         label=f"Training length ({_format_length(train_length)})",
@@ -347,15 +395,20 @@ def _draw_train_boundary(ax: plt.Axes, train_length: int) -> None:
 
 
 def _clip_perplexity(ppls: List[float], cap: float = 1000.0) -> List[float]:
-    """
-    Replace diverged perplexity values with NaN for clean plotting.
+    """Replace diverged perplexity values with NaN for clean plotting.
+
+    Models often produce extremely high or infinite perplexity values when
+    evaluated beyond their effective context window. This function clips such
+    values to NaN so they do not distort the plot y-axis range.
 
     Args:
-        ppls: List of perplexity values.
-        cap: Maximum threshold; values above this are replaced with NaN.
+        ppls (List[float]): List of perplexity values to process.
+        cap (float, optional): Maximum threshold; values above this are replaced
+            with NaN. Defaults to 1000.0.
 
     Returns:
-        List of perplexity values with diverged values replaced by NaN.
+        List[float]: List of perplexity values with diverged values replaced
+            by float('nan').
     """
     return [p if p < cap else float("nan") for p in ppls]
 
@@ -375,22 +428,24 @@ def plot_perplexity_combined(
     figsize: Tuple[float, float],
     dpi: int,
 ) -> None:
-    """
-    Plot a single figure comparing the five primary dynamic-scaling methods.
+    """Plot a single figure comparing the five primary dynamic-scaling methods.
 
-    Includes RoPE (none), Linear, NTK, NTK-by-Parts, and Freq-Reciprocal.
-    Only dynamic variants are included for non-baseline methods to ensure
-    a fair comparison without manual factor tuning.
+    Generates an overlay plot showing Standard RoPE (baseline) alongside Linear,
+    NTK, NTK-by-Parts, and Freq-Reciprocal methods. Only dynamic variants are
+    included for non-baseline methods to ensure fair comparison without manual
+    factor tuning. One figure is produced per unique model found in the records.
 
     Args:
-        records: List of dictionaries containing perplexity data and metadata.
-        train_length: The training context length; if None, inferred from model name.
-        out_dir: Output directory for saving the plot.
-        fmts: List of output file formats (e.g., ['png', 'pdf']).
-        log_scale: Whether to use logarithmic scale for y-axis.
-        ppl_cap: Maximum perplexity threshold for clipping diverged values.
-        figsize: Figure size as (width, height) tuple.
-        dpi: Resolution in dots per inch.
+        records (List[Dict]): List of dictionaries containing perplexity data and
+            metadata as returned by load_results.
+        train_length (Optional[int]): The training context length in tokens for
+            drawing the boundary line. If None, inferred from model name.
+        out_dir (str): Output directory path for saving the generated figure.
+        fmts (List[str]): List of output file formats (e.g., ['png', 'pdf']).
+        log_scale (bool): Whether to use logarithmic scale for the y-axis.
+        ppl_cap (float): Maximum perplexity threshold for clipping diverged values.
+        figsize (Tuple[float, float]): Figure size as (width, height) tuple in inches.
+        dpi (int): Resolution in dots per inch for raster output formats.
 
     Returns:
         None
@@ -404,7 +459,7 @@ def plot_perplexity_combined(
     models = sorted({r["model_name"] for r in records})
 
     for model in models:
-        # Keep only the five target types; for non-"none" types use dynamic only
+        # Filter to the five target types; use dynamic variants only for non-baseline methods
         model_records = [
             r
             for r in records
@@ -414,7 +469,7 @@ def plot_perplexity_combined(
         ]
         if not model_records:
             print(
-                f"  [SKIP] No matching dynamic records for '{model}' — combined plot skipped."
+                f"  [SKIP] No matching dynamic records for '{model}' -- combined plot skipped."
             )
             continue
         model_records.sort(key=lambda r: r["order_key"])
@@ -427,7 +482,7 @@ def plot_perplexity_combined(
         for rec in model_records:
             lengths = rec["lengths"]
             ppls = _clip_perplexity(rec["perplexities"], ppl_cap)
-            # Strip " (dyn.)" — redundant since every non-none curve here is dynamic
+            # Strip redundant " (dyn.)" suffix since all non-none curves here are dynamic
             label = rec["display_label"].replace(" (dyn.)", "")
             ax.plot(
                 lengths,
@@ -451,7 +506,7 @@ def plot_perplexity_combined(
             else model.replace("-", " ").title()
         )
         ax.set_title(
-            f"Perplexity vs. Context Length — {model_display}",
+            f"Perplexity vs. Context Length -- {model_display}",
             fontsize=13,
             pad=9,
         )
@@ -501,20 +556,26 @@ def plot_perplexity_by_family(
     ppl_cap: float,
     dpi: int,
 ) -> None:
-    """
-    Plot a multi-panel figure with one subplot per RoPE family.
+    """Plot a multi-panel figure with one subplot per RoPE family.
 
-    Each panel shows the family's curves against the Standard RoPE baseline.
-    Useful for comparing static vs dynamic scaling within each family.
+    Each panel displays all variants of a single RoPE method family against
+    the Standard RoPE baseline (shown as a grey dashed reference curve).
+    This layout is particularly useful for comparing static vs. dynamic
+    scaling behavior within each method family.
+
+    Subplot grid is automatically sized based on the number of families found,
+    with up to 3 columns and unused panels hidden.
 
     Args:
-        records: List of dictionaries containing perplexity data and metadata.
-        train_length: The training context length; if None, inferred from model name.
-        out_dir: Output directory for saving the plot.
-        fmts: List of output file formats (e.g., ['png', 'pdf']).
-        log_scale: Whether to use logarithmic scale for y-axis.
-        ppl_cap: Maximum perplexity threshold for clipping diverged values.
-        dpi: Resolution in dots per inch.
+        records (List[Dict]): List of dictionaries containing perplexity data and
+            metadata as returned by load_results.
+        train_length (Optional[int]): The training context length in tokens for
+            drawing the boundary line. If None, inferred from model name.
+        out_dir (str): Output directory path for saving the generated figure.
+        fmts (List[str]): List of output file formats (e.g., ['png', 'pdf']).
+        log_scale (bool): Whether to use logarithmic scale for the y-axis.
+        ppl_cap (float): Maximum perplexity threshold for clipping diverged values.
+        dpi (int): Resolution in dots per inch for raster output formats.
 
     Returns:
         None
@@ -562,7 +623,7 @@ def plot_perplexity_by_family(
 
             _draw_train_boundary(ax, tl)
 
-            # Draw baseline first (grey, thin)
+            # Draw baseline reference curve (grey, thin, dashed)
             if baseline is not None:
                 ax.plot(
                     baseline["lengths"],
@@ -599,7 +660,7 @@ def plot_perplexity_by_family(
             )
             ax.set_title(base_name, fontsize=11, pad=5)
             ax.set_xlabel("Context Length", fontsize=10)
-            ax.set_ylabel("Perplexity ↓", fontsize=10)
+            ax.set_ylabel("Perplexity down-arrow", fontsize=10)
             ax.xaxis.set_major_formatter(mticker.FuncFormatter(_format_length))
             ax.tick_params(which="both", direction="in", top=True, right=True)
             if log_scale:
@@ -613,14 +674,14 @@ def plot_perplexity_by_family(
                 log_scale,
             )
 
-        # Hide unused subplots
+        # Hide unused subplots in the grid
         for extra in range(n, nrows * ncols):
             r, c = divmod(extra, ncols)
             axes[r][c].set_visible(False)
 
         model_display = model.replace("-", " ").title()
         fig.suptitle(
-            f"Perplexity by RoPE Family — {model_display}",
+            f"Perplexity by RoPE Family -- {model_display}",
             fontsize=14,
             y=1.01,
         )
@@ -637,19 +698,25 @@ def plot_perplexity_delta(
     ppl_cap: float,
     dpi: int,
 ) -> None:
-    """
-    Plot delta-perplexity: PPL(method) - PPL(Standard RoPE) vs context length.
+    """Plot delta-perplexity: PPL(method) - PPL(Standard RoPE) vs context length.
 
-    Values below zero indicate the method outperforms Standard RoPE at that length.
-    This visualization highlights extrapolation gains without absolute scale dominance.
+    Values below zero indicate the method outperforms Standard RoPE at that
+    context length. This visualization highlights relative extrapolation gains
+    without being dominated by absolute perplexity magnitude differences.
+
+    Requires a Standard RoPE baseline record to be present for each model;
+    skips models where no baseline is available.
 
     Args:
-        records: List of dictionaries containing perplexity data and metadata.
-        train_length: The training context length; if None, inferred from model name.
-        out_dir: Output directory for saving the plot.
-        fmts: List of output file formats (e.g., ['png', 'pdf']).
-        ppl_cap: Maximum perplexity threshold for clipping diverged values.
-        dpi: Resolution in dots per inch.
+        records (List[Dict]): List of dictionaries containing perplexity data and
+            metadata as returned by load_results.
+        train_length (Optional[int]): The training context length in tokens for
+            drawing the boundary line. If None, inferred from model name.
+        out_dir (str): Output directory path for saving the generated figure.
+        fmts (List[str]): List of output file formats (e.g., ['png', 'pdf']).
+        ppl_cap (float): Maximum perplexity threshold; pairs where either value
+            exceeds this cap are excluded from the delta computation.
+        dpi (int): Resolution in dots per inch for raster output formats.
 
     Returns:
         None
@@ -661,7 +728,7 @@ def plot_perplexity_delta(
         baseline = next((r for r in model_records if r["rope_type"] == "none"), None)
         if baseline is None:
             print(
-                f"  [SKIP] No Standard RoPE baseline for '{model}' — delta plot skipped."
+                f"  [SKIP] No Standard RoPE baseline for '{model}' -- delta plot skipped."
             )
             continue
 
@@ -712,7 +779,7 @@ def plot_perplexity_delta(
             )
 
         ax.set_xlabel("Context Length (tokens)", fontsize=12)
-        ax.set_ylabel("ΔPPL vs RoPE ↓", fontsize=12)
+        ax.set_ylabel("Delta-PPL vs RoPE down-arrow", fontsize=12)
 
         model_display = (
             model.upper()
@@ -720,7 +787,7 @@ def plot_perplexity_delta(
             else model.replace("-", " ").title()
         )
         ax.set_title(
-            f"Perplexity Gain over RoPE — {model_display}\n"
+            f"Perplexity Gain over RoPE -- {model_display}\n"
             "Negative values indicate improvement",
             fontsize=12,
             pad=8,
@@ -757,14 +824,18 @@ def _set_ylim(
     ppl_cap: float,
     log_scale: bool,
 ) -> None:
-    """
-    Set sensible y-axis limits, ignoring diverged runs.
+    """Set sensible y-axis limits while ignoring diverged runs.
+
+    Computes min/max from valid (non-diverged, non-NaN) perplexity values
+    across all provided records and sets axis limits with appropriate margins.
 
     Args:
-        ax: Matplotlib Axes object to modify.
-        records: List of dictionaries containing perplexity data.
-        ppl_cap: Maximum perplexity threshold; values above are ignored.
-        log_scale: Whether the y-axis uses logarithmic scale.
+        ax (plt.Axes): Matplotlib Axes object to modify.
+        records (List[Dict]): List of dictionaries containing perplexity data.
+        ppl_cap (float): Maximum perplexity threshold; values above this are
+            excluded from limit calculation.
+        log_scale (bool): Whether the y-axis uses logarithmic scale. Affects
+            margin calculation strategy.
 
     Returns:
         None
@@ -792,15 +863,17 @@ def _save(
     fmts: List[str],
     dpi: int,
 ) -> None:
-    """
-    Save a figure to multiple formats.
+    """Save a figure to multiple output formats.
+
+    Creates the output directory if it does not exist, then writes the figure
+    in each requested format with consistent DPI settings.
 
     Args:
-        fig: Matplotlib Figure object to save.
-        out_dir: Output directory path.
-        name: Base filename without extension.
-        fmts: List of output formats (e.g., ['png', 'pdf']).
-        dpi: Resolution in dots per inch.
+        fig (plt.Figure): Matplotlib Figure object to save.
+        out_dir (str): Output directory path (created if nonexistent).
+        name (str): Base filename without extension.
+        fmts (List[str]): List of output format strings (e.g., ['png', 'pdf']).
+        dpi (int): Resolution in dots per inch for raster formats.
 
     Returns:
         None
@@ -809,7 +882,7 @@ def _save(
     for fmt in fmts:
         path = os.path.join(out_dir, f"{name}.{fmt}")
         fig.savefig(path, dpi=dpi, format=fmt)
-        print(f"  saved → {path}")
+        print(f"  saved -> {path}")
 
 
 # ============================================================================ #
@@ -818,11 +891,14 @@ def _save(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """
-    Build and configure the argument parser for the CLI.
+    """Build and configure the argument parser for the command-line interface.
+
+    Defines all accepted command-line arguments with their types, defaults,
+    and help text for the perplexity plotting tool.
 
     Returns:
-        Configured ArgumentParser instance.
+        argparse.ArgumentParser: Configured ArgumentParser instance ready for
+            parse_args() invocation.
     """
     p = argparse.ArgumentParser(
         description="Paper-quality perplexity plots for RoPE context-extension experiments.",
@@ -900,17 +976,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-delta",
         action="store_true",
         default=False,
-        help="Skip the ΔPPL plot (requires a Standard RoPE baseline file).",
+        help="Skip the delta-PPL plot (requires a Standard RoPE baseline file).",
     )
     return p
 
 
 def main() -> None:
-    """
-    Main entry point for the perplexity plotting CLI.
+    """Main entry point for the perplexity plotting CLI.
 
-    Parses command-line arguments, loads perplexity data from JSON files,
-    and generates comparison plots for RoPE extension methods.
+    Orchestrates the full pipeline: parse arguments, discover and load JSON
+    result files, print summary statistics, and generate the requested plot
+    types (combined overlay, per-family panels, delta-perplexity).
 
     Returns:
         None
@@ -945,11 +1021,11 @@ def main() -> None:
         p_max = max(r["perplexities"])
         print(
             f"  [{r['model_name']}]  {label:<35s}  "
-            f"lengths: {l_min}–{l_max} ({n_pts} pts)  "
-            f"PPL: {p_min:.2f}–{p_max:.2f}"
+            f"lengths: {l_min}-{l_max} ({n_pts} pts)  "
+            f"PPL: {p_min:.2f}-{p_max:.2f}"
         )
 
-    print(f"\nGenerating figures → {args.out_dir}/")
+    print(f"\nGenerating figures -> {args.out_dir}/")
 
     print("\n[1/3] Combined overlay plot")
     plot_perplexity_combined(

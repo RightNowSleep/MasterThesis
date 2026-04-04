@@ -1,3 +1,24 @@
+"""
+eval/eval_harness.py
+---------------------
+lm-evaluation-harness runner for MasterThesis custom RoPE models.
+
+This module wraps the lm_eval library to run standard NLP benchmarks (long-context,
+reasoning, math, code) on LLaMA-style models with custom Rotary Position Embedding
+(RoPE) configurations. It loads models via the project's model_loader (which applies
+the correct RoPE scaling), wraps them in lm-eval's HFLM, and runs evaluation tasks
+with checkpoint resume support.
+
+Key features:
+    - Task categorisation: long_context, reasoning, math, code.
+    - Per-task default few-shot counts mirroring yarn eval_harness.sh conventions.
+    - Error logging with automatic resume: failed tasks are skipped on re-run.
+    - Results saved per-task as JSON with full metadata.
+
+Usage:
+    python eval/eval_harness.py --model-name huggyllama/llama-7b --tasks arc_challenge,mmlu
+"""
+
 import argparse
 import json
 import os
@@ -82,7 +103,7 @@ def _warn_unknown_tasks(task_list: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Error log persistence (断点续跑)
+# Error log persistence (checkpoint resume support)
 # ---------------------------------------------------------------------------
 
 
@@ -179,6 +200,21 @@ def _build_output_path(output_dir: str, model_name: str, config) -> str:
 
 
 def main(args):
+    """
+    Run the full lm-evaluation-harness pipeline.
+
+    Loads the model with correct RoPE configuration, wraps it in HFLM, iterates
+    over the requested task list, and saves per-task results to JSON. Failed
+    tasks are logged to an error-log file so they can be skipped on subsequent
+    runs (checkpoint resume).
+
+    Args:
+        args: Parsed argparse.Namespace containing all CLI arguments
+            (model_name, tasks, output_dir, batch_size, limit, etc.).
+
+    Returns:
+        None. Results are written to disk as JSON files under args.output_dir.
+    """
     os.makedirs(args.output_dir, exist_ok=True)
     # ── 0. Load error log & filter already-failed tasks ──────────────── #
     error_log = _load_error_log(args.output_dir)

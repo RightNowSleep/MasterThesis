@@ -1,3 +1,42 @@
+"""Entropy-Stable Scaled Rotary Position Embedding for LLaMA models.
+
+This module implements a novel RoPE (Rotary Position Embedding) scaling approach that
+uses entropy-based compensation to maintain attention distribution stability when
+extending beyond the original training context length. Unlike traditional scaling
+methods that apply uniform temperature adjustments, this approach computes position-
+dependent compensation factors based on information-theoretic principles.
+
+Key Innovation:
+    The entropy-stable scaling method addresses the problem of attention distribution
+    degradation in long-context scenarios by:
+    1. Computing position-dependent entropy compensation factors using logarithmic growth
+    2. Applying adaptive attention temperature that increases with extrapolation distance
+    3. Limiting maximum compensation to prevent over-scaling (capped at 2.5x)
+
+Mathematical Formulation:
+    For positions beyond the original training length L_0:
+        - Relative position: rel_pos = pos - L_0
+        - Relative ratio: rel_ratio = rel_pos / L_0
+        - Relative entropy: rel_entropy = 1 + 0.5 * log(1 + rel_ratio) / log(2)
+        - Compensation factor: factor = 1 + β * (rel_entropy - 1), capped at 2.5
+        - Final scaling: t(pos, S) = 1 + α * ln(S) * compensation_factor(pos)
+
+    Where:
+        - α (alpha): Base scaling coefficient, default 0.1 (same as YaRN)
+        - β (beta): Entropy compensation strength, default 1.0
+        - S: Static scaling factor or dynamic runtime ratio
+
+Advantages Over Standard Approaches:
+    - Position-aware: Compensation adapts to how far each position is from training distribution
+    - Entropy-grounded: Uses information-theoretic principles for stable gradient flow
+    - Bounded: Maximum compensation limit prevents numerical instability
+    - Compatible: Works with both static and dynamic scaling modes
+
+Usage:
+    This module provides LlamaEntropyStableRotaryEmbedding which can be used as a
+    drop-in replacement for standard RoPE embeddings in LlamaAttention modules.
+"""
+
 import math
 import numpy as np
 import torch

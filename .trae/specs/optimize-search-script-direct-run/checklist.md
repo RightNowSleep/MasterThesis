@@ -1,4 +1,0 @@
-- [x] 脚本 `SEARCH_METHOD` 设置为 `bohb`
-- [x] 脚本顶部注释反映新的温度缩放公式
-- [x] BOHB 参数配置正确（initial_samples=25, iterations=100, early_stop_factor=3）
-- [x] 参数范围配置正确（coef_min=0.01, coef_max=0.3）

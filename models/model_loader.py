@@ -1,3 +1,28 @@
+"""Model and tokenizer loading utilities for LLaMA with RoPE scaling support.
+
+This module provides high-level functions for loading LLaMA models and tokenizers
+with comprehensive support for various RoPE (Rotary Position Embedding) scaling
+configurations, quantization settings, LoRA adapter merging, and gradient checkpointing.
+
+Main Functions:
+    - load_model: Load a LlamaForCausalLM model with specified RoPE configuration.
+    - load_tokenizer: Load the tokenizer associated with a pretrained model.
+    - add_args_model: Register CLI arguments for model configuration.
+
+Key Features:
+    - Automatic RoPE scaling configuration from command-line arguments
+    - Support for 20+ different RoPE scaling types (linear, NTK-aware, YaRN, etc.)
+    - Static vs dynamic scaling mode selection
+    - BitsAndBytes quantization (4-bit and 8-bit) integration
+    - LoRA adapter loading and merging via PEFT
+    - Gradient checkpointing for memory-efficient training
+    - Flexible dtype selection (float32, float16, bfloat16, auto)
+
+Usage Example:
+    Typical workflow involves calling add_args_model() to register arguments,
+    parsing them, then passing the args namespace to load_model() and load_tokenizer().
+"""
+
 import torch
 from transformers import AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel

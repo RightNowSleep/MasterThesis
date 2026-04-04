@@ -1,3 +1,34 @@
+"""LLaMA model implementation with extended RoPE scaling support.
+
+This module provides a PyTorch implementation of the LLaMA language model architecture
+with support for various Rotary Position Embedding (RoPE) scaling methods to extend
+the context window beyond the original training length.
+
+Key Features:
+    - Full LLaMA architecture: RMSNorm, SwiGLU MLP, Grouped Query Attention (GQA)
+    - Multiple attention implementations: eager, Flash Attention 2, SDPA
+    - Comprehensive RoPE scaling: 20+ different position encoding strategies
+    - Support for static and dynamic scaling modes
+    - Gradient checkpointing for memory efficiency
+    - KV caching for efficient autoregressive generation
+
+Model Variants:
+    - LlamaModel: Base transformer model outputting raw hidden states
+    - LlamaForCausalLM: Language model with vocabulary prediction head
+    - LlamaForSequenceClassification: Sequence classification using last token
+    - LlamaPreTrainedModel: Base class with weight initialization utilities
+
+Attention Implementations:
+    - LlamaAttention: Standard multi-head attention with RoPE
+    - LlamaFlashAttention2: Memory-efficient flash attention (requires flash-attn)
+    - LlamaSdpaAttention: PyTorch native scaled dot-product attention
+
+RoPE Scaling Methods:
+    See pe_llama.py for the complete list of supported scaling types including linear,
+    NTK-aware, NTK-by-parts, YaRN, My-RoPE variants, Block-Layered, Freq-Smooth,
+    Freq-Reciprocal, Dual-RoPE, and Inverse Dual-RoPE approaches.
+"""
+
 import math
 import warnings
 from typing import List, Optional, Tuple, Union

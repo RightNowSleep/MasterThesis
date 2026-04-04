@@ -1,3 +1,35 @@
+"""LLaMA model configuration with extended RoPE scaling validation.
+
+This module defines the LlamaConfig class that extends PretrainedConfig to support
+comprehensive configuration of LLaMA models with various Rotary Position Embedding
+(RoPE) scaling strategies. It provides robust validation for all 20+ supported
+RoPE scaling types and their parameters.
+
+Key Features:
+    - Complete LLaMA architecture configuration (vocab size, hidden size, layers, etc.)
+    - Support for Grouped Query Attention (GQA) via num_key_value_heads parameter
+    - Comprehensive RoPE scaling validation with deprecation handling
+    - Static vs dynamic scaling mode mutual exclusivity enforcement
+    - Automatic remapping of deprecated dynamic-* type strings
+
+RoPE Scaling Types Supported:
+    Standard: linear, ntk, part-ntk, yarn
+    Custom: my-rope, my-rope-scaled, my-rope2, my-rope2-scaled
+    Block-based: block-layered, block-layered-scaled
+    Frequency-based: freq-smooth, freq-smooth-scaled,
+                    freq-reciprocal, freq-reciprocal-scaled,
+                    freq-reciprocal-scaled-no-layer, freq-reciprocal-scaled-adaptive
+    Dual-position: dual-rope, dual-rope-scaled,
+                   inverse-dual-rope, inverse-dual-rope-scaled
+
+Configuration Validation:
+    The _rope_scaling_validation() method ensures:
+    - rope_scaling is a dictionary with valid 'type' field
+    - Type is one of the supported values or a deprecated variant
+    - At least one of 'factor' (>1.0) or 'dynamic' (True) is present
+    - Factor and dynamic are mutually exclusive (factor wins if both given)
+"""
+
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
 

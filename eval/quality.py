@@ -1,3 +1,23 @@
+"""
+eval/quality.py
+---------------
+Multiple-choice question (MCQ) quality evaluator for long-context models.
+
+Evaluates models on reading-comprehension benchmarks using two scoring modes:
+    - Logit mode (default): Reads raw next-token logits for A/B/C/D choice
+      letters. Robust against instruction-following failures; never produces
+      a parse error.
+    - Text mode (legacy): Generates up to 128 tokens and extracts the answer
+      via regex. Required for Chain-of-Thought (COT) and RAG modes.
+
+Supported datasets:
+    - LongBench-v2 (zai-org/LongBench-v2): Default, single split "train".
+    - QuALITY (emozilla/quality): SCROLLS benchmark, splits "train"/"validation".
+
+Usage:
+    python eval/quality.py --model-name huggyllama/llama-7b --scoring-mode logit --limit 50
+"""
+
 import gc
 import os
 import re
@@ -365,7 +385,20 @@ class QualityEvaluator:
     # ------------------------------------------------------------------ #
 
     def _prepare_logit_prompt(self, sample) -> str:
-        """Build the prompt for logit scoring (ends with '(' for the model to complete)."""
+        """
+        Build the prompt for logit scoring.
+
+        Constructs a multiple-choice question prompt that ends with '(' so that
+        the model's next-token prediction is forced to be one of A/B/C/D.
+        Handles both LongBench-v2 and QuALITY dataset formats. Truncates to
+        max_length if specified by keeping the first and last halves.
+
+        Args:
+            sample: A dataset sample dict containing context, question, and choices.
+
+        Returns:
+            The formatted prompt string ending with '('.
+        """
         if self.dataset_type == "quality":
             options = sample.get("options", ["", "", "", ""])
             context = sample.get("article", "")
@@ -729,6 +762,18 @@ def generate_save_filename(model_name, config) -> str:
 
 
 def add_args_quality(parser):
+    """
+    Register quality-evaluation CLI arguments.
+
+    Adds arguments for dataset selection, scoring mode, COT/RAG/no-context
+    options, length limiting, memory management, and output paths.
+
+    Args:
+        parser: ArgumentParser to add arguments to.
+
+    Returns:
+        The same parser with added arguments.
+    """
     parser.add_argument(
         "--dataset-name",
         type=str,

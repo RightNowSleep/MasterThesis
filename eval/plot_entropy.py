@@ -116,7 +116,19 @@ _VIOLIN_POINTS = 300
 
 
 def _get_color(seq_len: int, lengths: Sequence[int]) -> str:
-    """Return a consistent colour for a given sequence length."""
+    """
+    Return a consistent colour for a given sequence length.
+
+    Uses a fixed palette (_LENGTH_COLORS) for known lengths; falls back to
+    tab10 colormap for unexpected values.
+
+    Args:
+        seq_len: The sequence length to look up.
+        lengths: All available sequence lengths (used for fallback indexing).
+
+    Returns:
+        A matplotlib-compatible colour string (e.g., '#E65100').
+    """
     if seq_len in _LENGTH_COLORS:
         return _LENGTH_COLORS[seq_len]
     idx = list(lengths).index(seq_len)
@@ -144,7 +156,23 @@ def _end_label(
     color: str,
     fs: int = _ENDLABEL_FS,
 ) -> None:
-    """Annotate the last point of a line with its label."""
+    """
+    Annotate the last point of a line with its label.
+
+    Places a bold text label to the right of the final (x, y) coordinate
+    on the given axes, used for line-plot legends.
+
+    Args:
+        ax: Matplotlib Axes to annotate on.
+        xs: X-coordinate array.
+        ys: Y-coordinate array.
+        label: Text label to display.
+        colour: Text colour.
+        fs: Font size, defaults to _ENDLABEL_FS.
+
+    Returns:
+        None.
+    """
     ax.annotate(
         label,
         xy=(xs[-1], ys[-1]),
@@ -323,7 +351,17 @@ def _auto_select_layers(data: dict, n: int = 4) -> List[int]:
 
 
 def _grid(n: int):
-    """Return (nrows, ncols) for n sub-plots with preferred 2×2 / 3×3 layout."""
+    """
+    Compute a grid layout (nrows, ncols) for n sub-plots.
+
+    Prefers square-ish layouts: 1×1, 1×2, 2×2, 2×3, 3×3, 4×4, etc.
+
+    Args:
+        n: Number of sub-plots to arrange.
+
+    Returns:
+        A tuple of (nrows, ncols).
+    """
     if n <= 1:
         return 1, 1
     if n <= 2:
@@ -344,7 +382,19 @@ def _grid(n: int):
 
 
 def _common_vrange(matrices: List[np.ndarray]):
-    """Compute a shared (vmin, vmax) across a list of 2-D arrays."""
+    """
+    Compute a shared (vmin, vmax) across a list of 2-D arrays.
+
+    Used to ensure consistent colour-bar scaling across multiple heatmap
+    panels that display related data.
+
+    Args:
+        matrices: List of 2-D numpy arrays.
+
+    Returns:
+        A tuple of (vmin, vmax) as floats. Returns (nan, nan) if all arrays
+        contain only NaN values.
+    """
     all_vals = np.concatenate([m.ravel() for m in matrices])
     return float(np.nanmin(all_vals)), float(np.nanmax(all_vals))
 
@@ -1783,6 +1833,13 @@ def plot_all(
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """
+    Build the CLI argument parser for the entropy plotting script.
+
+    Returns:
+        Configured argparse.ArgumentParser with --input, --out-dir, --fmt,
+        --dpi, and --fig arguments.
+    """
     p = argparse.ArgumentParser(
         description="Plot attention-entropy results from EntropyEvaluator JSON output."
     )
@@ -1824,6 +1881,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """
+    Entry point for the entropy plotting CLI.
+
+    Loads an EntropyEvaluator JSON result file, normalises the data format,
+    and generates diagnostic figures (all figures or a single figure by number).
+
+    Returns:
+        None. Figures are saved to disk in the specified output directory.
+
+    Raises:
+        FileNotFoundError: If the input JSON file does not exist.
+    """
     args = _build_parser().parse_args()
     input_path = Path(args.input)
 

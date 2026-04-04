@@ -1,7 +1,0 @@
-- [x] LlamaDualRoPEEmbedding 类实现完成
-- [x] 第一重RoPE使用 t % S 计算位置索引
-- [x] 第二重RoPE使用 t // S 计算位置索引
-- [x] 缩放因子 S 正确计算
-- [x] LlamaDualRoPEScaledEmbedding 类实现完成
-- [x] 注意力温度缩放正确应用
-- [x] 新类添加到 __all__ 导出列表

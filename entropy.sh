@@ -13,11 +13,15 @@
 # Usage:
 #   bash entropy.sh
 # -----------------------------------------------------------------------------
-# Parameters: None (all configuration is done via variables below)
+# Parameters:
+#   None (all configuration is done via variables below)
+# -----------------------------------------------------------------------------
+# Globals:
+#   CUDA_VISIBLE_DEVICES  - GPU device IDs for computation (default: "0,1,2,3")
 # -----------------------------------------------------------------------------
 # Output:
-#   - Entropy data saved to: results/entropy/
-#   - Visualization plots saved to: results/entropy/plots/
+#   Entropy data saved to:     results/entropy/
+#   Visualization plots saved to: results/entropy/plots/
 # =============================================================================
 
 CUDA_DEVICES="0,1,2,3"
@@ -44,12 +48,12 @@ ADAPTER_DIR="finetunes/continued_pretrain"
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
 ROPE_METHODS=(
-    "--rope-type none"
-    "--rope-type linear --rope-dynamic"
-    "--rope-type ntk --rope-dynamic"
-    "--rope-type part-ntk --rope-dynamic"
-    "--rope-type freq-reciprocal --rope-dynamic"
-    "--rope-type dual-rope --rope-dynamic"
+    # "--rope-type none"
+    # "--rope-type linear --rope-dynamic"
+    # "--rope-type ntk --rope-dynamic"
+    # "--rope-type part-ntk --rope-dynamic"
+    # "--rope-type freq-reciprocal --rope-dynamic"
+    # "--rope-type dual-rope --rope-dynamic"
     "--rope-type inverse-dual-rope --rope-dynamic"
 )
 
@@ -60,6 +64,7 @@ ADAPTER_PATHS=(
 )
 
 # ── Build Methods List ───────────────────────────────────────────────────────
+# Combine enabled RoPE methods and adapter paths into the final evaluation list
 METHODS=()
 if [ $ROPE = true ]; then
     METHODS+=("${ROPE_METHODS[@]}")
@@ -69,7 +74,7 @@ if [ $ADAPTER = true ]; then
 fi
 
 # ── Pipeline Control Flags ────────────────────────────────────────────────────
-PART1=true
+PART1=false
 PART2=true
 
 mkdir -p "$SAVE_DIR"
@@ -97,7 +102,7 @@ if [ $PART1 = true ]; then
         echo "--------------------------------------------------"
         echo "Processing method: $method"
         echo "--------------------------------------------------"
-        
+
         python "$ENTROPY_SCRIPT" \
             --model-name "huggyllama/llama-7b" \
             $method \
@@ -106,7 +111,7 @@ if [ $PART1 = true ]; then
             --num-samples "$NUM_SAMPLES" \
             --dataset-name "$DATASET" \
             --save-dir "$SAVE_DIR"
-        
+
         echo "Completed: $method"
         echo ""
     done
@@ -132,17 +137,17 @@ if [ $PART2 = true ]; then
     for INPUT_FILE in $JSON_FILES; do
         FILENAME=$(basename "$INPUT_FILE" .json)
         METHOD_PLOT_DIR="$PLOT_DIR/$FILENAME"
-        
+
         echo "--------------------------------------------------"
         echo "Plotting for: $FILENAME"
         echo "Input: $INPUT_FILE"
         echo "Output: $METHOD_PLOT_DIR"
         echo "--------------------------------------------------"
-        
+
         python "$PLOT_SCRIPT" \
             --input "$INPUT_FILE" \
             --out-dir "$METHOD_PLOT_DIR"
-        
+
         echo "Plots generated for: $FILENAME"
         echo ""
     done

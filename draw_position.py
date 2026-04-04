@@ -1,31 +1,36 @@
 # sinusoidal_pe_heatmap_with_box.py
-"""Generate a heatmap visualization of sinusoidal positional encoding.
+"""Sinusoidal positional encoding heatmap visualizer.
 
-This module creates a visual representation of the sinusoidal positional encoding
-matrix used in transformer models, highlighting the extrapolation region beyond
-the training context length.
+Constructs and plots the standard sinusoidal positional encoding (PE) matrix
+used in the original Transformer architecture (Vaswani et al., 2017). Each row
+corresponds to a position and each column to a dimension, with alternating
+sin/cos patterns across dimension pairs.
+
+A red rectangle highlights positions beyond the original training context length
+(default 2048), indicating the extrapolation region where encodings may degrade.
 """
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 # ========== Parameters ==========
-d_model = 128
-max_len = 4096
-base = 10000.0
+d_model = 128  # Embedding dimension
+max_len = 4096  # Maximum sequence length to visualize
+base = 10000.0  # PE base frequency
 
-# ========== Construct PE ==========
+# ========== Construct positional encoding matrix ==========
 pe = np.zeros((max_len, d_model))
 dim_vec = np.arange(0, d_model, 2).reshape(1, -1)
 angle = np.arange(max_len).reshape(-1, 1) / (base ** (dim_vec / d_model))
 
-pe[:, 0::2] = np.sin(angle)
-pe[:, 1::2] = np.cos(angle)
+pe[:, 0::2] = np.sin(angle)  # Even dimensions: sine
+pe[:, 1::2] = np.cos(angle)  # Odd dimensions: cosine
 
 # ========== Plotting ==========
 fig, ax = plt.subplots(figsize=(10, 6))
 im = ax.imshow(pe, cmap="viridis", aspect="auto")
 
-# Red box: region >= 2048
+# Red box highlighting the extrapolation region (positions >= 2048)
 start_row = 2048
 box_height = max_len - start_row
 ax.add_patch(

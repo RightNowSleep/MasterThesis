@@ -1,3 +1,22 @@
+"""
+eval/perplexity.py
+-------------------
+Perplexity evaluator for computing language model predictive quality.
+
+Perplexity (PPL) is the exponential of average negative log-likelihood over a
+tokenised dataset. Lower values indicate better language modelling capability.
+This evaluator uses a sliding-window approach to handle texts that exceed the
+model's maximum context length, with weighted accumulation to produce an
+unbiased global perplexity estimate.
+
+Supports evaluation at multiple context lengths (e.g., 256, 512, ..., 8192) to
+analyse how model quality scales with input length — particularly relevant for
+long-context RoPE scaling experiments.
+
+Usage:
+    python eval/perplexity.py --model-name huggyllama/llama-7b --max-length 8192
+"""
+
 import gc
 import torch
 from datasets import load_dataset
@@ -347,6 +366,18 @@ def generate_save_filename(model_name, config):
 
 
 def add_args_perplexity(parser):
+    """
+    Register perplexity-evaluation CLI arguments.
+
+    Adds arguments for dataset selection, BOS token handling, length configuration,
+    sliding window size, truncation behaviour, memory management, and output paths.
+
+    Args:
+        parser: ArgumentParser to add arguments to.
+
+    Returns:
+        The same parser with added arguments.
+    """
     parser.add_argument(
         "--dataset-name",
         type=str,

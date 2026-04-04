@@ -1,3 +1,26 @@
+"""Supervised fine-tuning (SFT) script with QLoRA and DeepSpeed support.
+
+Implements an end-to-end SFT pipeline for instruction-tuning large language models
+using Hugging Face TRL's :class:`~trl.SFTTrainer`. Supports:
+
+    - **QLoRA**: 4-bit or 8-bit quantization via BitsAndBytes for memory-efficient
+      fine-tuning on consumer GPUs.
+    - **LoRA**: Optional Low-Rank Adaptation wrapping for parameter-efficient SFT.
+    - **DeepSpeed**: Integration with DeepSpeed ZeRO offloading for multi-GPU scaling.
+    - **Chat template formatting**: Automatic message-to-text conversion via the
+      tokenizer's chat template.
+    - **Multiple RoPE types**: Linear, NTK-aware, YaRN, and dynamic RoPE scaling
+      inherited from the shared model loader.
+
+Typical usage::
+
+    python finetune.py \\
+        --model-name meta-llama/Llama-2-7b-chat-hf \\
+        --rope-type linear --rope-factor 4.0 \\
+        --quantization 4bit --use-lora \\
+        --dataset HuggingFaceH4/ultrachat_200k
+"""
+
 import argparse
 import torch
 from datasets import load_dataset
@@ -11,31 +34,32 @@ from models.model_loader import load_model, load_tokenizer, add_args_model
 def add_args_finetune(parser: argparse.ArgumentParser):
     """Add SFT-specific hyperparameters to the argument parser.
 
-    Model, tokenizer, and RoPE arguments are inherited from add_args_model()
-    in the model_loader module.
+    Registers CLI flags for model output, training epochs, batch size, learning rate,
+    LoRA configuration, quantization mode, dataset selection, and DeepSpeed settings.
+    Model/tokenizer/RoPE arguments are handled separately by :func:`add_args_model`.
 
     Args:
-        parser: Argument parser to add SFT-specific arguments to.
+        parser: Argument parser instance to augment with SFT arguments.
 
     Returns:
-        argparse.ArgumentParser: The parser with added SFT-specific arguments.
+        argparse.ArgumentParser: The same parser with additional SFT arguments registered.
 
     Added Arguments:
-        --output-dir: Directory to save the fine-tuned model.
-        --num-train-epochs: Number of training epochs.
-        --per-device-train-batch-size: Batch size per device.
-        --gradient-accumulation-steps: Number of gradient accumulation steps.
-        --learning-rate: Learning rate for the optimizer.
-        --max-seq-length: Maximum sequence length for SFTTrainer.
-        --optim: Optimizer type.
-        --deepspeed: Path to DeepSpeed config JSON file.
-        --use-lora: Whether to use LoRA for parameter-efficient fine-tuning.
-        --lora-r: LoRA rank.
-        --lora-alpha: LoRA alpha parameter.
-        --lora-dropout: LoRA dropout rate.
-        --quantization: Quantization mode (4bit, 8bit, none).
-        --dataset: HuggingFace dataset ID for SFT.
-        --dataset-split: Dataset split to use for training.
+        --output-dir: Directory for saving the fine-tuned model.
+        --num-train-epochs: Number of full passes over the training dataset.
+        --per-device-train-batch-size: Batch size per GPU/device.
+        --gradient-accumulation-steps: Steps before optimizer update.
+        --learning-rate: Peak learning rate for the optimizer.
+        --max-seq-length: Maximum sequence length passed to SFTTrainer.
+        --optim: Optimizer name (adamw_torch, adamw_bnb_8bit, paged_adamw_8bit).
+        --deepspeed: Path to DeepSpeed JSON config file (None disables).
+        --use-lora: Enable LoRA wrapping for parameter-efficient fine-tuning.
+        --lora-r: LoRA rank (dimension of low-rank matrices).
+        --lora-alpha: LoRA scaling factor (recommend >= lora_r).
+        --lora-dropout: Dropout probability applied to LoRA layers.
+        --quantization: Quantization mode — "4bit", "8bit", or "none".
+        --dataset: HuggingFace dataset identifier for training data.
+        --dataset-split: Dataset split to use (e.g., "train_sft").
     """
     parser.add_argument(
         "--output-dir",
@@ -70,7 +94,12 @@ def add_args_finetune(parser: argparse.ArgumentParser):
         help="Wrap model with LoRA for parameter-efficient SFT.",
     )
     parser.add_argument("--lora-r", type=int, default=16)
-    parser.add_argument("--lora-alpha", type=int, default=32)
+    parser.add_argument(
+        "--lora-alpha",
+        type=int,
+        default=32,
+        help="LoRA alpha. Recommend >= lora_r.",
+    )
     parser.add_argument("--lora-dropout", type=float, default=0.05)
     parser.add_argument(
         "--quantization",
@@ -90,21 +119,23 @@ def add_args_finetune(parser: argparse.ArgumentParser):
 
 
 def main(args):
-    """Main entry point for supervised fine-tuning (SFT) with QLoRA and DeepSpeed.
+    """Execute the supervised fine-tuning pipeline.
 
-    Pipeline:
-        1. Parse command-line arguments for model, SFT, and LoRA configurations.
-        2. Load tokenizer and define chat-template formatting function.
-        3. Build quantization config (4-bit or 8-bit) if requested.
-        4. Load the model via the unified loader.
-        5. Configure LoRA for parameter-efficient fine-tuning if enabled.
-        6. Load and prepare the training dataset.
-        7. Initialize SFTTrainer and start training.
-        8. Save the fine-tuned model to the output directory.
+    Pipeline steps:
+
+        1. Derive experiment tag from ``--rope-type``.
+        2. Load tokenizer and define chat-template formatting closure.
+        3. Build BitsAndBytesConfig if quantization is requested.
+        4. Patch args for compatibility with the unified model loader.
+        5. Load model via :func:`models.model_loader.load_model`.
+        6. Optionally wrap model with LoRA configuration.
+        7. Load training dataset from Hugging Face Hub.
+        8. Instantiate SFTTrainer with training arguments.
+        9. Run training and save the final model.
 
     Args:
-        args: Parsed command-line arguments containing model, SFT, and LoRA
-            configurations.
+        args: Parsed command-line arguments containing model, SFT, LoRA,
+            quantization, and dataset configurations.
 
     Returns:
         None
@@ -121,6 +152,15 @@ def main(args):
     tokenizer.model_max_length = args.max_seq_length
 
     def formatting_func(example):
+        """Convert a chat-messages example into a single formatted text string.
+
+        Args:
+            example: A dictionary containing a ``"messages"`` key with a list
+                of role-content dictionaries.
+
+        Returns:
+            dict: Dictionary with a single ``"text"`` key holding the formatted string.
+        """
         return {
             "text": tokenizer.apply_chat_template(
                 example["messages"], tokenize=False, add_generation_prompt=False

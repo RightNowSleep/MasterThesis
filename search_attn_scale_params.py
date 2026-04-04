@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
-"""
-Attention Scale Parameter Search Script
+"""Attention scale parameter search script for context-extended language models.
 
-This script searches for optimal parameters in the attention scaling formula:
-    t_base = attn_scale_base + attn_scale_coef * torch.log(s)
+This module searches for optimal parameters in the attention scaling formula::
 
-where attn_scale_base and attn_scale_coef are the parameters to optimize.
-The optimization objective is to minimize perplexity at 64K context length.
+    t_base = attn_scale_base + attn_scale_coef * log(s)
+
+where ``attn_scale_base`` and ``attn_scale_coef`` are the parameters to optimize.
+The optimization objective is to minimize perplexity at extended context lengths
+(e.g., 64K tokens).
+
+Supported search strategies:
+
+    - **grid**: Exhaustive uniform sampling over the parameter space.
+    - **random**: Uniform random sampling for quick exploration.
+    - **bayesian**: L-BFGS-B based local optimization from initial points.
+    - **adaptive**: Multi-stage coarse-to-fine search that progressively narrows
+      the search region around the best candidate found so far.
+    - **log-scale**: Logarithmic spacing, useful when parameters span orders of magnitude.
+    - **bohb**: Bayesian Optimization + HyperBand combining low-fidelity screening
+      with high-fidelity validation.
+
+All strategies evaluate candidates using length-weighted average perplexity across
+multiple context lengths, with built-in caching and resume support.
 """
 
 import argparse
@@ -30,6 +45,15 @@ _eval_cache = {}
 
 
 def parse_args():
+    """Parse command-line arguments for the attention scale parameter search.
+
+    Defines and parses all CLI flags controlling the search method, parameter
+    bounds, evaluation configuration, and output settings.
+
+    Returns:
+        argparse.Namespace: Parsed argument namespace containing all configuration
+            options for the parameter search run.
+    """
     parser = argparse.ArgumentParser(
         description="Search for optimal attention scale parameters"
     )
@@ -171,11 +195,15 @@ def generate_grid_search_space(
     coef_max: float,
     coef_steps: int,
 ) -> List[float]:
-    """
-    Generate parameter values for grid search.
+    """Generate uniformly spaced parameter values for grid search.
+
+    Args:
+        coef_min: Lower bound of the coefficient search range.
+        coef_max: Upper bound of the coefficient search range.
+        coef_steps: Number of grid points to generate between bounds.
 
     Returns:
-        List of attn_scale_coef values (rounded to 3 decimal places)
+        list[float]: List of ``attn_scale_coef`` values rounded to 3 decimal places.
     """
     coef_values = torch.linspace(coef_min, coef_max, coef_steps).tolist()
     coef_values = [round(v, 3) for v in coef_values]
@@ -188,11 +216,15 @@ def generate_random_search_space(
     coef_max: float,
     n_samples: int,
 ) -> List[float]:
-    """
-    Generate random parameter values.
+    """Generate randomly sampled parameter values.
+
+    Args:
+        coef_min: Lower bound of the coefficient search range.
+        coef_max: Upper bound of the coefficient search range.
+        n_samples: Number of random samples to draw.
 
     Returns:
-        List of attn_scale_coef values (rounded to 3 decimal places)
+        list[float]: List of ``attn_scale_coef`` values rounded to 3 decimal places.
     """
     coef_values = torch.rand(n_samples) * (coef_max - coef_min) + coef_min
     coef_values = [round(v, 3) for v in coef_values.tolist()]
@@ -201,13 +233,19 @@ def generate_random_search_space(
 
 
 def set_model_attn_scale_params(model, attn_scale_base: float, attn_scale_coef: float):
-    """
-    Set attention scale parameters in all rotary embedding layers.
+    """Set attention scale parameters in all rotary embedding layers.
+
+    Iterates over every named module in *model* and assigns the given scaling
+    parameters to any module exposing ``attn_scale_base`` or ``attn_scale_coef``
+    attributes.
 
     Args:
-        model: The language model
-        attn_scale_base: Base value for attention scaling
-        attn_scale_coef: Coefficient for attention scaling
+        model: The language model whose rotary embedding layers will be updated.
+        attn_scale_base: Base value for attention scaling (typically 1.0).
+        attn_scale_coef: Coefficient for attention scaling to optimize.
+
+    Returns:
+        None
     """
     for name, module in model.named_modules():
         if hasattr(module, "attn_scale_base"):
@@ -227,26 +265,34 @@ def evaluate_params(
     limit: int,
     device: str,
 ) -> Dict:
-    """
-    Evaluate a parameter combination using perplexity at multiple context lengths.
+    """Evaluate a parameter combination using perplexity at multiple context lengths.
+
+    Sets the model's attention scaling parameters, runs a perplexity evaluation
+    across a range of context lengths, and computes a length-weighted average
+    perplexity as the optimization objective. Results are cached by parameter
+    combination to avoid redundant computation.
 
     Args:
-        model: The language model
-        tokenizer: The tokenizer
-        attn_scale_coef: Coefficient for attention scaling
-        eval_min_length: Minimum context length for evaluation
-        eval_max_length: Maximum context length for evaluation
-        dataset: Dataset name
-        split: Dataset split
-        limit: Number of samples
-        device: Device to use
+        model: The language model to evaluate.
+        tokenizer: The tokenizer associated with the model.
+        attn_scale_coef: Coefficient for attention scaling under test.
+        eval_min_length: Minimum context length for evaluation.
+        eval_max_length: Maximum context length for evaluation.
+        dataset: HuggingFace dataset identifier for evaluation data.
+        split: Dataset split to use (e.g., ``"test"``).
+        limit: Maximum number of samples to evaluate.
+        device: Device string for model inference (e.g., ``"cuda:0"``).
 
     Returns:
-        Dictionary containing:
-            - weighted_ppl: Weighted average perplexity (lower is better)
-            - lengths: List of evaluated context lengths
-            - perplexities: List of perplexities at each length
-        Uses length-weighted average: longer contexts get higher weights
+        dict: Evaluation result containing:
+
+            - ``weighted_ppl`` (*float*): Length-weighted average perplexity
+              (lower is better).
+            - ``lengths`` (*list[int]*): Context lengths that were evaluated.
+            - ``perplexities`` (*list[float]*): Perplexity at each evaluated length.
+
+    Raises:
+        Exception: Propagated from the underlying evaluator on failure.
     """
     global _eval_cache
 
@@ -311,13 +357,18 @@ def save_results(
     output_dir: str,
     args,
 ):
-    """
-    Save search results to JSON file.
+    """Save search results to a timestamped JSON file.
+
+    Serializes the full result list, the best-performing configuration (by
+    perplexity), and the original CLI arguments into a single JSON file.
 
     Args:
-        results: List of evaluation results
-        output_dir: Output directory
-        args: Command line arguments
+        results: List of evaluation result dictionaries from the search.
+        output_dir: Directory path where the JSON file will be written.
+        args: Parsed CLI arguments to record alongside results.
+
+    Returns:
+        None
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -343,14 +394,18 @@ def save_results(
 
 
 def load_previous_results(filepath: str) -> List[Dict]:
-    """
-    Load results from previous search.
+    """Load previously saved search results from a JSON file.
 
     Args:
-        filepath: Path to previous results file
+        filepath: Path to a JSON file produced by :func:`save_results`.
 
     Returns:
-        List of previous results
+        list[dict]: The list of result dictionaries stored under the ``"results"``
+            key, or an empty list if the key is absent.
+
+    Raises:
+        FileNotFoundError: If *filepath* does not exist.
+        json.JSONDecodeError: If the file contains invalid JSON.
     """
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -363,17 +418,23 @@ def run_grid_search(
     args,
     previous_results: List[Dict] = None,
 ) -> List[Dict]:
-    """
-    Run grid search over parameter space.
+    """Run exhaustive grid search over the parameter space.
+
+    Evaluates every point on a uniformly spaced grid defined by
+    ``--attn-scale-coef-min``, ``--attn-scale-coef-max``, and
+    ``--attn-scale-coef-steps``. Supports resuming from prior results by
+    skipping already-evaluated parameter combinations.
 
     Args:
-        model: The language model
-        tokenizer: The tokenizer
-        args: Command line arguments
-        previous_results: Results from previous run (for resuming)
+        model: The language model to evaluate.
+        tokenizer: The tokenizer associated with the model.
+        args: Parsed CLI arguments containing search bounds and evaluation config.
+        previous_results: Optional list of prior evaluation results for resume
+            support; already-evaluated combinations will be skipped.
 
     Returns:
-        List of evaluation results
+        list[dict]: Complete list of evaluation results including both prior and
+            newly evaluated configurations.
     """
     coef_values = generate_grid_search_space(
         args.attn_scale_coef_min,
@@ -484,17 +545,21 @@ def run_random_search(
     args,
     previous_results: List[Dict] = None,
 ) -> List[Dict]:
-    """
-    Run random search over parameter space.
+    """Run random search over the parameter space.
+
+    Draws ``--random-samples`` uniform random points within the coefficient
+    bounds and evaluates each one. Supports resuming from prior results.
 
     Args:
-        model: The language model
-        tokenizer: The tokenizer
-        args: Command line arguments
-        previous_results: Results from previous run (for resuming)
+        model: The language model to evaluate.
+        tokenizer: The tokenizer associated with the model.
+        args: Parsed CLI arguments containing search bounds and evaluation config.
+        previous_results: Optional list of prior evaluation results for resume
+            support; already-evaluated combinations will be skipped.
 
     Returns:
-        List of evaluation results
+        list[dict]: Complete list of evaluation results including both prior and
+            newly evaluated configurations.
     """
     coef_values = generate_random_search_space(
         args.attn_scale_coef_min,
@@ -605,17 +670,24 @@ def run_bayesian_optimization(
     args,
     previous_results: List[Dict] = None,
 ) -> List[Dict]:
-    """
-    Run Bayesian optimization over parameter space.
+    """Run Bayesian optimization using L-BFGS-B local search.
+
+    Performs an initial uniform sampling phase followed by iterative L-BFGS-B
+    optimization starting from the current best point. Implements early stopping
+    when no improvement is observed for a configurable number of iterations.
 
     Args:
-        model: The language model
-        tokenizer: The tokenizer
-        args: Command line arguments
-        previous_results: Results from previous run (for resuming)
+        model: The language model to evaluate.
+        tokenizer: The tokenizer associated with the model.
+        args: Parsed CLI arguments containing search config and evaluation params.
+        previous_results: Optional list of prior evaluation results for resume
+            support or warm-starting the optimizer.
 
     Returns:
-        List of evaluation results
+        list[dict]: Complete list of evaluation results.
+
+    Raises:
+        SystemExit: If scipy is not installed (required for L-BFGS-B).
     """
     try:
         from scipy.optimize import minimize
@@ -627,6 +699,15 @@ def run_bayesian_optimization(
     results = previous_results if previous_results else []
 
     def objective(params):
+        """Objective function wrapping evaluate_params for scipy minimizer.
+
+        Args:
+            params: List-like container where ``params[0]`` is the
+                ``attn_scale_coef`` value to evaluate.
+
+        Returns:
+            float: Weighted perplexity (or a large penalty on error).
+        """
         coef = params[0]
 
         print(f"\nEvaluating: coef={coef:.3f}")
@@ -807,20 +888,24 @@ def run_adaptive_search(
     args,
     previous_results: List[Dict] = None,
 ) -> List[Dict]:
-    """
-    Run adaptive multi-stage search over parameter space.
+    """Run adaptive multi-stage coarse-to-fine search over the parameter space.
 
-    This strategy performs multiple stages of search, progressively
-    narrowing the search space around the best parameters found.
+    Executes multiple search stages. In each stage, the algorithm evaluates
+    uniformly spaced coefficients within a centered window, then narrows the
+    window around the best-found coefficient by the refinement factor for the
+    next stage. Converges early when improvement falls below threshold.
 
     Args:
-        model: The language model
-        tokenizer: The tokenizer
-        args: Command line arguments
-        previous_results: Results from previous run (for resuming)
+        model: The language model to evaluate.
+        tokenizer: The tokenizer associated with the model.
+        args: Parsed CLI arguments containing adaptive search config
+            (``--adaptive-stages``, ``--adaptive-refinement-factor``) and
+            evaluation parameters.
+        previous_results: Optional list of prior results for resume support;
+            the best prior result initializes the search center.
 
     Returns:
-        List of evaluation results
+        list[dict]: Complete list of evaluation results annotated with stage numbers.
     """
     results = previous_results if previous_results else []
 
@@ -991,19 +1076,20 @@ def run_log_scale_search(
     args,
     previous_results: List[Dict] = None,
 ) -> List[Dict]:
-    """
-    Run log-scale search over parameter space.
+    """Run logarithmic-scale search over the parameter space.
 
-    This is useful when parameters span multiple orders of magnitude.
+    Generates coefficient values using log-spaced sampling, which provides
+    denser coverage near the lower bound. This is useful when the optimal
+    parameter is expected to lie in a specific order-of-magnitude range.
 
     Args:
-        model: The language model
-        tokenizer: The tokenizer
-        args: Command line arguments
-        previous_results: Results from previous run (for resuming)
+        model: The language model to evaluate.
+        tokenizer: The tokenizer associated with the model.
+        args: Parsed CLI arguments containing search bounds and evaluation config.
+        previous_results: Optional list of prior results for resume support.
 
     Returns:
-        List of evaluation results
+        list[dict]: Complete list of evaluation results.
     """
     n_samples_coef = args.attn_scale_coef_steps
 
@@ -1104,7 +1190,7 @@ def run_log_scale_search(
     print(f"  Total evaluations: {evaluations_count}")
     print(f"  Time elapsed: {elapsed:.1f}s")
     if best_overall:
-        print(f"  Best attn_scale_base: 1.000 (fixed)")
+        print(f"  Best attn_scale_base: {best_overall['attn_scale_base']:.3f}")
         print(f"  Best attn_scale_coef: {best_overall['attn_scale_coef']:.3f}")
         print(f"  Best perplexity: {best_overall['perplexity']:.4f}")
     print(f"{'='*60}")
@@ -1118,20 +1204,31 @@ def run_bohb_search(
     args,
     previous_results: List[Dict] = None,
 ) -> List[Dict]:
-    """
-    Run BOHB (Bayesian Optimization + HyperBand) search.
+    """Run BOHB (Bayesian Optimization + HyperBand) search.
 
-    BOHB combines Bayesian optimization with HyperBand for efficient
-    hyperparameter search with early stopping.
+    Combines three phases for efficient hyperparameter search:
+
+        1. **Initial Random Sampling** — Low-fidelity evaluation (fewer samples)
+           of many random configurations to broadly explore the space.
+        2. **HyperBand Early Stopping** — Promote only the top-performing
+           configurations to full-fidelity evaluation.
+        3. **Bayesian Optimization** — Iteratively propose new candidates using
+           an Expected Improvement acquisition function, with periodic
+           high-fidelity validation checkpoints.
 
     Args:
-        model: The language model
-        tokenizer: The tokenizer
-        args: Command line arguments
-        previous_results: Results from previous run (for resuming)
+        model: The language model to evaluate.
+        tokenizer: The tokenizer associated with the model.
+        args: Parsed CLI arguments containing BOHB-specific config
+            (``--bohb-initial-samples``, ``--bohb-iterations``,
+            ``--bohb-early-stop-factor``) and evaluation parameters.
+        previous_results: Optional list of prior results for resume support.
 
     Returns:
-        List of evaluation results
+        list[dict]: Complete list of evaluation results with fidelity annotations.
+
+    Raises:
+        SystemExit: If scipy is not installed (required for L-BFGS-B and EI).
     """
     try:
         from scipy.optimize import minimize
@@ -1158,15 +1255,19 @@ def run_bohb_search(
     print(f"Initial samples: {args.bohb_initial_samples}")
 
     def evaluate_with_fidelity(coef: float, fidelity: str = "low") -> Dict:
-        """
-        Evaluate parameter with specified fidelity level.
+        """Evaluate a coefficient at the specified fidelity level.
+
+        Uses fewer evaluation samples for low fidelity (fast screening) and
+        the full sample count for high fidelity (accurate validation).
 
         Args:
-            coef: Attention scale coefficient
-            fidelity: "low" or "high" fidelity evaluation
+            coef: Attention scale coefficient to evaluate.
+            fidelity: Evaluation fidelity — ``"low"`` uses reduced sample count,
+                ``"high"`` uses the full ``--eval-limit`` count.
 
         Returns:
-            Evaluation result dictionary
+            dict: Result dictionary with keys ``attn_scale_base``,
+                ``attn_scale_coef``, ``perplexity``, ``status``, and ``fidelity``.
         """
         limit = low_fidelity_limit if fidelity == "low" else high_fidelity_limit
 
@@ -1305,16 +1406,20 @@ def run_bohb_search(
     def acquisition_function(
         coef: float, explored_params: List[float], explored_values: List[float]
     ) -> float:
-        """
-        Expected Improvement acquisition function.
+        """Compute Expected Improvement (EI) acquisition function value.
+
+        Balances exploitation (targeting regions near the best observed value)
+        with exploration (penalizing proximity to already-explored points)
+        to propose promising new candidates.
 
         Args:
-            coef: Parameter to evaluate
-            explored_params: Previously explored parameters
-            explored_values: Corresponding objective values
+            coef: Candidate parameter value to score.
+            explored_params: List of previously evaluated parameter values.
+            explored_values: Corresponding objective (perplexity) values.
 
         Returns:
-            Expected improvement value
+            float: EI score plus exploration bonus; higher values indicate
+                more promising candidates.
         """
         if len(explored_params) < 2:
             return 0.0
@@ -1350,6 +1455,14 @@ def run_bohb_search(
         x0 = [best_current["attn_scale_coef"]]
 
         def objective(params):
+            """Inner objective function for scipy L-BFGS-B minimization during Phase 3.
+
+            Args:
+                params: List-like where ``params[0]`` is the proposed coefficient.
+
+            Returns:
+                float: Perplexity or penalty value for the proposed coefficient.
+            """
             coef = params[0]
             coef = max(args.attn_scale_coef_min, min(args.attn_scale_coef_max, coef))
 
@@ -1485,6 +1598,17 @@ def run_bohb_search(
 
 
 def main():
+    """Entry point for the attention scale parameter search.
+
+    Parses CLI arguments, loads the model and tokenizer, dispatches to the
+    selected search strategy, and persists the results to disk.
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: If an unrecognized ``--search-method`` is specified.
+    """
     args = parse_args()
 
     print("=" * 60)
