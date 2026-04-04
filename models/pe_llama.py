@@ -2189,7 +2189,7 @@ class LlamaInverseDualRoPEEmbedding(nn.Module):
         L_0 = self.original_max_position_embeddings
         t = torch.arange(seq_len, device=device, dtype=torch.float32)
 
-        pos_1 = t // L_0
+        pos_1 = t 
         pos_2 = t % L_0
 
         self.register_buffer("pos_1_cached", pos_1, persistent=False)

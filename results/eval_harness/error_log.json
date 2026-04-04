@@ -1,0 +1,30 @@
+{
+  "aime": {
+    "error": "Invalid configuration: requested max tokens to generate (32768) must be less than model's maximum sequence length (16384).",
+    "type": "AssertionError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "part-ntk",
+    "timestamp": "2026-04-04T02:40:00.806558"
+  },
+  "hendrycks_math": {
+    "error": "Answer is not a string! : [-9, 9]",
+    "type": "AssertionError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "part-ntk",
+    "timestamp": "2026-04-04T02:40:24.282748"
+  },
+  "humananeval": {
+    "error": "'humananeval'",
+    "type": "KeyError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "part-ntk",
+    "timestamp": "2026-04-04T02:40:28.119243"
+  },
+  "humananeval_infilling": {
+    "error": "'humananeval_infilling'",
+    "type": "KeyError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "part-ntk",
+    "timestamp": "2026-04-04T03:03:38.464419"
+  }
+}

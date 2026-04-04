@@ -54,6 +54,7 @@ _TASKS_MAP = {
 }
 
 _METADATA = {"max_seq_lengths": [2048, 4096, 8192, 16384]}
+_ERROR_LOG_FILE = "error_log.json"
 
 # ---------------------------------------------------------------------------
 # Task name validation helper (optional; avoids cryptic lm-eval errors)
@@ -78,6 +79,46 @@ def _warn_unknown_tasks(task_list: list[str]) -> None:
                 )
     except Exception:
         pass  # Non-fatal; lm-eval will catch unknown tasks itself
+
+
+# ---------------------------------------------------------------------------
+# Error log persistence (断点续跑)
+# ---------------------------------------------------------------------------
+
+
+def _load_error_log(output_dir: str) -> dict:
+    """
+    Load existing error log from disk.
+
+    Args:
+        output_dir: Base output directory.
+
+    Returns:
+        Dict mapping task name → error info dict.
+    """
+    path = os.path.join(output_dir, _ERROR_LOG_FILE)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_error_log(output_dir: str, error_log: dict) -> None:
+    """
+    Save error log to disk (atomic write).
+
+    Args:
+        output_dir: Base output directory.
+        error_log: Dict mapping task name → error info dict.
+    """
+    path = os.path.join(output_dir, _ERROR_LOG_FILE)
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(error_log, f, indent=2, ensure_ascii=False, default=str)
+    os.replace(tmp_path, path)
 
 
 # ---------------------------------------------------------------------------
@@ -139,9 +180,31 @@ def _build_output_path(output_dir: str, model_name: str, config) -> str:
 
 def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
-    # ── 0. Validate tasks ─────────────────────────────────────────────── #
-    task_list = [t.strip() for t in args.tasks.split(",") if t.strip()]
-    _warn_unknown_tasks(task_list)
+    # ── 0. Load error log & filter already-failed tasks ──────────────── #
+    error_log = _load_error_log(args.output_dir)
+    if error_log:
+        print(f"\n[Resume] Loaded error log with {len(error_log)} recorded failure(s):")
+        for task, info in error_log.items():
+            print(f"  - {task}: {info.get('error', 'unknown')[:100]}")
+
+    raw_task_list = [t.strip() for t in args.tasks.split(",") if t.strip()]
+    _warn_unknown_tasks(raw_task_list)
+
+    # Filter out tasks that already failed in previous runs
+    skipped_tasks = [t for t in raw_task_list if t in error_log]
+    task_list = [t for t in raw_task_list if t not in error_log]
+    if skipped_tasks:
+        print(
+            f"\n[Skip] Skipping {len(skipped_tasks)} previously-failed task(s): {', '.join(skipped_tasks)}"
+        )
+        print(
+            f"        Use --tasks to specify only the tasks you want to retry, or delete {os.path.join(args.output_dir, _ERROR_LOG_FILE)} to reset."
+        )
+    if not task_list:
+        print(
+            "\n[Info] All tasks have been previously recorded as failures. Nothing to run."
+        )
+        return
 
     # ── 1. Load model with our loader (correct RoPE) ──────────────────── #
     # Training scripts set use_cache=False; here we want it True for
@@ -174,6 +237,7 @@ def main(args):
     )
     _METADATA["pretrained"] = args.model_name
     ERRORS = dict()
+    new_errors = 0
 
     # ── 3. Run evaluation ─────────────────────────────────────────────── #
     for task in task_list:
@@ -221,21 +285,44 @@ def main(args):
                     elif not metric.startswith("_"):
                         print(f"    {metric}: {value}")
         except Exception as e:
-            ERRORS[task] = str(e)
-            print(f"Error running task '{task}': {e}")
+            error_msg = str(e)
+            error_type = type(e).__name__
+            ERRORS[task] = error_msg
+            error_log[task] = {
+                "error": error_msg,
+                "type": error_type,
+                "model_name": args.model_name,
+                "rope_type": rope_type,
+                "timestamp": __import__("datetime").datetime.now().isoformat(),
+            }
+            _save_error_log(args.output_dir, error_log)
+            new_errors += 1
+            print(f"Error running task '{task}': [{error_type}] {error_msg}")
+            print(
+                f"  → Error logged to {os.path.join(args.output_dir, _ERROR_LOG_FILE)}"
+            )
 
     # ── 5. Print final summary ────────────────────────────────────────── #
+    all_tasks_raw = raw_task_list
     print(f"\n{'='*60}")
-    print(f"ALL TASKS [{', '.join(task_list)}] COMPLETED - FINAL SUMMARY")
+    print(f"ALL TASKS [{', '.join(all_tasks_raw)}] EVALUATION COMPLETE")
     print(f"{'='*60}")
-    print(f"Total tasks completed: {len(task_list)}")
-    print(f"Results saved → {output_path}")
+    print(f"Tasks attempted this run : {len(task_list)}")
+    print(f"Tasks completed          : {len(task_list) - len(ERRORS)}")
+    print(f"New errors this run      : {new_errors}")
+    print(f"Previously skipped      : {len(skipped_tasks)}")
+    print(f"Total errors on record   : {len(error_log)}")
+    print(
+        f"Error log file           : {os.path.join(args.output_dir, _ERROR_LOG_FILE)}"
+    )
     print(f"{'='*60}\n")
     if ERRORS:
-        print(f"Errors encountered: {', '.join(ERRORS.keys())}")
+        print(f"New errors this run:")
         print(f"{'='*60}\n")
         for task, error in ERRORS.items():
-            print(f"  {task}: {error}")
+            info = error_log.get(task, {})
+            print(f"  [{info.get('type', 'Exception')}] {task}:")
+            print(f"    {error[:200]}{'...' if len(error) > 200 else ''}")
 
 
 # ---------------------------------------------------------------------------

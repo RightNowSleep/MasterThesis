@@ -448,43 +448,34 @@ def add_args_entropy(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     return parser
 
 
-def generate_save_filename(args) -> str:
+def generate_save_filename(model_name, config):
     """
-    Generate filename based on model, adapter, and RoPE configuration.
+    Generate filename based on model and RoPE configuration.
 
     Args:
-        args: Arguments object with model_name, adapter_path (optional), rope_type,
-              rope_factor, and rope_dynamic.
+        model_name: The name of the model.
+        config: The configuration object.
 
     Returns:
-        Filename string. Examples:
-            - Adapter-only: 'llama-7b_adapter_dual-rope_20260402_113443.json'
-            - RoPE-only: 'llama-7b_linear_dynamic.json'
-            - Adapter+RoPE: 'llama-7b_adapter_dual-rope_20260402_113443_linear_dynamic.json'
-            - No adapter or RoPE: 'llama-7b_none.json'
+        The filename.
+
+    Examples:
+        --rope-type none                              → llama-7b_none.json
+        --rope-type linear --rope-dynamic             → llama-7b_linear_dynamic.json
+        --rope-type linear --rope-factor 4.0          → llama-7b_linear_factor4_0.json
+        --rope-type ntk --rope-factor 2.5             → llama-7b_ntk_factor2_5.json
     """
-    model_name = args.model_name.split("/")[-1]
-    parts = [model_name]
-
-    if hasattr(args, "adapter_path") and args.adapter_path:
-        adapter_id = os.path.basename(args.adapter_path.rstrip("/"))
-        parts.append("adapter")
-        parts.append(adapter_id)
-
-    rope_type = getattr(args, "rope_type", "none")
+    model_name = model_name.split("/")[-1]
+    rope_scaling = config.rope_scaling
+    rope_type = rope_scaling["type"] if rope_scaling else "none"
+    parts = [model_name, rope_type]
     if rope_type != "none":
-        parts.append(rope_type)
-        rope_factor = getattr(args, "rope_factor", None)
-        rope_dynamic = getattr(args, "rope_dynamic", False)
-
-        if rope_factor is not None:
-            parts.append(f"factor{str(rope_factor).replace('.', '_')}")
-        elif rope_dynamic:
+        factor = rope_scaling.get("factor", None)
+        dynamic = rope_scaling.get("dynamic", False)
+        if factor is not None:
+            parts.append(f"factor{str(factor).replace('.', '_')}")
+        elif dynamic:
             parts.append("dynamic")
-    else:
-        if not (hasattr(args, "adapter_path") and args.adapter_path):
-            parts.append("none")
-
     return "_".join(parts) + ".json"
 
 
@@ -503,9 +494,9 @@ if __name__ == "__main__":
     # experiment-spec defaults
     args.model_name = args.model_name or "huggyllama/llama-7b"
 
-    model, _ = load_model(args)
+    model, config = load_model(args)
     tokenizer = load_tokenizer(args)
-    args.save_file = args.save_file or generate_save_filename(args)
+    args.save_file = args.save_file or generate_save_filename(args.model_name, config)
 
     evaluator = EntropyEvaluator(
         model=model,

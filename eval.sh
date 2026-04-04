@@ -31,7 +31,7 @@ export DISABLE_FLASH_ATTN=1
 export USE_FLASH_ATTN=0
 export HF_ALLOW_CODE_EVAL=1
 
-CUDA_DEVICES="0,1,2,3"
+CUDA_DEVICES="2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 # ── Model Configuration ──────────────────────────────────────────────────────
@@ -59,7 +59,6 @@ ROPE_METHODS=(
     # "--rope-type freq-reciprocal --rope-dynamic"
     # "--rope-type freq-reciprocal-scaled --rope-dynamic"
     # "--rope-type freq-reciprocal-scaled-no-layer --rope-dynamic"
-    # "--rope-type freq-reciprocal-scaled-adaptive --rope-dynamic"
     # "--rope-type dual-rope --rope-dynamic"
     # "--rope-type dual-rope-scaled --rope-dynamic"
     "--rope-type inverse-dual-rope --rope-dynamic"
@@ -68,15 +67,16 @@ ROPE_METHODS=(
 
 # ── Adapter Paths Configuration ──────────────────────────────────────────────
 ADAPTER_PATHS=(
+    "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
+    "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
     "--adapter-path ${ADAPTER_DIR}/part-ntk_20260315_233845"
-    "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
-    "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
     "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
+    "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
+    "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
+    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
+    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
     "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
-    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
-    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
-    # "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
-    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
+    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
 )
 
 # ── Build Methods List ───────────────────────────────────────────────────────
@@ -115,10 +115,13 @@ PASSKEY_ARGS="--num-keys 5 \
 --restrict-tokens True \
 --save-dir ${OUTPUT_DIR}/passkey"
 
-# Available tasks: longbench, longbench2, longcxt, passkey, ruler, babilong,
-#                  bbh, mmlu, gsm8k, aime, hendrycks_math, humaneval, mbpp,
-#                  humaneval_infilling
-TASKS="longbench,longbench2,longcxt,passkey,ruler,babilong,bbh,mmlu,gsm8k,aime,hendrycks_math,humananeval,mbpp,humananeval_infilling"
+# Available tasks: 
+# long_context: longbench,longbench2,longcxt,passkey,ruler,babilong
+# reasoning: arc_challenge,truthfulqa,hellaswag,bbh,mmlu
+# math: gsm8k,aime,hendrycks_math
+# code: humaneval,mbpp,humaneval_infilling
+# Too long tasks: bbh
+TASKS="humananeval,mbpp,humananeval_infilling"
 EVAL_HARNESS_ARGS="--tasks ${TASKS} --batch-size ${BATCH_SIZE} --output-dir ${OUTPUT_DIR}/eval_harness"
 
 echo "=========================================="

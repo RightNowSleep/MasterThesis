@@ -38,22 +38,25 @@ LOAD_4BIT="--load-in-4bit"
 DATASET="emozilla/proofpile-test-tokenized"
 
 # ── Evaluation Mode Flags ─────────────────────────────────────────────────────
-ROPE=false
+ROPE=true
 ADAPTER=true
 ADAPTER_DIR="finetunes/continued_pretrain"
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
 ROPE_METHODS=(
-    # "--rope-type linear --rope-dynamic"
-    # "--rope-type ntk --rope-dynamic"
-    # "--rope-type part-ntk --rope-dynamic"
-    # "--rope-type freq-reciprocal --rope-dynamic"
+    "--rope-type none"
+    "--rope-type linear --rope-dynamic"
+    "--rope-type ntk --rope-dynamic"
+    "--rope-type part-ntk --rope-dynamic"
+    "--rope-type freq-reciprocal --rope-dynamic"
     "--rope-type dual-rope --rope-dynamic"
+    "--rope-type inverse-dual-rope --rope-dynamic"
 )
 
 # ── Adapter Paths Configuration ──────────────────────────────────────────────
 ADAPTER_PATHS=(
     "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
+    "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
 )
 
 # ── Build Methods List ───────────────────────────────────────────────────────

@@ -1,0 +1,1623 @@
+{
+  "results": {
+    "babilong": {
+      "acc,none": 0.48538977284098866,
+      "acc_stderr,none": 0.003357095548470395,
+      "alias": "babilong"
+    },
+    "babilong_qa1": {
+      "alias": " - babilong_qa1",
+      "acc,none": 0.571,
+      "acc_stderr,none": 0.015658997547870243
+    },
+    "babilong_qa10": {
+      "alias": " - babilong_qa10",
+      "acc,none": 0.438,
+      "acc_stderr,none": 0.01569721001969469
+    },
+    "babilong_qa11": {
+      "alias": " - babilong_qa11",
+      "acc,none": 0.4494494494494494,
+      "acc_stderr,none": 0.015746127234491814
+    },
+    "babilong_qa12": {
+      "alias": " - babilong_qa12",
+      "acc,none": 0.5825825825825826,
+      "acc_stderr,none": 0.015609851119017925
+    },
+    "babilong_qa13": {
+      "alias": " - babilong_qa13",
+      "acc,none": 0.5925925925925926,
+      "acc_stderr,none": 0.015553470116418019
+    },
+    "babilong_qa14": {
+      "alias": " - babilong_qa14",
+      "acc,none": 0.2922922922922923,
+      "acc_stderr,none": 0.014396945935278734
+    },
+    "babilong_qa15": {
+      "alias": " - babilong_qa15",
+      "acc,none": 0.4144144144144144,
+      "acc_stderr,none": 0.01559363429097814
+    },
+    "babilong_qa16": {
+      "alias": " - babilong_qa16",
+      "acc,none": 0.42842842842842843,
+      "acc_stderr,none": 0.01566423463294801
+    },
+    "babilong_qa17": {
+      "alias": " - babilong_qa17",
+      "acc,none": 0.5195195195195195,
+      "acc_stderr,none": 0.015815158134250575
+    },
+    "babilong_qa18": {
+      "alias": " - babilong_qa18",
+      "acc,none": 0.5185185185185185,
+      "acc_stderr,none": 0.015816364286091025
+    },
+    "babilong_qa19": {
+      "alias": " - babilong_qa19",
+      "acc,none": 0.08308308308308308,
+      "acc_stderr,none": 0.008736873026951404
+    },
+    "babilong_qa2": {
+      "alias": " - babilong_qa2",
+      "acc,none": 0.42542542542542544,
+      "acc_stderr,none": 0.015650191366454246
+    },
+    "babilong_qa20": {
+      "alias": " - babilong_qa20",
+      "acc,none": 0.5195195195195195,
+      "acc_stderr,none": 0.015815158134250575
+    },
+    "babilong_qa3": {
+      "alias": " - babilong_qa3",
+      "acc,none": 0.2502502502502503,
+      "acc_stderr,none": 0.013711348023779298
+    },
+    "babilong_qa4": {
+      "alias": " - babilong_qa4",
+      "acc,none": 0.5735735735735735,
+      "acc_stderr,none": 0.01565493798896976
+    },
+    "babilong_qa5": {
+      "alias": " - babilong_qa5",
+      "acc,none": 0.7297297297297297,
+      "acc_stderr,none": 0.014057719952354279
+    },
+    "babilong_qa6": {
+      "alias": " - babilong_qa6",
+      "acc,none": 0.657,
+      "acc_stderr,none": 0.015019206922356953
+    },
+    "babilong_qa7": {
+      "alias": " - babilong_qa7",
+      "acc,none": 0.383,
+      "acc_stderr,none": 0.015380102325652721
+    },
+    "babilong_qa8": {
+      "alias": " - babilong_qa8",
+      "acc,none": 0.5,
+      "acc_stderr,none": 0.015819299929208316
+    },
+    "babilong_qa9": {
+      "alias": " - babilong_qa9",
+      "acc,none": 0.779,
+      "acc_stderr,none": 0.013127502859696244
+    }
+  },
+  "groups": {
+    "babilong": {
+      "acc,none": 0.48538977284098866,
+      "acc_stderr,none": 0.003357095548470395,
+      "alias": "babilong"
+    }
+  },
+  "group_subtasks": {
+    "babilong": [
+      "babilong_qa1",
+      "babilong_qa2",
+      "babilong_qa3",
+      "babilong_qa4",
+      "babilong_qa5",
+      "babilong_qa6",
+      "babilong_qa7",
+      "babilong_qa8",
+      "babilong_qa9",
+      "babilong_qa10",
+      "babilong_qa11",
+      "babilong_qa12",
+      "babilong_qa13",
+      "babilong_qa14",
+      "babilong_qa15",
+      "babilong_qa16",
+      "babilong_qa17",
+      "babilong_qa18",
+      "babilong_qa19",
+      "babilong_qa20"
+    ]
+  },
+  "configs": {
+    "babilong_qa1": {
+      "task": "babilong_qa1",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa1"
+      },
+      "test_split": "qa1",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about positions of different persons hidden in some random text and a question. You need to answer the question based only on the information from the facts. If a person was in different locations, use the latest location to answer the question.\nAlways return your answer in the following format:\nThe most recent location of 'person' is 'location'. Do not write anything else after that.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Charlie went to the hallway. Judith come back to the kitchen. Charlie travelled to balcony.",
+            "question": "Where is Charlie?",
+            "target": "The most recent location of Charlie is balcony."
+          },
+          {
+            "input": "Alan moved to the garage. Charlie went to the beach. Alan went to the shop. Rouse travelled to balcony.",
+            "question": "Where is Alan?",
+            "target": "The most recent location of Alan is shop."
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa10": {
+      "task": "babilong_qa10",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa10"
+      },
+      "test_split": "qa10",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and their locations hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nIf a person was in different locations, use the latest location the person was in to answer the question.\nYour answer should contain only one word - $yes$ or $no$ or $maybe$. Do not write anything else. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Bill is in the kitchen. Julie is either in the school or the cinema.",
+            "question": "Is Bill in the bedroom?",
+            "target": "no"
+          },
+          {
+            "input": "Fred is in the bedroom. Mary is either in the school or the cinema.",
+            "question": "Is Mary in the school?",
+            "target": "maybe"
+          },
+          {
+            "input": "Fred is either in the kitchen or the park. Bill moved to the cinema.",
+            "question": "Is Bill in the cinema?",
+            "target": "yes"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa11": {
+      "task": "babilong_qa11",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa11",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and their locations hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nIf a person was in different locations, use the latest location the person was in to answer the question.\nYour answer should contain only one word - location. Do not write anything else after that. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Daniel journeyed to the hallway. After that he journeyed to the garden.",
+            "question": "Where is Daniel?",
+            "target": "garden"
+          },
+          {
+            "input": "Mary moved to the office. Afterwards she journeyed to the kitchen. Daniel went to the hallway. Then he journeyed to the garden.",
+            "question": "Where is Mary?",
+            "target": "kitchen"
+          },
+          {
+            "input": "Sandra moved to the kitchen. After that she went back to the hallway. Sandra moved to the bedroom. Then she went to the hallway. Mary moved to the bedroom. Afterwards she travelled to the bathroom.",
+            "question": "Where is Sandra?",
+            "target": "hallway"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa12": {
+      "task": "babilong_qa12",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa12",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and their locations hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nIf a person was in different locations, use the latest location the person was in to answer the question.\nYour answer should contain only one word - location. Do not write anything else after that. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Mary and Daniel travelled to the bathroom. John and Daniel travelled to the office.",
+            "question": "Where is Daniel?",
+            "target": "office"
+          },
+          {
+            "input": "Sandra and Mary went back to the office. Daniel and Sandra went to the bedroom. Sandra and Mary travelled to the hallway. John and Mary went to the kitchen.",
+            "question": "Where is Mary?",
+            "target": "kitchen"
+          },
+          {
+            "input": "Daniel and Sandra went back to the hallway. Daniel and John moved to the office. Daniel and John moved to the garden. Daniel and Mary went back to the bathroom. Daniel and John went back to the kitchen. Daniel and Sandra went to the bathroom.",
+            "question": "Where is John?",
+            "target": "kitchen"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa13": {
+      "task": "babilong_qa13",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa13",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and their locations hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nIf a person was in different locations, use the latest location the person was in to answer the question.\nYour answer should contain only one word - location. Do not write anything else after that. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Mary and Daniel travelled to the bathroom. Then they journeyed to the hallway.",
+            "question": "Where is Daniel?",
+            "target": "hallway"
+          },
+          {
+            "input": "Daniel and Sandra travelled to the kitchen. After that they journeyed to the hallway. Mary and Daniel travelled to the bedroom. After that they travelled to the hallway.",
+            "question": "Where is Sandra?",
+            "target": "hallway"
+          },
+          {
+            "input": "John and Mary moved to the bathroom. Then they travelled to the office. John and Mary went to the kitchen. Afterwards they went to the bedroom. John and Sandra moved to the bathroom. Following that they went back to the kitchen.",
+            "question": "Where is Mary?",
+            "target": "bedroom"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa14": {
+      "task": "babilong_qa14",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa14",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and their locations hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nIf a person was in different locations, use the latest location the person was in to answer the question.\nYour answer should contain only one word - location. Do not write anything else after that. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Bill went back to the cinema yesterday. Julie went to the school this morning. Fred went to the park yesterday. Yesterday Julie went to the office.",
+            "question": "Where was Julie before the school?",
+            "target": "office"
+          },
+          {
+            "input": "This morning Fred went to the kitchen. Fred journeyed to the bedroom yesterday. Mary travelled to the bedroom this morning. Yesterday Mary went to the cinema.",
+            "question": "Where was Mary before the bedroom?",
+            "target": "cinema"
+          },
+          {
+            "input": "Yesterday Julie went back to the park. Julie went to the bedroom this morning. Bill journeyed to the cinema yesterday. This morning Bill went back to the park. This evening Julie went to the school. This afternoon Julie went back to the park.",
+            "question": "Where was Julie before the bedroom?",
+            "target": "park"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa15": {
+      "task": "babilong_qa15",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa15",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about animals, their names and relations. The facts and a question are hidden in some random text. You need to answer the question based only on the information from the facts.\nYour answer should contain only one word - an animal species. Do not write anything else after that. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Mice are afraid of wolves. Gertrude is a mouse. Cats are afraid of sheep. Winona is a mouse. Sheep are afraid of wolves. Emily is a mouse. Jessica is a wolf.",
+            "question": "What is gertrude afraid of?",
+            "target": "wolf"
+          },
+          {
+            "input": "Mice are afraid of wolves. Gertrude is a mouse. Cats are afraid of sheep. Winona is a mouse. Sheep are afraid of wolves. Emily is a mouse. Jessica is a wolf.",
+            "question": "What is jessica afraid of?",
+            "target": "cat"
+          },
+          {
+            "input": "Mice are afraid of cats. Wolves are afraid of sheep. Emily is a wolf. Cats are afraid of sheep. Gertrude is a wolf. Sheep are afraid of cats. Winona is a wolf.",
+            "question": "What is emily afraid of?",
+            "target": "sheep"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa16": {
+      "task": "babilong_qa16",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa16",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about animals, their names and colors. The facts and a question are hidden in some random text. You need to answer the question based only on the information from the facts.\nYour answer should contain only one word - a color. Do not write anything else after that.\nDo not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Lily is a frog. Bernhard is a frog. Bernhard is green. Brian is a lion. Brian is white. Julius is a swan. Julius is green. Lily is green. Greg is a swan.",
+            "question": "What color is Greg?",
+            "target": "green"
+          },
+          {
+            "input": "Julius is a lion. Lily is a rhino. Bernhard is a swan. Lily is white. Bernhard is green. Greg is a rhino. Greg is gray. Julius is white. Brian is a lion.",
+            "question": "What color is Brian?",
+            "target": "white"
+          },
+          {
+            "input": "Brian is a rhino. Julius is a lion. Bernhard is a lion. Greg is a swan. Brian is gray. Greg is white. Lily is a rhino. Bernhard is yellow. Lily is gray.",
+            "question": "What color is Julius?",
+            "target": "yellow"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa17": {
+      "task": "babilong_qa17",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa17",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about different figures, their location and colors, hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nYour answer should contain only one word - $yes$ or $no$. Do not write anything else.\nDo not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "The triangle is above the pink rectangle. The blue square is to the left of the triangle.",
+            "question": "Is the pink rectangle to the right of the blue square?",
+            "target": "yes"
+          },
+          {
+            "input": "The red sphere is to the left of the yellow square. The red sphere is below the pink rectangle.",
+            "question": "Is the pink rectangle to the left of the yellow square?",
+            "target": "yes"
+          },
+          {
+            "input": "The red sphere is above the pink rectangle. The red sphere is to the right of the red square.",
+            "question": "Is the pink rectangle above the red square?",
+            "target": "no"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa18": {
+      "task": "babilong_qa18",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa18",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about different objects and their sizes, hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nYour answer should contain only one word - $yes$ or $no$. Do not write anything else.\nDo not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "The box of chocolates fits inside the chest. The box is bigger than the chest. The box is bigger than the suitcase. The suitcase fits inside the box. The container is bigger than the box of chocolates.",
+            "question": "Does the box fit in the box of chocolates?",
+            "target": "no"
+          },
+          {
+            "input": "The suitcase is bigger than the container. The container fits inside the box. The chest is bigger than the chocolate. The suitcase fits inside the box. The chest fits inside the box.",
+            "question": "Does the chocolate fit in the box?",
+            "target": "yes"
+          },
+          {
+            "input": "The chocolate fits inside the box of chocolates. The suitcase fits inside the box. The chocolate fits inside the box. The box is bigger than the box of chocolates. The suitcase is bigger than the box of chocolates.",
+            "question": "Is the chocolate bigger than the box?",
+            "target": "no"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa19": {
+      "task": "babilong_qa19",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa19",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about different places and their locations, hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nYour answer should contain only two letters, separated by a comma - ordinal directions. You can choose the letters from $n$, $s$, $e$ and $w$. Do not write anything else after that.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "The office is east of the hallway. The kitchen is north of the office. The garden is west of the bedroom. The office is west of the garden. The bathroom is north of the garden.",
+            "question": "How do you go from the kitchen to the garden?",
+            "target": "s,e"
+          },
+          {
+            "input": "The bedroom is west of the hallway. The office is east of the garden. The garden is north of the kitchen. The kitchen is north of the bathroom. The hallway is west of the garden.",
+            "question": "How do you go from the kitchen to the hallway?",
+            "target": "n,w"
+          },
+          {
+            "input": "The bedroom is south of the hallway. The bathroom is east of the office. The kitchen is west of the garden. The garden is south of the office. The office is south of the bedroom.",
+            "question": "How do you go from the garden to the bedroom?",
+            "target": "n,n"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa2": {
+      "task": "babilong_qa2",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa2"
+      },
+      "test_split": "qa2",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about locations and actions of different persons hidden in some random text and a question. You need to answer the question based only on the information from the facts. If a person got an item in the first location and travelled to the second location the item is also in the second location. If a person dropped an item in the first location and moved to the second location the item remains in the first location.\nAlways return your answer in the following format:\nThe 'item' is in 'location'. Do not write anything else after that.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Charlie went to the kitchen. Charlie got a bottle. Charlie moved to the balcony.",
+            "question": "Where is the bottle?",
+            "target": "The bottle is in the balcony."
+          },
+          {
+            "input": "Alan moved to the garage. Alan got a screw driver. Alan moved to the kitchen.",
+            "question": "Where is the screw driver?",
+            "target": "The screw driver is in the kitchen."
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa20": {
+      "task": "babilong_qa20",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_name": "0k",
+      "test_split": "qa20",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people, their locations and condition hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nIf a person was in different locations, use the latest location the person was in to answer the question.\nYour answer should contain only one word - a person condition or a place. Do not write anything else after that. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Sumit is tired.",
+            "question": "Where will sumit go?",
+            "target": "bedroom"
+          },
+          {
+            "input": "Yann is hungry. Yann journeyed to the kitchen.",
+            "question": "Why did yann go to the kitchen?",
+            "target": "hungry"
+          },
+          {
+            "input": "Antoine is thirsty. Yann is tired. Yann went back to the bedroom. Yann picked up the pajamas there. Jason is thirsty. Antoine went back to the kitchen.",
+            "question": "Why did antoine go to the kitchen?",
+            "target": "thirsty"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa3": {
+      "task": "babilong_qa3",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa3"
+      },
+      "test_split": "qa3",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I give you context with the facts about locations and actions of different persons hidden in some random text and a question. You need to answer the question based only on the information from the facts. If a person got an item in the first location and travelled to the second location the item is also in the second location. If a person dropped an item in the first location and moved to the second location the item remains in the first location.\nAlways return your answer in the following format:\nBefore the $location_1$ the $item$ was in the $location_2$. Do not write anything else after that.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "John journeyed to the bedroom. Mary grabbed the apple. Mary went back to the bathroom. Daniel journeyed to the bedroom. Daniel moved to the garden. Mary travelled to the kitchen.",
+            "question": "Where was the apple before the kitchen?",
+            "target": "Before the kitchen the apple was in the bathroom."
+          },
+          {
+            "input": "John went back to the bedroom. John went back to the garden. John went back to the kitchen. Sandra took the football. Sandra travelled to the garden. Sandra journeyed to the bedroom.",
+            "question": "Where was the football before the bedroom?",
+            "target": "Before the bedroom the football was in the garden."
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa4": {
+      "task": "babilong_qa4",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa4"
+      },
+      "test_split": "qa4",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about different people, their location and actions, hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nYour answer should contain only one word - location. Do not write anything else after that.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "The hallway is south of the kitchen. The bedroom is north of the kitchen.",
+            "question": "What is the kitchen south of?",
+            "target": "bedroom"
+          },
+          {
+            "input": "The garden is west of the bedroom. The bedroom is west of the kitchen.",
+            "question": "What is west of the bedroom?",
+            "target": "garden"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa5": {
+      "task": "babilong_qa5",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa5"
+      },
+      "test_split": "qa5",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about locations and their relations hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nYour answer should contain only one word. Do not write anything else after that. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Mary picked up the apple there. Mary gave the apple to Fred. Mary moved to the bedroom. Bill took the milk there.",
+            "question": "Who did Mary give the apple to?",
+            "target": "Fred"
+          },
+          {
+            "input": "Jeff took the football there. Jeff passed the football to Fred. Jeff got the milk there. Bill travelled to the bedroom.",
+            "question": "Who gave the football?",
+            "target": "Jeff"
+          },
+          {
+            "input": "Fred picked up the apple there. Fred handed the apple to Bill. Bill journeyed to the bedroom. Jeff went back to the garden.",
+            "question": "What did Fred give to Bill?",
+            "target": "apple"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa6": {
+      "task": "babilong_qa6",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa6"
+      },
+      "test_split": "qa6",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and their locations hidden in some random text and a question. You need to answer the question based only on the information from the facts. If a person was in different locations, use the latest location the person was in to answer the question.\nYour answer should contain only one word - $yes$ or $no$. Do not write anything else after that.\nDo not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "John travelled to the hallway. John travelled to the garden.",
+            "question": "Is John in the garden?",
+            "target": "yes"
+          },
+          {
+            "input": "Mary went to the office. Daniel journeyed to the hallway. Mary went to the bedroom. Sandra went to the garden.",
+            "question": "Is Mary in the office?",
+            "target": "no"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa7": {
+      "task": "babilong_qa7",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa7"
+      },
+      "test_split": "qa7",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and objects they carry, hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nYour answer should contain only one word - $none$ or $number_of_objects$.\nDo not write anything else after that. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Daniel went to the bedroom. Daniel got the apple there.",
+            "question": "How many objects is Daniel carrying?",
+            "target": "one"
+          },
+          {
+            "input": "Mary grabbed the apple there. Mary gave the apple to John.",
+            "question": "How many objects is Mary carrying?",
+            "target": "none"
+          },
+          {
+            "input": "Sandra travelled to the hallway. Sandra picked up the milk there. Sandra took the apple there. Mary travelled to the garden.",
+            "question": "How many objects is Sandra carrying?",
+            "target": "two"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa8": {
+      "task": "babilong_qa8",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa8"
+      },
+      "test_split": "qa8",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and objects they carry, hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nYour answer should contain only one or two words: $nothing$ or $object$ or $object_1$, $object_2$. Do not write anything else. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "Sandra travelled to the garden. Mary grabbed the milk there.",
+            "question": "What is Mary carrying?",
+            "target": "milk"
+          },
+          {
+            "input": "Mary travelled to the kitchen. Sandra travelled to the office. John travelled to the office. Sandra discarded the milk there.",
+            "question": "What is Sandra carrying?",
+            "target": "nothing"
+          },
+          {
+            "input": "Daniel grabbed the apple there. Mary went to the office. Daniel moved to the garden. Daniel grabbed the milk there. Mary went to the kitchen.",
+            "question": "What is Daniel carrying?",
+            "target": "apple,milk"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    },
+    "babilong_qa9": {
+      "task": "babilong_qa9",
+      "custom_dataset": "def load_dataset(**kwargs):\n    config_name = kwargs.get(\"max_seq_lengths\", \"0k\")\n\n    # Get specific qa split\n    qa_split = kwargs.get(\"qa_split\")\n\n    eval_logger.info(\n        f\"Loading babilong dataset: max_seq_lengths={config_name}, split={qa_split}\"\n    )\n    dataset = datasets.load_dataset(\n        \"RMT-team/babilong-1k-samples\", name=config_name, split=qa_split\n    )\n    return {qa_split: dataset}\n",
+      "dataset_path": "RMT-team/babilong-1k-samples",
+      "dataset_kwargs": {
+        "qa_split": "qa9"
+      },
+      "test_split": "qa9",
+      "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+      "doc_to_target": "{{target}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    pred = postprocess_pred(results)\n    target = doc.get(\"target\", \"\").strip()\n\n    # String match\n    score = 1.0 if target.lower() in pred[0].lower() else 0.0\n\n    return {\"acc\": score}\n",
+      "description": "I will give you context with the facts about people and their locations hidden in some random text and a question. You need to answer the question based only on the information from the facts.\nIf a person was in different locations, use the latest location the person was in to answer the question.\nYour answer should contain only one word - $yes$ or $no$. Do not write anything else. Do not explain your answer.\n\n",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "first_n",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": [
+          {
+            "input": "John is not in the bathroom. Sandra is not in the bedroom.",
+            "question": "Is John in the bathroom?",
+            "target": "no"
+          },
+          {
+            "input": "Mary journeyed to the kitchen. John is in the bedroom. Sandra is not in the garden.",
+            "question": "Is Mary in the kitchen?",
+            "target": "yes"
+          }
+        ],
+        "doc_to_text": "{{input.strip()}}\n{{question.strip()}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{target}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 2,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 16,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0
+      }
+    }
+  },
+  "versions": {
+    "babilong": 0.0,
+    "babilong_qa1": 0.0,
+    "babilong_qa10": 0.0,
+    "babilong_qa11": 0.0,
+    "babilong_qa12": 0.0,
+    "babilong_qa13": 0.0,
+    "babilong_qa14": 0.0,
+    "babilong_qa15": 0.0,
+    "babilong_qa16": 0.0,
+    "babilong_qa17": 0.0,
+    "babilong_qa18": 0.0,
+    "babilong_qa19": 0.0,
+    "babilong_qa2": 0.0,
+    "babilong_qa20": 0.0,
+    "babilong_qa3": 0.0,
+    "babilong_qa4": 0.0,
+    "babilong_qa5": 0.0,
+    "babilong_qa6": 0.0,
+    "babilong_qa7": 0.0,
+    "babilong_qa8": 0.0,
+    "babilong_qa9": 0.0
+  },
+  "n-shot": {
+    "babilong_qa1": 2,
+    "babilong_qa10": 2,
+    "babilong_qa11": 2,
+    "babilong_qa12": 2,
+    "babilong_qa13": 2,
+    "babilong_qa14": 2,
+    "babilong_qa15": 2,
+    "babilong_qa16": 2,
+    "babilong_qa17": 2,
+    "babilong_qa18": 2,
+    "babilong_qa19": 2,
+    "babilong_qa2": 2,
+    "babilong_qa20": 2,
+    "babilong_qa3": 2,
+    "babilong_qa4": 2,
+    "babilong_qa5": 2,
+    "babilong_qa6": 2,
+    "babilong_qa7": 2,
+    "babilong_qa8": 2,
+    "babilong_qa9": 2
+  },
+  "higher_is_better": {
+    "babilong": {
+      "acc": true
+    },
+    "babilong_qa1": {
+      "acc": true
+    },
+    "babilong_qa10": {
+      "acc": true
+    },
+    "babilong_qa11": {
+      "acc": true
+    },
+    "babilong_qa12": {
+      "acc": true
+    },
+    "babilong_qa13": {
+      "acc": true
+    },
+    "babilong_qa14": {
+      "acc": true
+    },
+    "babilong_qa15": {
+      "acc": true
+    },
+    "babilong_qa16": {
+      "acc": true
+    },
+    "babilong_qa17": {
+      "acc": true
+    },
+    "babilong_qa18": {
+      "acc": true
+    },
+    "babilong_qa19": {
+      "acc": true
+    },
+    "babilong_qa2": {
+      "acc": true
+    },
+    "babilong_qa20": {
+      "acc": true
+    },
+    "babilong_qa3": {
+      "acc": true
+    },
+    "babilong_qa4": {
+      "acc": true
+    },
+    "babilong_qa5": {
+      "acc": true
+    },
+    "babilong_qa6": {
+      "acc": true
+    },
+    "babilong_qa7": {
+      "acc": true
+    },
+    "babilong_qa8": {
+      "acc": true
+    },
+    "babilong_qa9": {
+      "acc": true
+    }
+  },
+  "n-samples": {
+    "babilong_qa1": {
+      "original": 1000,
+      "effective": 1000
+    },
+    "babilong_qa2": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa3": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa4": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa5": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa6": {
+      "original": 1000,
+      "effective": 1000
+    },
+    "babilong_qa7": {
+      "original": 1000,
+      "effective": 1000
+    },
+    "babilong_qa8": {
+      "original": 1000,
+      "effective": 1000
+    },
+    "babilong_qa9": {
+      "original": 1000,
+      "effective": 1000
+    },
+    "babilong_qa10": {
+      "original": 1000,
+      "effective": 1000
+    },
+    "babilong_qa11": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa12": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa13": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa14": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa15": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa16": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa17": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa18": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa19": {
+      "original": 999,
+      "effective": 999
+    },
+    "babilong_qa20": {
+      "original": 999,
+      "effective": 999
+    }
+  },
+  "config": {
+    "model": "huggyllama/llama-7b",
+    "model_args": null,
+    "model_num_parameters": 6738415616,
+    "model_dtype": "torch.float16",
+    "model_revision": "main",
+    "model_sha": "",
+    "batch_size": 1,
+    "batch_sizes": [],
+    "device": null,
+    "use_cache": null,
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "gen_kwargs": null,
+    "random_seed": 0,
+    "numpy_seed": 1234,
+    "torch_seed": 1234,
+    "fewshot_seed": 1234
+  },
+  "git_hash": "52f9def",
+  "date": 1775214303.765443,
+  "pretty_env_info": "PyTorch version: 2.7.1+cu126\nIs debug build: False\nCUDA used to build PyTorch: 12.6\nROCM used to build PyTorch: N/A\n\nOS: Ubuntu 20.04.6 LTS (x86_64)\nGCC version: (Ubuntu 7.5.0-6ubuntu2) 7.5.0\nClang version: Could not collect\nCMake version: version 3.16.3\nLibc version: glibc-2.31\n\nPython version: 3.10.16 (main, Dec 11 2024, 16:24:50) [GCC 11.2.0] (64-bit runtime)\nPython platform: Linux-5.15.0-67-generic-x86_64-with-glibc2.31\nIs CUDA available: True\nCUDA runtime version: 12.6.20\nCUDA_MODULE_LOADING set to: LAZY\nGPU models and configuration: \nGPU 0: NVIDIA GeForce RTX 4090\nGPU 1: NVIDIA GeForce RTX 4090\nGPU 2: NVIDIA GeForce RTX 4090\nGPU 3: NVIDIA GeForce RTX 4090\n\nNvidia driver version: 575.57.08\ncuDNN version: /usr/local/cuda-12.6/targets/x86_64-linux/lib/libcudnn.so.7\nHIP runtime version: N/A\nMIOpen runtime version: N/A\nIs XNNPACK available: True\n\nCPU:\nArchitecture:                    x86_64\nCPU op-mode(s):                  32-bit, 64-bit\nByte Order:                      Little Endian\nAddress sizes:                   46 bits physical, 57 bits virtual\nCPU(s):                          160\nOn-line CPU(s) list:             0-159\nThread(s) per core:              2\nCore(s) per socket:              40\nSocket(s):                       2\nNUMA node(s):                    2\nVendor ID:                       GenuineIntel\nCPU family:                      6\nModel:                           106\nModel name:                      Intel(R) Xeon(R) Platinum 8383C CPU @ 2.70GHz\nStepping:                        6\nCPU MHz:                         800.000\nCPU max MHz:                     3600.0000\nCPU min MHz:                     800.0000\nBogoMIPS:                        5400.00\nVirtualization:                  VT-x\nL1d cache:                       3.8 MiB\nL1i cache:                       2.5 MiB\nL2 cache:                        100 MiB\nL3 cache:                        120 MiB\nNUMA node0 CPU(s):               0-39,80-119\nNUMA node1 CPU(s):               40-79,120-159\nVulnerability Itlb multihit:     Not affected\nVulnerability L1tf:              Not affected\nVulnerability Mds:               Not affected\nVulnerability Meltdown:          Not affected\nVulnerability Mmio stale data:   Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Retbleed:          Not affected\nVulnerability Spec store bypass: Mitigation; Speculative Store Bypass disabled via prctl and seccomp\nVulnerability Spectre v1:        Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:        Mitigation; Enhanced IBRS, IBPB conditional, RSB filling, PBRSB-eIBRS SW sequence\nVulnerability Srbds:             Not affected\nVulnerability Tsx async abort:   Not affected\nFlags:                           fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l3 invpcid_single ssbd mba ibrs ibpb stibp ibrs_enhanced tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb intel_pt avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local split_lock_detect wbnoinvd dtherm ida arat pln pts avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg tme avx512_vpopcntdq la57 rdpid fsrm md_clear pconfig flush_l1d arch_capabilities\n\nVersions of relevant libraries:\n[pip3] apollo-torch==1.0.3\n[pip3] galore-torch==1.0\n[pip3] mypy_extensions==1.1.0\n[pip3] numpy==1.26.4\n[pip3] nvidia-cublas-cu12==12.6.4.1\n[pip3] nvidia-cuda-cupti-cu12==12.6.80\n[pip3] nvidia-cuda-nvrtc-cu12==12.6.77\n[pip3] nvidia-cuda-runtime-cu12==12.6.77\n[pip3] nvidia-cudnn-cu12==9.5.1.17\n[pip3] nvidia-cudnn-frontend==1.16.0\n[pip3] nvidia-cufft-cu12==11.3.0.4\n[pip3] nvidia-curand-cu12==10.3.7.77\n[pip3] nvidia-cusolver-cu12==11.7.1.2\n[pip3] nvidia-cusparse-cu12==12.5.4.2\n[pip3] nvidia-cusparselt-cu12==0.6.3\n[pip3] nvidia-nccl-cu12==2.26.2\n[pip3] nvidia-nvjitlink-cu12==12.6.85\n[pip3] nvidia-nvtx-cu12==12.6.77\n[pip3] nvtx==0.2.14\n[pip3] onnx==1.19.1\n[pip3] onnx_graphsurgeon==0.5.8\n[pip3] torch==2.7.1\n[pip3] torchaudio==2.9.0\n[pip3] torchdata==0.11.0\n[pip3] torchprofile==0.0.4\n[pip3] torchtitan==0.2.0\n[pip3] torchvision==0.22.1\n[pip3] triton==3.3.1\n[conda] apollo-torch              1.0.3                    pypi_0    pypi\n[conda] galore-torch              1.0                      pypi_0    pypi\n[conda] numpy                     1.26.4                   pypi_0    pypi\n[conda] nvidia-cublas-cu12        12.6.4.1                 pypi_0    pypi\n[conda] nvidia-cuda-cupti-cu12    12.6.80                  pypi_0    pypi\n[conda] nvidia-cuda-nvrtc-cu12    12.6.77                  pypi_0    pypi\n[conda] nvidia-cuda-runtime-cu12  12.6.77                  pypi_0    pypi\n[conda] nvidia-cudnn-cu12         9.5.1.17                 pypi_0    pypi\n[conda] nvidia-cudnn-frontend     1.16.0                   pypi_0    pypi\n[conda] nvidia-cufft-cu12         11.3.0.4                 pypi_0    pypi\n[conda] nvidia-curand-cu12        10.3.7.77                pypi_0    pypi\n[conda] nvidia-cusolver-cu12      11.7.1.2                 pypi_0    pypi\n[conda] nvidia-cusparse-cu12      12.5.4.2                 pypi_0    pypi\n[conda] nvidia-cusparselt-cu12    0.6.3                    pypi_0    pypi\n[conda] nvidia-nccl-cu12          2.26.2                   pypi_0    pypi\n[conda] nvidia-nvjitlink-cu12     12.6.85                  pypi_0    pypi\n[conda] nvidia-nvtx-cu12          12.6.77                  pypi_0    pypi\n[conda] nvtx                      0.2.14                   pypi_0    pypi\n[conda] torch                     2.7.1                    pypi_0    pypi\n[conda] torchaudio                2.9.0                    pypi_0    pypi\n[conda] torchdata                 0.11.0                   pypi_0    pypi\n[conda] torchprofile              0.0.4                    pypi_0    pypi\n[conda] torchtitan                0.2.0                    pypi_0    pypi\n[conda] torchvision               0.22.1                   pypi_0    pypi\n[conda] triton                    3.3.1                    pypi_0    pypi",
+  "transformers_version": "4.46.0",
+  "lm_eval_version": "0.4.11",
+  "upper_git_hash": null,
+  "tokenizer_pad_token": [
+    "</s>",
+    "2"
+  ],
+  "tokenizer_eos_token": [
+    "</s>",
+    "2"
+  ],
+  "tokenizer_bos_token": [
+    "<s>",
+    "1"
+  ],
+  "eot_token_id": 2,
+  "max_length": 16384,
+  "metadata": {
+    "model_name": "huggyllama/llama-7b",
+    "adapter_path": "finetunes/continued_pretrain/part-ntk_20260315_233845",
+    "rope_type": "part-ntk",
+    "rope_factor": 8.0,
+    "rope_dynamic": false,
+    "max_length": 16384,
+    "task": "babilong",
+    "completed_tasks": "babilong"
+  }
+}
