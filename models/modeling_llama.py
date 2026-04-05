@@ -702,6 +702,7 @@ class LlamaAttention(nn.Module):
             )
 
         elif scaling_type == "inverse-dual-rope-scaled":
+            _rs = self.config.rope_scaling or {}
             self.rotary_emb = LlamaInverseDualRoPEScaledEmbedding(
                 dim=self.head_dim,
                 max_position_embeddings=self.max_position_embeddings,
@@ -709,6 +710,9 @@ class LlamaAttention(nn.Module):
                 scaling_factor=scaling_factor,
                 original_max_position_embeddings=self.original_max_position_embeddings,
                 dynamic=dynamic,
+                alpha=_rs.get("alpha", 0.1),
+                beta=_rs.get("beta", 0.5),
+                gamma=_rs.get("gamma", 2.0),
             )
 
         else:

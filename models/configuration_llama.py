@@ -92,6 +92,12 @@ class LlamaConfig(PretrainedConfig):
             If both "factor" and "dynamic" are supplied simultaneously, "factor" takes priority
             and "dynamic" is ignored with a warning.
 
+            Type-specific optional parameters:
+                "inverse-dual-rope-scaled" additionally supports optional parameters:
+                - "alpha" (float > 0, default=0.1): alpha coefficient
+                - "beta" (float > 0, default=0.5): beta coefficient
+                - "gamma" (float > 0, default=2.0): gamma coefficient
+
             Example (static YaRN, 4x extension)::
 
                 rope_scaling = {"type": "yarn", "factor": 4.0}
@@ -207,6 +213,12 @@ class LlamaConfig(PretrainedConfig):
 
         If both are supplied, "factor" wins and "dynamic" is dropped with a warning.
         At least one must be present.
+
+        Type-specific optional parameters (only validated when type matches):
+            - "inverse-dual-rope-scaled":
+                * "alpha" (int or float > 0, default=0.1): alpha coefficient
+                * "beta" (int or float > 0, default=0.5): beta coefficient
+                * "gamma" (int or float > 0, default=2.0): gamma coefficient
 
         Deprecated type strings:
             "dynamic-linear", "dynamic-ntk", "dynamic-part-ntk", "dynamic-yarn",
@@ -340,3 +352,22 @@ class LlamaConfig(PretrainedConfig):
                     "`rope_scaling`'s 'factor' must be a float strictly greater than "
                     f"1.0, got {rope_scaling_factor}"
                 )
+
+        # ------------------------------------------------------------------ #
+        # Validate type-specific optional parameters                          #
+        # ------------------------------------------------------------------ #
+        if rope_scaling_type == "inverse-dual-rope-scaled":
+            _defaults = {"alpha": 0.1, "beta": 0.5, "gamma": 2.0}
+            for param_name, default_val in _defaults.items():
+                param_val = self.rope_scaling.get(param_name)
+                if param_val is None:
+                    self.rope_scaling[param_name] = default_val
+                elif not isinstance(param_val, (int, float)):
+                    raise ValueError(
+                        f"`rope_scaling.{param_name}` must be an int or float, "
+                        f"got {type(param_val).__name__}"
+                    )
+                elif param_val <= 0:
+                    raise ValueError(
+                        f"`rope_scaling.{param_name}` must be > 0, " f"got {param_val}"
+                    )

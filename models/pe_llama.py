@@ -3266,16 +3266,31 @@ class LlamaInverseDualRoPEEmbedding(nn.Module):
 
 
 class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
-    """Inverse Dual RoPE Embedding with attention temperature scaling.
+    """Inverse Dual RoPE Embedding with piecewise global-local attention scaling.
 
     Inherits the inverse dual-position encoding from LlamaInverseDualRoPEEmbedding and
-    adds adaptive attention temperature scaling for better long-context handling.
+    adds a decomposed scaling function s(t) = global(t) × local(t) for better
+    long-context handling.
 
-    The attention scaling uses the entropy-based formula: mscale = max(1.0, ln(t) / ln(L_0))
-    where L_0 is the original_max_position_embeddings and t is the position index.
+    Design idea: Decompose the scaling function s(t) into global term × local term:
+
+        s(t) = 1                              t < L_0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·e^(-γr))   t ≥ L_0
+
+    where:
+        k = ⌊t / L_0⌋ ≥ 1          (segment index, global)
+        r = (t mod L_0) / L_0 ∈ [0, 1]  (intra-segment position, local)
+
+    Parameter meanings:
+        α : Global term growth rate with segment index (YaRN-like ln growth). Default: 0.1
+        β : Jump compensation amplitude at segment boundaries. Default: 0.5
+        γ : Intra-segment decay rate for local compensation. Default: 2.0
 
     Attributes:
         Inherits all attributes from LlamaInverseDualRoPEEmbedding.
+        alpha (float): Global term growth rate coefficient.
+        beta (float): Boundary jump compensation amplitude.
+        gamma (float): Intra-segment exponential decay rate.
     """
 
     def __init__(
@@ -3287,8 +3302,11 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
         scaling_factor: float = 1.0,
         original_max_position_embeddings: int = 2048,
         dynamic: bool = False,
+        alpha: float = 0.1,
+        beta: float = 0.5,
+        gamma: float = 2.0,
     ):
-        """Initialize Inverse Dual RoPE Embedding with attention scaling.
+        """Initialize Inverse Dual RoPE Embedding with global-local scaling.
 
         Args:
             dim (int): Dimension of the embedding (must be even).
@@ -3298,10 +3316,19 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
             device (torch.device): Device to place tensors on. Defaults to None.
             scaling_factor (float): Scaling factor (currently unused, reserved).
                 Defaults to 1.0.
-            original_max_position_embeddings (int): Original context window size.
+            original_max_position_embeddings (int): Original context window size L_0.
                 Defaults to 2048.
             dynamic (bool): Whether to dynamically recompute frequencies (unused).
                 Defaults to False.
+            alpha (float): Global term growth rate (YaRN-like ln growth).
+                Controls how fast the global scale grows with segment index k.
+                Defaults to 0.1.
+            beta (float): Boundary jump compensation amplitude.
+                Controls the magnitude of local compensation at segment boundaries.
+                Defaults to 0.5.
+            gamma (float): Intra-segment decay rate.
+                Controls how quickly the local compensation decays within each segment.
+                Defaults to 2.0.
         """
         super().__init__(
             dim=dim,
@@ -3312,12 +3339,26 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
             original_max_position_embeddings=original_max_position_embeddings,
             dynamic=dynamic,
         )
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
 
     def _compute_attn_scale(self, seq_len: int, device):
-        """Compute entropy-based attention scaling factor.
+        """Compute global-local decomposed attention scaling factor.
 
-        Calculates uniform scaling using logarithmic ratio to original context length:
-        mscale = max(1.0, log(t+1) / log(L_0)), applied identically to all positions.
+        Implements the piecewise scaling function:
+            s(t) = 1                                    t < L_0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·e^(-γr))   t ≥ L_0
+
+        where k = floor(t / L_0) is the segment index (global coordinate),
+        and r = (t mod L_0) / L_0 is the normalized intra-segment position (local coordinate).
+
+        The global term (1 + α·ln(k+1)) provides monotonic YaRN-like logarithmic growth
+        across segments, compensating for cumulative attention entropy loss.
+
+        The local term (1 + β·e^(-γr)) provides a jump-up compensation at each segment
+        boundary (r ≈ 0) that decays exponentially within the segment (r → 1),
+        addressing the discontinuity issue at segment transitions.
 
         Args:
             seq_len (int): Current sequence length.
@@ -3326,20 +3367,30 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
         Returns:
             torch.Tensor: Attention scaling factors of shape (seq_len, 1).
         """
-        t = torch.arange(seq_len, device=device, dtype=torch.float32) + 1.0
-        log_t = torch.log(t)
-        log_L0 = math.log(self.original_max_position_embeddings)
-        mscale = torch.maximum(
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        L_0 = self.original_max_position_embeddings
+
+        mask = t < L_0
+        k = torch.floor(t / L_0).clamp(min=1.0)
+        r = (t % L_0) / L_0
+
+        global_term = 1.0 + self.alpha * torch.log(k + 1.0)
+        local_term = 1.0 + self.beta * torch.exp(-self.gamma * r)
+
+        s_t = torch.where(
+            mask,
             torch.tensor(1.0, device=device),
-            log_t / log_L0,
+            global_term * local_term,
         )
-        return mscale.unsqueeze(-1)
+        return s_t.unsqueeze(-1)
 
     def _set_cos_sin_cache(self, seq_len: int, device, dtype):
-        """Compute and cache cos/sin values with inverse dual encoding and attention scaling.
+        """Compute and cache cos/sin values with inverse dual encoding and global-local scaling.
 
-        Extends parent class by applying entropy-based attention temperature
-        to the inverse dual-encoded embeddings.
+        Extends parent class by applying the decomposed scaling function s(t) =
+        global(t) × local(t) to the inverse dual-encoded embeddings, where the global
+        term captures cross-segment accumulation and the local term handles intra-segment
+        boundary compensation.
 
         Args:
             seq_len (int): Sequence length to cache embeddings for.
@@ -3374,9 +3425,9 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
         )
 
     def forward(self, x: torch.Tensor, seq_len: int = None):
-        """Forward pass with inverse dual position encoding and attention scaling.
+        """Forward pass with inverse dual position encoding and global-local scaling.
 
-        Returns cached embeddings with attention temperature applied.
+        Returns cached embeddings with the decomposed attention temperature applied.
 
         Args:
             x (torch.Tensor): Input tensor of shape (batch, num_heads, seq_len, head_dim).

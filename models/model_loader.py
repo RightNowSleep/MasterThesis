@@ -120,6 +120,13 @@ def _build_rope_scaling(args) -> Optional[Dict]:
     else:
         rope_scaling["dynamic"] = True
 
+    if hasattr(args, "rope_alpha") and args.rope_alpha is not None:
+        rope_scaling["alpha"] = float(args.rope_alpha)
+    if hasattr(args, "rope_beta") and args.rope_beta is not None:
+        rope_scaling["beta"] = float(args.rope_beta)
+    if hasattr(args, "rope_gamma") and args.rope_gamma is not None:
+        rope_scaling["gamma"] = float(args.rope_gamma)
+
     return rope_scaling
 
 
@@ -384,7 +391,7 @@ def add_args_model(parser):
             "  dual-rope               — Dual RoPE (position only)\n"
             "  dual-rope-scaled        — Dual RoPE + attention temperature\n"
             "  inverse-dual-rope          — Inverse-Dual RoPE (position only)\n"
-            "  inverse-dual-rope-scaled    — Inverse-Dual RoPE + attention temperature\n"
+            "  inverse-dual-rope-scaled    — Inverse-Dual RoPE + global-local attention scaling (alpha/beta/gamma)\n"
             "\n"
             "All types except 'none' require exactly ONE of:\n"
             "  --rope-factor F   static scaling with fixed ratio F > 1.0\n"
@@ -413,6 +420,24 @@ def add_args_model(parser):
             "as s = max(1, seq_len / original_L), so the model adapts automatically "
             "to any sequence length without reloading weights."
         ),
+    )
+    parser.add_argument(
+        "--rope-alpha",
+        type=float,
+        default=0.1,
+        help="Global term growth rate for inverse-dual-rope-scaled (alpha). Default: 0.1",
+    )
+    parser.add_argument(
+        "--rope-beta",
+        type=float,
+        default=0.5,
+        help="Boundary jump compensation amplitude for inverse-dual-rope-scaled (beta). Default: 0.5",
+    )
+    parser.add_argument(
+        "--rope-gamma",
+        type=float,
+        default=2.0,
+        help="Intra-segment decay rate for inverse-dual-rope-scaled (gamma). Default: 2.0",
     )
 
     return parser
