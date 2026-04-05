@@ -59,7 +59,7 @@ ROPE_METHODS=(
 
 # ── Adapter Paths Configuration ──────────────────────────────────────────────
 ADAPTER_PATHS=(
-    "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
+    # "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
     "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
 )
 
@@ -74,7 +74,7 @@ if [ $ADAPTER = true ]; then
 fi
 
 # ── Pipeline Control Flags ────────────────────────────────────────────────────
-PART1=false
+PART1=true
 PART2=true
 
 mkdir -p "$SAVE_DIR"
