@@ -4,11 +4,17 @@
 # finetune.sh
 # -----------------------------------------------------------------------------
 # Purpose: Run supervised fine-tuning (QLoRA / LoRA) across all RoPE methods
+#           with optional hierarchical base adapter support
 # -----------------------------------------------------------------------------
 # Description:
 #   This script performs supervised fine-tuning on a LLaMA-7b model using
 #   QLoRA/LoRA techniques. It iterates through multiple RoPE (Rotary Position
 #   Embedding) methods to compare their effectiveness for long-context tasks.
+#
+#   Supports hierarchical fine-tuning via BASE_ADAPTER_PATH: when set, the
+#   script loads a pre-trained base adapter first, then applies the target
+#   RoPE type on top. This is useful for fine-tuning scaled variants (e.g.
+#   freq-reciprocal-scaled) on top of their base method adapters (e.g. yarn).
 # -----------------------------------------------------------------------------
 # Usage:
 #   bash finetune.sh
@@ -19,6 +25,8 @@
 # Globals:
 #   CUDA_VISIBLE_DEVICES  - GPU device IDs for computation (default: "0,1,2,3")
 #   WANDB                 - WandB project name for experiment tracking (empty = disabled)
+#   BASE_ADAPTER_PATH     - Path to a base adapter for hierarchical fine-tuning (optional)
+#   BASE_ADAPTER_TARGET_ROPE - Target RoPE type when using base adapter mode
 # -----------------------------------------------------------------------------
 # Output:
 #   Fine-tuned model checkpoints saved to: finetunes/finetune/
@@ -80,6 +88,28 @@ ROPE_METHODS=(
     "--rope-type freq-reciprocal-scaled --rope-factor 4.0"
 )
 
+# ── Base Adapter Configuration ─────────────────────────────────────────────
+# Optional: Path to a base adapter for hierarchical fine-tuning.
+# When set, fine-tuning will load the base adapter first, then apply the
+# target RoPE type on top. Useful for fine-tuning scaled variants on top
+# of their base methods.
+#
+# Example: Fine-tune freq-reciprocal-scaled on top of yarn adapter
+# BASE_ADAPTER_PATH="finetunes/continued_pretrain/yarn_20260316_071953"
+# BASE_ADAPTER_TARGET_ROPE="freq-reciprocal-scaled"
+BASE_ADAPTER_PATH=""
+BASE_ADAPTER_TARGET_ROPE=""
+
+# ── LoRA Adapter Configuration (Mode 2) ───────────────────────────────────
+# Optional: Path to an existing fine-tuned LoRA adapter to load before training.
+# When set, the adapter is merged into the model first, then new LoRA weights
+# are trained on top. This enables incremental fine-tuning or layering multiple
+# LoRA adapters. Maps to --adapter-path in model_loader Mode 2 (Step 7).
+#
+# Example: Continue fine-tuning on top of a previously trained adapter
+# ADAPTER_PATH="finetunes/finetune/some_method_20260401_120000"
+ADAPTER_PATH=""
+
 # ── Build Shared Argument String ─────────────────────────────────────────────
 BASE_ARGS="--model-name $MODEL_NAME \
   --max-length $MAX_LENGTH \
@@ -118,6 +148,13 @@ echo "Quantization: $QUANTIZATION  |  LoRA r=$LORA_R / alpha=$LORA_ALPHA"
 echo "RoPE methods: ${#ROPE_METHODS[@]}"
 echo "Output dir : $OUTPUT_DIR"
 echo "=========================================="
+if [ -n "${BASE_ADAPTER_PATH}" ]; then
+    echo "Base Adapter   : ${BASE_ADAPTER_PATH}"
+    echo "Target RoPE     : ${BASE_ADAPTER_TARGET_ROPE}"
+fi
+if [ -n "${ADAPTER_PATH}" ]; then
+    echo "LoRA Adapter    : ${ADAPTER_PATH} (Mode 2: load before training)"
+fi
 
 # -----------------------------------------------------------------------------
 # Function: run_finetune
@@ -139,8 +176,25 @@ run_finetune() {
     echo "RoPE: $rope_method"
     echo "------------------------------------------"
 
+    # Support base adapter mode (Mode 1) and LoRA adapter mode (Mode 2)
+    local base_adapter_arg=""
+    local adapter_arg=""
+    if [ -n "${BASE_ADAPTER_PATH}" ]; then
+        base_adapter_arg="--base-adapter-path ${BASE_ADAPTER_PATH}"
+        # NOTE: rope_method from ROPE_METHODS is preserved as the target RoPE type.
+        # model_loader.py Mode 1 uses it to override the base adapter's RoPE config.
+        echo "[INFO] Base adapter mode: ${BASE_ADAPTER_PATH}"
+        echo "[INFO] Target RoPE (from ROPE_METHODS): ${rope_method}"
+    fi
+    if [ -n "${ADAPTER_PATH}" ]; then
+        adapter_arg="--adapter-path ${ADAPTER_PATH}"
+        echo "[INFO] LoRA adapter mode (Mode 2): ${ADAPTER_PATH}"
+    fi
+
     local cmd="python finetune.py \
       $BASE_ARGS \
+      $base_adapter_arg \
+      $adapter_arg \
       $rope_method"
 
     echo "Executing: $cmd"

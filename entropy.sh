@@ -63,6 +63,13 @@ ADAPTER_PATHS=(
     "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
 )
 
+# ── Base Adapter Configuration ─────────────────────────────────────────────
+# Optional: Base adapter for entropy evaluation with custom RoPE override
+# Format: "base_adapter_path|target_rope_type"
+BASE_ADAPTER_FOR_ENTROPY=""
+# Example:
+# BASE_ADAPTER_FOR_ENTROPY="finetunes/inverse-dual-rope_20260403|inverse-dual-rope-scaled"
+
 # ── Build Methods List ───────────────────────────────────────────────────────
 # Combine enabled RoPE methods and adapter paths into the final evaluation list
 METHODS=()
@@ -71,6 +78,12 @@ if [ $ROPE = true ]; then
 fi
 if [ $ADAPTER = true ]; then
     METHODS+=("${ADAPTER_PATHS[@]}")
+fi
+
+# Parse and add base adapter combination if configured
+if [ -n "$BASE_ADAPTER_FOR_ENTROPY" ]; then
+    IFS='|' read -r base_path target_rope <<< "$BASE_ADAPTER_FOR_ENTROPY"
+    METHODS+=("--base-adapter-path ${ADAPTER_DIR}/${base_path} --rope-type ${target_rope} --rope-dynamic")
 fi
 
 # ── Pipeline Control Flags ────────────────────────────────────────────────────
@@ -89,6 +102,12 @@ echo "4-bit Quantization: $LOAD_4BIT"
 echo "Methods: ${#METHODS[@]}"
 echo "ROPE: ${ROPE}"
 echo "ADAPTER: ${ADAPTER}"
+if [ -n "$BASE_ADAPTER_FOR_ENTROPY" ]; then
+    IFS='|' read -r base_path target_rope <<< "$BASE_ADAPTER_FOR_ENTROPY"
+    echo "Base Adapter: ${ADAPTER_DIR}/${base_path} (RoPE: ${target_rope})"
+else
+    echo "Base Adapter: (none)"
+fi
 echo "Save Directory: $SAVE_DIR"
 echo "=========================================="
 

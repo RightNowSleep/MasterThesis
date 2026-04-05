@@ -104,24 +104,28 @@ __all__ = [
 
 
 def _interleave_cos_sin(freqs):
-    """Interleave cosine and sine values from frequency tensor.
+    """Compute cosine and sine values from frequency tensor for rotary embeddings.
 
-    Takes a frequency tensor and computes both cosine and sine values,
-    then interleaves them by duplicating each value to create pairs
-    suitable for rotary embedding application.
+    Takes a frequency tensor of shape (seq_len, dim//2) and produces
+    cos/sin tensors of shape (seq_len, dim) by duplicating the frequency
+    dimensions to match the HuggingFace RoPE convention used by apply_rotary_pos_emb.
+
+    The output layout is [f0, f1, ..., f_{n-1}, f0, f1, ..., f_{n-1}]
+    where the first half and second half are identical. This matches the
+    expected format in modeling_llama.apply_rotary_pos_emb which computes:
+        q_embed = q * cos + rotate_half(q) * sin
+    where rotate_half swaps the first/second halves, requiring cos[i] == cos[i+n].
 
     Args:
         freqs (torch.Tensor): Frequency tensor of shape (seq_len, dim//2).
 
     Returns:
         tuple[torch.Tensor, torch.Tensor]: A tuple containing:
-            - cos: Interleaved cosine values of shape (seq_len, dim).
-            - sin: Interleaved sine values of shape (seq_len, dim).
+            - cos: Cosine values of shape (seq_len, dim).
+            - sin: Sine values of shape (seq_len, dim).
     """
-    cos_half = freqs.cos()
-    sin_half = freqs.sin()
-    cos = torch.stack([cos_half, cos_half], dim=-1).reshape(freqs.shape[0], -1)
-    sin = torch.stack([sin_half, sin_half], dim=-1).reshape(freqs.shape[0], -1)
+    cos = torch.cat([freqs.cos(), freqs.cos()], dim=-1)
+    sin = torch.cat([freqs.sin(), freqs.sin()], dim=-1)
     return cos, sin
 
 
@@ -3123,7 +3127,7 @@ class LlamaDualRoPEScaledEmbedding(LlamaDualRoPEEmbedding):
 
 
 class LlamaInverseDualRoPEEmbedding(nn.Module):
-    """Inverse Dual RoPE Embedding.
+    """Inverse Dual RoPE Embedding.Normal name: BiSpaceRoPE.
 
     A novel inverse dual-position encoding approach that splits position indices into
     two parts based on the critical dimension i_star, while keeping inv_freq complete.
@@ -3330,6 +3334,9 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
                 Controls how quickly the local compensation decays within each segment.
                 Defaults to 2.0.
         """
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
         super().__init__(
             dim=dim,
             max_position_embeddings=max_position_embeddings,
@@ -3339,9 +3346,6 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
             original_max_position_embeddings=original_max_position_embeddings,
             dynamic=dynamic,
         )
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
 
     def _compute_attn_scale(self, seq_len: int, device):
         """Compute global-local decomposed attention scaling factor.

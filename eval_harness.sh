@@ -62,6 +62,17 @@ ADAPTERS=(
     "freq-reciprocal-scaled-no-layer_20260324_014910"
 )
 
+# ── Base Adapter Combinations (Phase 3) ──────────────────────────────────────
+# Optional: Define base adapter + target RoPE combinations for evaluation.
+# Each entry: "base_adapter_name|target_rope_type|dynamic_flag"
+# Format: "--base-combo <base_adapter>|<rope_type>[|--rope-dynamic]"
+#
+# Example: Evaluate inverse-dual-rope-scaled on top of inverse-dual-rope
+# BASE_COMBOS=(
+#     "inverse-dual-rope_20260403_103555|inverse-dual-rope-scaled|--rope-dynamic"
+# )
+BASE_COMBOS=()
+
 echo "=========================================="
 echo "lm-eval Harness Evaluation"
 echo "=========================================="
@@ -72,6 +83,10 @@ echo "Output dir   : ${OUTPUT_DIR}"
 echo "RoPE methods : ${#ROPE_METHODS[@]}"
 echo "Adapter dir  : ${ADAPTER_DIR}"
 echo "Adapters     : ${#ADAPTERS[@]}"
+echo "Base Combos  : ${#BASE_COMBOS[@]}"
+if [ ${#BASE_COMBOS[@]} -gt 0 ]; then
+    echo "  (Will evaluate base adapter + target RoPE combinations)"
+fi
 echo "=========================================="
 
 # -----------------------------------------------------------------------------
@@ -127,7 +142,20 @@ if [ ${#ADAPTERS[@]} -gt 0 ]; then
     echo "=========================================="
 
     for adapter_entry in "${ADAPTERS[@]}"; do
-        run_eval "--adapter_path ${ADAPTER_DIR}/${adapter_entry}"
+        run_eval "--adapter-path ${ADAPTER_DIR}/${adapter_entry}"
+    done
+fi
+
+# ── Phase 3: Base Adapter Combination Evaluation ─────────────────────────────
+if [ ${#BASE_COMBOS[@]} -gt 0 ]; then
+    echo ""
+    echo "=========================================="
+    echo "Phase 3: Base adapter combination evaluation"
+    echo "=========================================="
+
+    for combo in "${BASE_COMBOS[@]}"; do
+        IFS='|' read -r base_adapter rope_type rest <<< "$combo"
+        run_eval "--base-adapter-path ${ADAPTER_DIR}/${base_adapter} --rope-type ${rope_type} ${rest}"
     done
 fi
 

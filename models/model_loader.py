@@ -15,6 +15,8 @@ Key Features:
     - Static vs dynamic scaling mode selection
     - BitsAndBytes quantization (4-bit and 8-bit) integration
     - LoRA adapter loading and merging via PEFT
+    - Base adapter loading: Support for loading a foundational RoPE adapter before applying
+      target scaling, enabling hierarchical RoPE method composition
     - Gradient checkpointing for memory-efficient training
     - Flexible dtype selection (float32, float16, bfloat16, auto)
 
@@ -157,21 +159,103 @@ def _resolve_torch_dtype(dtype_str: str):
 
 def load_model(args, quantization_config=None):
     """
-    Load a LlamaForCausalLM model from pretrained weights with the RoPE configuration specified by ``args``.
+    Load a LlamaForCausalLM model with support for three modes:
+    1. Base Adapter Mode (--base-adapter-path): Load base adapter + optional RoPE override + optional LoRA
+    2. Adapter Mode (--adapter-path): Load complete trained model with LoRA weights
+    3. Base Model Mode (default): Apply RoPE config directly to pretrained model
 
-    Args:
-        args: Parsed argument namespace (see ``add_args_model``).
-        quantization_config: Optional BitsAndBytesConfig. If provided, overrides any
-            quantization settings derived from args.
-
-    Returns:
-        tuple: A tuple containing:
-            - model (LlamaForCausalLM): Loaded (and optionally adapter-merged) model.
-            - config (LlamaConfig): Final model configuration used for loading.
+    Each branch is self-contained and returns independently.
     """
     print(f"Loading model : {args.model_name}")
-    if args.adapter_path:
-        print(f"  adapter: {args.adapter_path}")
+
+    # ════════════════════════════════════════════════════════════
+    # Branch 1: Base Adapter Mode
+    # Load base RoPE adapter, optionally override its RoPE config,
+    # then merge base adapter weights into the model.
+    # ════════════════════════════════════════════════════════════
+    if getattr(args, "base_adapter_path", None):
+        print(f"  [Mode 1] Base Adapter: {args.base_adapter_path}")
+
+        # Step 1: Load config from base adapter
+        config = LlamaConfig.from_pretrained(
+            args.base_adapter_path,
+            trust_remote_code=True,
+        )
+        config.original_max_position_embeddings = getattr(
+            config,
+            "original_max_position_embeddings",
+            config.max_position_embeddings,
+        )
+
+        # Step 2: Optionally override RoPE config via CLI args
+        if args.rope_type != "none" or args.rope_factor is not None:
+            rope_scaling = _build_rope_scaling(args)
+            config.rope_scaling = rope_scaling
+            config._rope_scaling_validation()
+            print(
+                f"  [INFO] Overriding base adapter RoPE with --rope-type={args.rope_type}"
+            )
+
+        # Step 3: Set runtime parameters
+        config.max_position_embeddings = args.max_length
+        config.use_cache = args.use_cache
+
+        print(
+            f"  rope-scaling   : {config.rope_scaling}\n"
+            f"  max-length     : {config.max_position_embeddings}\n"
+            f"  original_max   : {config.original_max_position_embeddings}"
+        )
+
+        # Step 4: Handle quantization config
+        torch_dtype = _resolve_torch_dtype(args.dtype)
+        if (args.load_in_8bit or args.load_in_4bit) and quantization_config is None:
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=args.load_in_4bit,
+                load_in_8bit=args.load_in_8bit,
+            )
+            torch_dtype = "auto"
+            print(f"  quantization: 4bit={args.load_in_4bit}, 8bit={args.load_in_8bit}")
+
+        # Step 5: Load model weights (only once!)
+        model = LlamaForCausalLM.from_pretrained(
+            args.model_name,
+            config=config,
+            torch_dtype=torch_dtype,
+            device_map="auto",
+            trust_remote_code=True,
+            quantization_config=quantization_config,
+        )
+
+        # Step 6: Merge base adapter LoRA weights
+        print(f"  Merging base adapter: {args.base_adapter_path}")
+        model = PeftModel.from_pretrained(model, args.base_adapter_path)
+        model = model.merge_and_unload()
+        print("  ✓ Base adapter merged successfully")
+
+        # Step 7: Optionally merge additional LoRA adapter (e.g., fine-tuned on top)
+        if getattr(args, "adapter_path", None):
+            print(f"  Merging LoRA adapter: {args.adapter_path}")
+            model = PeftModel.from_pretrained(model, args.adapter_path)
+            model = model.merge_and_unload()
+            print("  ✓ LoRA adapter merged successfully")
+
+        # Step 8: Optional gradient checkpointing
+        if getattr(args, "gradient_checkpointing", False):
+            model.gradient_checkpointing_enable()
+            print("  ✓ Gradient checkpointing enabled")
+
+        print(f"✓ Model loaded (Mode 1: Base Adapter) | Device: {model.device}")
+        return model, config
+
+    # ════════════════════════════════════════════════════════════
+    # Branch 2: Traditional Adapter Mode
+    # Load complete trained model from adapter path (including RoPE config and LoRA weights).
+    # Ignores --rope-type argument.
+    # ════════════════════════════════════════════════════════════
+    elif args.adapter_path:
+        print(f"  [Mode 2] Traditional Adapter: {args.adapter_path}")
+
+        # Step 1: Load complete config from adapter
         config = LlamaConfig.from_pretrained(
             args.adapter_path,
             trust_remote_code=True,
@@ -181,69 +265,115 @@ def load_model(args, quantization_config=None):
             "original_max_position_embeddings",
             config.max_position_embeddings,
         )
+
+        # Warn user if --rope-type is also specified (will be ignored)
         if args.rope_type != "none" or args.rope_factor is not None:
             print(
-                "[WARNING] --rope-type/--rope-factor are ignored when --adapter-path is set;"
-                " RoPE config is loaded from the adapter's config.json."
+                "[WARNING] --rope-type/--rope-factor is ignored when --adapter-path is set; "
+                "RoPE config is loaded from the adapter's config.json."
             )
+
+        # Step 2: Set runtime parameters
+        config.max_position_embeddings = args.max_length
+        config.use_cache = args.use_cache
+
+        print(
+            f"  rope-scaling   : {config.rope_scaling}\n"
+            f"  max-length     : {config.max_position_embeddings}\n"
+            f"  original_max   : {config.original_max_position_embeddings}"
+        )
+
+        # Step 3: Handle quantization config
+        torch_dtype = _resolve_torch_dtype(args.dtype)
+        if (args.load_in_8bit or args.load_in_4bit) and quantization_config is None:
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=args.load_in_4bit,
+                load_in_8bit=args.load_in_8bit,
+            )
+            torch_dtype = "auto"
+            print(f"  quantization: 4bit={args.load_in_4bit}, 8bit={args.load_in_8bit}")
+
+        # Step 4: Load model weights
+        model = LlamaForCausalLM.from_pretrained(
+            args.model_name,
+            config=config,
+            torch_dtype=torch_dtype,
+            device_map="auto",
+            trust_remote_code=True,
+            quantization_config=quantization_config,
+        )
+
+        # Step 5: Merge LoRA adapter weights
+        print(f"  Loading LoRA adapter: {args.adapter_path}")
+        model = PeftModel.from_pretrained(model, args.adapter_path)
+        model = model.merge_and_unload()
+        print("  ✓ LoRA adapter merged successfully")
+
+        # Step 6: Optional gradient checkpointing
+        if getattr(args, "gradient_checkpointing", False):
+            model.gradient_checkpointing_enable()
+            print("  ✓ Gradient checkpointing enabled")
+
+        print(f"✓ Model loaded (Mode 2: Adapter) | Device: {model.device}")
+        return model, config
+
+    # ════════════════════════════════════════════════════════════
+    # Branch 3: Base Model Mode (default)
+    # Apply RoPE scaling config directly to pretrained model, no adapters used.
+    # Used for quick experiments and prototyping new RoPE methods.
+    # ════════════════════════════════════════════════════════════
     else:
+        print(f"  [Mode 3] Base Model (no adapter)")
+
+        # Step 1: Load default config from pretrained model
         config = LlamaConfig.from_pretrained(
             args.model_name,
             trust_remote_code=True,
         )
         config.original_max_position_embeddings = config.max_position_embeddings
+
+        # Step 2: Build RoPE config from CLI args
         rope_scaling = _build_rope_scaling(args)
         config.rope_scaling = rope_scaling
         config._rope_scaling_validation()
-    config.max_position_embeddings = args.max_length
-    config.use_cache = args.use_cache
 
-    print(
-        f"  rope-scaling   : {config.rope_scaling}\n"
-        f"  max-length  : {config.max_position_embeddings}\n"
-        f"  original_max_position_embeddings: {config.original_max_position_embeddings}"
-    )
+        # Step 3: Set runtime parameters
+        config.max_position_embeddings = args.max_length
+        config.use_cache = args.use_cache
 
-    torch_dtype = _resolve_torch_dtype(args.dtype)
-
-    if (args.load_in_8bit or args.load_in_4bit) and quantization_config is None:
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=args.load_in_4bit,
-            load_in_8bit=args.load_in_8bit,
+        print(
+            f"  rope-scaling   : {config.rope_scaling}\n"
+            f"  max-length     : {config.max_position_embeddings}\n"
+            f"  original_max   : {config.original_max_position_embeddings}"
         )
-        torch_dtype = "auto"
-        print(f"  quantization: 4bit={args.load_in_4bit}, 8bit={args.load_in_8bit}")
 
-    # ------------------------------------------------------------------ #
-    # 6. Load model weights                                              #
-    # ------------------------------------------------------------------ #
-    model = LlamaForCausalLM.from_pretrained(
-        args.model_name,
-        config=config,
-        torch_dtype=torch_dtype,
-        device_map="auto",
-        trust_remote_code=True,
-        quantization_config=quantization_config,
-    )
+        # Step 4: Handle quantization config
+        torch_dtype = _resolve_torch_dtype(args.dtype)
+        if (args.load_in_8bit or args.load_in_4bit) and quantization_config is None:
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=args.load_in_4bit,
+                load_in_8bit=args.load_in_8bit,
+            )
+            torch_dtype = "auto"
+            print(f"  quantization: 4bit={args.load_in_4bit}, 8bit={args.load_in_8bit}")
 
-    # ------------------------------------------------------------------ #
-    # 7. Optional: merge LoRA adapter                                    #
-    # ------------------------------------------------------------------ #
-    if args.adapter_path:
-        print(f"  Loading LoRA adapter: {args.adapter_path}")
-        model = PeftModel.from_pretrained(model, args.adapter_path)
-        model = model.merge_and_unload()
-        print("  LoRA adapter merged successfully")
+        # Step 5: Load model weights
+        model = LlamaForCausalLM.from_pretrained(
+            args.model_name,
+            config=config,
+            torch_dtype=torch_dtype,
+            device_map="auto",
+            trust_remote_code=True,
+            quantization_config=quantization_config,
+        )
 
-    # ------------------------------------------------------------------ #
-    # 8. Optional: gradient checkpointing                                #
-    # ------------------------------------------------------------------ #
-    if args.gradient_checkpointing:
-        model.gradient_checkpointing_enable()
-        print("  Gradient checkpointing enabled")
+        # Step 6: Optional gradient checkpointing
+        if getattr(args, "gradient_checkpointing", False):
+            model.gradient_checkpointing_enable()
+            print("  ✓ Gradient checkpointing enabled")
 
-    print(f"Model loaded successfully  |  device: {model.device}")
-    return model, config
+        print(f"✓ Model loaded (Mode 3: Base Model) | Device: {model.device}")
+        return model, config
 
 
 def load_tokenizer(args):
@@ -306,6 +436,17 @@ def add_args_model(parser):
         help="Local path to a LoRA adapter directory.  "
         "If provided, the adapter is loaded via PEFT and merged into the "
         "base model before returning. Remember not to checkpoint the adapter.",
+    )
+    parser.add_argument(
+        "--base-adapter-path",
+        type=str,
+        default=None,
+        help="Local path to a base adapter directory containing the foundational RoPE method. "
+        "If provided, this adapter's weights and RoPE config are loaded first, then "
+        "the target --rope-type (if specified) is applied on top. This enables "
+        "training scaled variants (e.g., inverse-dual-rope-scaled) on top of their "
+        "base methods (e.g., inverse-dual-rope). The base adapter is merged into "
+        "the model before any optional --adapter-path LoRA adapter.",
     )
 
     # ── Hardware ────────────────────────────────────────────────────── #
@@ -424,19 +565,19 @@ def add_args_model(parser):
     parser.add_argument(
         "--rope-alpha",
         type=float,
-        default=0.1,
+        default=0.06,
         help="Global term growth rate for inverse-dual-rope-scaled (alpha). Default: 0.1",
     )
     parser.add_argument(
         "--rope-beta",
         type=float,
-        default=0.5,
+        default=0.50,
         help="Boundary jump compensation amplitude for inverse-dual-rope-scaled (beta). Default: 0.5",
     )
     parser.add_argument(
         "--rope-gamma",
         type=float,
-        default=2.0,
+        default=4.05,
         help="Intra-segment decay rate for inverse-dual-rope-scaled (gamma). Default: 2.0",
     )
 

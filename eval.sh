@@ -10,6 +10,10 @@
 #   evaluation types including perplexity, performance, passkey retrieval, and
 #   lm-eval-harness benchmarks. It can evaluate both base models with RoPE
 #   methods and fine-tuned adapters.
+#
+#   Additionally supports base adapter + target RoPE combinations via BASE_COMBOS,
+#   allowing evaluation of adapter stacking scenarios (e.g., evaluating
+#   inverse-dual-rope-scaled on top of inverse-dual-rope).
 # -----------------------------------------------------------------------------
 # Usage:
 #   bash eval.sh
@@ -87,6 +91,17 @@ ADAPTER_PATHS=(
     "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
 )
 
+# ── Base Adapter Combinations ────────────────────────────────────────────
+# Optional: Define base adapter + target RoPE combinations for evaluation.
+# Each entry should be: "base_path|target_rope_type|dynamic_flag"
+# Format: "--base-combo <base_adapter>|<rope_type>[|--rope-dynamic]"
+#
+# Example: Evaluate inverse-dual-rope-scaled on top of inverse-dual-rope
+# BASE_COMBOS=(
+#     "finetunes/inverse-dual-rope_20260403|inverse-dual-rope-scaled|--rope-dynamic"
+# )
+BASE_COMBOS=()
+
 # ── Build Methods List ───────────────────────────────────────────────────────
 METHODS=()
 if [ $ROPE = true ]; then
@@ -95,6 +110,12 @@ fi
 if [ $ADAPTER = true ]; then
     METHODS+=("${ADAPTER_PATHS[@]}")
 fi
+
+# Add base adapter combinations (parsed into --base-adapter-path + --rope-type)
+for combo in "${BASE_COMBOS[@]}"; do
+    IFS='|' read -r base_path rope_type rest <<< "$combo"
+    METHODS+="--base-adapter-path ${ADAPTER_DIR}/${base_path} ${rope_type} ${rest}"
+done
 
 # ── Evaluation Type Flags ────────────────────────────────────────────────────
 PERPLEXITY=false
@@ -140,6 +161,10 @@ echo "Max length     : ${MAX_LENGTH}"
 echo "Min length     : ${MIN_LENGTH}"
 echo "Quantization   : ${QUANT}"
 echo "Methods        : ${#METHODS[@]}"
+echo "Base Combos    : ${#BASE_COMBOS[@]}"
+if [ ${#BASE_COMBOS[@]} -gt 0 ]; then
+    echo "  (Will evaluate base adapter + target RoPE combinations)"
+fi
 echo "Perplexity     : ${PERPLEXITY}"
 echo "Performance    : ${PERFORMANCE}"
 echo "Passkey        : ${PASSKEY}"

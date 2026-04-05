@@ -46,6 +46,23 @@ ROPE_METHODS=(
     "--rope-type freq-reciprocal-scaled --rope-dynamic"
 )
 
+# ── Base Adapter Testing ──────────────────────────────────────────────────
+# Optional: Test models loaded from base adapters with different RoPE configs
+# Format: "base_adapter_path|target_rope_type"
+BASE_ADAPTER_TEST=""
+# Example:
+# BASE_ADAPTER_TEST="finetunes/inverse-dual-rope_20260403|inverse-dual-rope-scaled"
+
+# ── Adapter Testing (Mode 2) ─────────────────────────────────────────────
+# Optional: Test models loaded from fine-tuned LoRA adapters
+# Format: array of "--adapter-path <path>" strings
+ADAPTER_PATHS=()
+# Example:
+# ADAPTER_PATHS=(
+#     "--adapter-path finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
+#     "--adapter-path finetunes/continued_pretrain/yarn_20260316_071953"
+# )
+
 # ── Test Types Configuration ─────────────────────────────────────────────────
 TEST_TYPES=(
     "perplexity"
@@ -61,6 +78,16 @@ echo "=========================================="
 echo "Model: $MODEL"
 echo "Test types: ${TEST_TYPES[*]}"
 echo "RoPE methods: ${#ROPE_METHODS[@]}"
+if [ -n "$BASE_ADAPTER_TEST" ]; then
+    IFS='|' read -r base_path target_rope <<< "$BASE_ADAPTER_TEST"
+    echo "Base Adapter: ${base_path} (RoPE: ${target_rope})"
+else
+    echo "Base Adapter: (none)"
+fi
+echo "Adapter Paths: ${#ADAPTER_PATHS[@]}"
+if [ ${#ADAPTER_PATHS[@]} -gt 0 ]; then
+    echo "  (Will also test with --adapter-path Mode 2)"
+fi
 echo "=========================================="
 
 # -----------------------------------------------------------------------------
@@ -85,12 +112,17 @@ run_test() {
     echo "Test: $test_type | RoPE: $rope_method"
     echo "------------------------------------------"
 
-    # Build and execute the test command for the given type and RoPE method
+    # Support three modes: base adapter / adapter-path / direct RoPE
+    local cmd=""
     if [ "$test_type" = "quality" ]; then
-        local cmd="python test.py $test_type $MODEL $rope_method"
+        cmd="python test.py $test_type $MODEL $rope_method"
+    elif [ -n "$BASE_ADAPTER_TEST" ]; then
+        IFS='|' read -r base_path target_rope <<< "$BASE_ADAPTER_TEST"
+        cmd="python test.py $test_type $MODEL --base-adapter-path ${base_path} --rope-type ${target_rope} --rope-dynamic"
     else
-        local cmd="python test.py $test_type $MODEL $rope_method"
+        cmd="python test.py $test_type $MODEL $rope_method"
     fi
+
     echo "Executing: $cmd"
     eval $cmd
 
@@ -101,6 +133,28 @@ run_test() {
     fi
 }
 
+# Mode 2: Run tests with --adapter-path (fine-tuned adapters)
+run_adapter_test() {
+    local test_type=$1
+    local adapter_arg=$2
+
+    echo ""
+    echo "------------------------------------------"
+    echo "Test: $test_type | Adapter: $adapter_arg"
+    echo "------------------------------------------"
+
+    local cmd="python test.py $test_type $MODEL ${adapter_arg}"
+
+    echo "Executing: $cmd"
+    eval $cmd
+
+    if [ $? -eq 0 ]; then
+        echo "[SUCCESS] Adapter test completed: $test_type"
+    else
+        echo "[FAILED] Adapter test failed: $test_type"
+    fi
+}
+
 # Nested loop: iterate over each test type, then over each RoPE method
 for test_type in "${TEST_TYPES[@]}"; do
     echo ""
@@ -108,8 +162,14 @@ for test_type in "${TEST_TYPES[@]}"; do
     echo "Test Type: $test_type"
     echo "=========================================="
 
+    # Mode 3 & Mode 1: RoPE methods and base adapter tests
     for rope_method in "${ROPE_METHODS[@]}"; do
         run_test "$test_type" "$rope_method"
+    done
+
+    # Mode 2: Adapter path tests
+    for adapter_arg in "${ADAPTER_PATHS[@]}"; do
+        run_adapter_test "$test_type" "$adapter_arg"
     done
 done
 

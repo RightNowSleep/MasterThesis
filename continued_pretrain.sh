@@ -9,6 +9,9 @@
 #   This script performs continued pretraining on a LLaMA-7b model using
 #   QLoRA/LoRA techniques. It iterates through multiple RoPE methods to
 #   extend the model's context length capabilities through additional training.
+#   This script now supports hierarchical RoPE training via --base-adapter-path,
+#   enabling training of scaled variants (e.g., inverse-dual-rope-scaled) on top
+#   of their foundational methods (e.g., inverse-dual-rope).
 # -----------------------------------------------------------------------------
 # Usage:
 #   bash continued_pretrain.sh
@@ -26,16 +29,16 @@
 
 # ── Model Configuration ──────────────────────────────────────────────────────
 MODEL_NAME="huggyllama/llama-7b"
-MAX_LENGTH=4096
+MAX_LENGTH=16384
 DTYPE="bfloat16"
-ROPE_FACTOR=1.0
+ROPE_FACTOR=8.0
 
 # ── Training Hyperparameters ─────────────────────────────────────────────────
-BATCH_SIZE=2
+BATCH_SIZE=1
 GRADIENT_ACCUMULATE_EVERY=2
 MAX_TRAIN_STEPS=400
 WARMUP_STEPS=40
-LEARNING_RATE=2e-2
+LEARNING_RATE=2e-4
 WEIGHT_DECAY=0.01
 GRAD_NORM=1.0
 LR_SCHEDULE="cosine"
@@ -53,7 +56,7 @@ QUANTIZATION="4bit"
 DATASET="emozilla/pg_books-tokenized-bos-eos-chunked-65536"
 
 # ── Infrastructure Settings ──────────────────────────────────────────────────
-CUDA_DEVICES="0,1,2,3"
+CUDA_DEVICES="1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 OUTPUT_DIR="finetunes/continued_pretrain"
@@ -78,8 +81,36 @@ ROPE_METHODS=(
     # "--rope-type freq-reciprocal --rope-factor $ROPE_FACTOR"
     # "--rope-type freq-reciprocal-scaled --rope-factor $ROPE_FACTOR"
     # "--rope-type freq-reciprocal-scaled-no-layer --rope-factor $ROPE_FACTOR"
-    "--rope-type dual-rope --rope-factor $ROPE_FACTOR"
+    # "--rope-type dual-rope --rope-factor $ROPE_FACTOR"
+    # "--rope-type inverse-dual-rope --rope-factor $ROPE_FACTOR"
+    "--rope-type inverse-dual-rope-scaled --rope-factor $ROPE_FACTOR"
 )
+
+# ── Base Adapter Configuration ─────────────────────────────────────────────
+# Optional: Path to a base adapter containing the foundational RoPE method.
+# When set, continued pretraining will load this base adapter first, then
+# apply the target RoPE type from ROPE_METHODS on top of it.
+# This enables hierarchical RoPE composition (e.g., train inverse-dual-rope-scaled
+# on top of a trained inverse-dual-rope adapter).
+#
+# Example: Train inverse-dual-rope-scaled on top of inverse-dual-rope
+# BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
+# BASE_ADAPTER_ROPE_TYPE="inverse-dual-rope-scaled"
+BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
+BASE_ADAPTER_ROPE_TYPE="inverse-dual-rope"
+
+# Uncomment to enable:
+# BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
+# BASE_ADAPTER_ROPE_TYPE="inverse-dual-rope-scaled"
+
+# ── LoRA Adapter Configuration (Mode 2) ───────────────────────────────────
+# Optional: Path to an existing fine-tuned LoRA adapter to load before pretraining.
+# When set, the adapter is merged into the model first, then new LoRA weights
+# are trained on top. Maps to --adapter-path in model_loader Mode 2 (Step 7).
+#
+# Example: Continue pretraining on top of a previously trained adapter
+# ADAPTER_PATH="finetunes/continued_pretrain/some_method_20260401_120000"
+ADAPTER_PATH=""
 
 # ── Build Shared Argument String ─────────────────────────────────────────────
 BASE_ARGS="--model-name $MODEL_NAME \
@@ -122,6 +153,15 @@ echo "LR         : $LEARNING_RATE  (schedule: $LR_SCHEDULE)"
 echo "Quantization: $QUANTIZATION  |  LoRA r=$LORA_R / alpha=$LORA_ALPHA"
 echo "RoPE methods: ${#ROPE_METHODS[@]}"
 echo "Progressive : $PROGRESSIVE_LENGTH"
+if [ -n "${BASE_ADAPTER_PATH}" ]; then
+    echo "Base Adapter   : ${BASE_ADAPTER_PATH}"
+    echo "Base→Target    : ${BASE_ADAPTER_ROPE_TYPE} → ${ROPE_METHODS[*]}"
+else
+    echo "Base Adapter   : (none - training from scratch)"
+fi
+if [ -n "${ADAPTER_PATH}" ]; then
+    echo "LoRA Adapter   : ${ADAPTER_PATH} (Mode 2: load before pretraining)"
+fi
 echo "Output dir : $OUTPUT_DIR"
 echo "=========================================="
 
@@ -145,8 +185,25 @@ run_pretrain() {
     echo "RoPE: $rope_method"
     echo "------------------------------------------"
 
+    # Build command with optional base adapter (Mode 1) and LoRA adapter (Mode 2) support
+    local base_adapter_arg=""
+    local adapter_arg=""
+    if [ -n "${BASE_ADAPTER_PATH}" ]; then
+        base_adapter_arg="--base-adapter-path ${BASE_ADAPTER_PATH}"
+        # NOTE: rope_method from ROPE_METHODS is preserved as the target RoPE type.
+        # model_loader.py Mode 1 uses it to override the base adapter's RoPE config.
+        echo "[INFO] Base adapter mode: ${BASE_ADAPTER_PATH}"
+        echo "[INFO] Target RoPE (from ROPE_METHODS): ${rope_method}"
+    fi
+    if [ -n "${ADAPTER_PATH}" ]; then
+        adapter_arg="--adapter-path ${ADAPTER_PATH}"
+        echo "[INFO] LoRA adapter mode (Mode 2): ${ADAPTER_PATH}"
+    fi
+
     local cmd="python continued_pretrain.py \
       $BASE_ARGS \
+      $base_adapter_arg \
+      $adapter_arg \
       $rope_method"
 
     echo "Executing: $cmd"
