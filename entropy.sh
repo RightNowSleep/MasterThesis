@@ -43,7 +43,7 @@ DATASET="emozilla/proofpile-test-tokenized"
 
 # ── Evaluation Mode Flags ─────────────────────────────────────────────────────
 ROPE=true
-ADAPTER=true
+ADAPTER=false
 ADAPTER_DIR="finetunes/continued_pretrain"
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
@@ -54,7 +54,12 @@ ROPE_METHODS=(
     # "--rope-type part-ntk --rope-dynamic"
     # "--rope-type freq-reciprocal --rope-dynamic"
     # "--rope-type dual-rope --rope-dynamic"
-    "--rope-type inverse-dual-rope --rope-dynamic"
+    # "--rope-type inverse-dual-rope --rope-dynamic"
+    # "--rope-type inverse-dual-rope-scaled --rope-dynamic"
+    "--rope-type inverse-dual-tangle-rope --rope-dynamic"
+    # "--rope-type inverse-dual-tangle-rope-scaled --rope-dynamic"
+    # "--rope-type inverse-dual-nopos-rope --rope-dynamic"
+    # "--rope-type inverse-dual-nopos-rope-scaled --rope-dynamic"
 )
 
 # ── Adapter Paths Configuration ──────────────────────────────────────────────

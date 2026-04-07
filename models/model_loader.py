@@ -58,6 +58,10 @@ _ROPE_TYPES_WITH_DYNAMIC_FLAG = {
     "dual-rope-scaled",
     "inverse-dual-rope",
     "inverse-dual-rope-scaled",
+    "inverse-dual-tangle-rope",
+    "inverse-dual-tangle-rope-scaled",
+    "inverse-dual-nopos-rope",
+    "inverse-dual-nopos-rope-scaled",
 }
 _ROPE_TYPE_NONE = "none"
 
@@ -533,6 +537,10 @@ def add_args_model(parser):
             "  dual-rope-scaled        — Dual RoPE + attention temperature\n"
             "  inverse-dual-rope          — Inverse-Dual RoPE (position only)\n"
             "  inverse-dual-rope-scaled    — Inverse-Dual RoPE + global-local attention scaling (alpha/beta/gamma)\n"
+            "  inverse-dual-tangle-rope    — Inverse-Dual-Tangle RoPE (position only)\n"
+            "  inverse-dual-tangle-rope-scaled — Inverse-Dual-Tangle RoPE + global-local attention scaling (alpha/beta/gamma)\n"
+            "  inverse-dual-nopos-rope     — Inverse-Dual No-Pos RoPE (position only)\n"
+            "  inverse-dual-nopos-rope-scaled — Inverse-Dual No-Pos RoPE + global-local attention scaling (alpha/beta/gamma)\n"
             "\n"
             "All types except 'none' require exactly ONE of:\n"
             "  --rope-factor F   static scaling with fixed ratio F > 1.0\n"
@@ -562,6 +570,9 @@ def add_args_model(parser):
             "to any sequence length without reloading weights."
         ),
     )
+    # version 1.0 [0.06, 0.50, 4.05]
+    # version 2.0 [0.05, 0.20, 1.12]
+    # version 3.0 [0.05, 0.50, 1.20]
     parser.add_argument(
         "--rope-alpha",
         type=float,

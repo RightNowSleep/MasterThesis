@@ -64,6 +64,12 @@ __all__ = [
     # Inverse Dual RoPE family
     "LlamaInverseDualRoPEEmbedding",
     "LlamaInverseDualRoPEScaledEmbedding",
+    # Inverse Dual Tangle RoPE family
+    "LlamaInverseDualTangleRoPEEmbedding",
+    "LlamaInverseDualTangleRoPEScaledEmbedding",
+    # Inverse Dual NoPos RoPE family
+    "LlamaInverseDualNoPosRoPEEmbedding",
+    "LlamaInverseDualNoPosRoPEScaledEmbedding",
 ]
 
 # ================================================================================== #
@@ -3118,12 +3124,12 @@ class LlamaDualRoPEScaledEmbedding(LlamaDualRoPEEmbedding):
         return super().forward(x, seq_len)
 
 
-# ================================================================================== #
-#  Inverse Dual RoPE family                                                          #
-#                                                                                    #
-#  LlamaInverseDualRoPEEmbedding       (Inverse-Dual-RoPE, position only)            #
-#  LlamaInverseDualRoPEScaledEmbedding (Inverse-Dual-RoPE + attention temperature)   #
-# ================================================================================== #
+# ========================================================================================================== #
+#  Inverse Dual RoPE family, named BS2——BiSpace & BiFactor Extension.                                        #
+#                                                                                                            #
+#  LlamaInverseDualRoPEEmbedding       (Inverse-Dual-RoPE, position only) named BiSpaceRoPE.                 #
+#  LlamaInverseDualRoPEScaledEmbedding (Inverse-Dual-RoPE + attention temperature) named BiFactor-Scaling.   #
+# ========================================================================================================== #
 
 
 class LlamaInverseDualRoPEEmbedding(nn.Module):
@@ -3271,6 +3277,7 @@ class LlamaInverseDualRoPEEmbedding(nn.Module):
 
 class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
     """Inverse Dual RoPE Embedding with piecewise global-local attention scaling.
+    Normal name: BS2——BiSpace & BiFactor Extension.
 
     Inherits the inverse dual-position encoding from LlamaInverseDualRoPEEmbedding and
     adds a decomposed scaling function s(t) = global(t) × local(t) for better
@@ -3278,8 +3285,10 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
 
     Design idea: Decompose the scaling function s(t) into global term × local term:
 
-        s(t) = 1                              t < L_0
-        s(t) = (1 + α·ln(k+1)) · (1 + β·e^(-γr))   t ≥ L_0
+        s(t) = 1                                        t < L_0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·e^(1-γr))       t ≥ L_0    1.0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γk))   t ≥ L_0    2.0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γ))    t ≥ L_0    3.0
 
     where:
         k = ⌊t / L_0⌋ ≥ 1          (segment index, global)
@@ -3349,10 +3358,13 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
 
     def _compute_attn_scale(self, seq_len: int, device):
         """Compute global-local decomposed attention scaling factor.
+        Normal name: BiFactor-Scaling.
 
         Implements the piecewise scaling function:
-            s(t) = 1                                    t < L_0
-            s(t) = (1 + α·ln(k+1)) · (1 + β·e^(-γr))   t ≥ L_0
+            s(t) = 1                                        t < L_0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·e^(-γr))        t ≥ L_0    1.0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γk))   t ≥ L_0    2.0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γ))    t ≥ L_0    3.0
 
         where k = floor(t / L_0) is the segment index (global coordinate),
         and r = (t mod L_0) / L_0 is the normalized intra-segment position (local coordinate).
@@ -3379,7 +3391,13 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
         r = (t % L_0) / L_0
 
         global_term = 1.0 + self.alpha * torch.log(k + 1.0)
-        local_term = 1.0 + self.beta * torch.exp(-self.gamma * r)
+        # local_term = 1.0 + self.beta * torch.exp(-self.gamma * r) # 1.0
+        # exponent = 1.0 / (self.gamma * k)
+        exponent = 1.0 / self.gamma
+        local_term = 1.0 + self.beta * torch.pow(
+            torch.clamp(1.0 - r, min=1e-9),
+            exponent,
+        )  # 2.0
 
         s_t = torch.where(
             mask,
@@ -3442,6 +3460,702 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
             tuple[torch.Tensor, torch.Tensor]: A tuple containing:
                 - cos: Scaled inverse dual cosine values of shape (seq_len, dim).
                 - sin: Scaled inverse dual sine values of shape (seq_len, dim).
+        """
+        if seq_len is None:
+            seq_len = x.shape[2]
+        if seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
+        return (
+            self.cos_cached[:seq_len].to(x.dtype),
+            self.sin_cached[:seq_len].to(x.dtype),
+        )
+
+
+class LlamaInverseDualTangleRoPEEmbedding(nn.Module):
+    f"""Inverse Dual Tangle RoPE Embedding.Normal name: BiSpaceRoPE.
+
+    A novel inverse dual-position encoding approach that splits position indices into
+    two parts based on the critical dimension i_star, while keeping inv_freq complete.
+    This is the INVERSE of LlamaDualRoPEEmbedding — the high/low frequency operations
+    are swapped:
+
+    - inv_freq: complete, size = dim // 2 (e.g., [f_0, f_1, f_2, ..., f_(dim//2-1)])
+    - High-frequency dimensions (i < i_star): position index = t (global, monotonic)
+    - Low-frequency dimensions (i >= i_star): position index = p if p < L_0 else P - p (local, cyclic)
+        P = 2(L_0 - 1), p = t % P
+        
+    The critical dimension i_star is computed as the number of dimensions that complete
+    at least one full rotation within the original context window::
+        r_i = L_0 * θ_i / (2π),  i_star = first index where r_i < 1
+
+    Key difference from Dual-RoPE: denominator uses L_0 (original context length),
+    not S (scaled context length). This makes the cyclic component always relative to
+    the training distribution.
+
+    Attributes:
+        dim (int): Dimension of the embedding (head dimension).
+        max_position_embeddings (int): Maximum sequence length for caching.
+        base (int): Base frequency for computing inverse frequencies.
+        scaling_factor (float): Scaling factor for position interpolation.
+        original_max_position_embeddings (int): Original context window size.
+        dynamic (bool): Whether to dynamically recompute frequencies (currently unused).
+        i_star (int): Critical dimension index for splitting position indices.
+        inv_freq (torch.Tensor): Complete inverse frequency buffer.
+        inv_freq_1 (torch.Tensor): High-frequency inverse frequencies (i < i_star).
+        inv_freq_2 (torch.Tensor): Low-frequency inverse frequencies (i >= i_star).
+        cos_cached (torch.Tensor): Cached cosine values.
+        sin_cached (torch.Tensor): Cached sine values.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        dynamic: bool = False,
+    ):
+        """Initialize Inverse Dual RoPE Embedding.
+
+        Args:
+            dim (int): Dimension of the embedding (must be even).
+            max_position_embeddings (int): Maximum sequence length for caching.
+                Defaults to 2048.
+            base (int): Base frequency. Defaults to 10000.
+            device (torch.device): Device to place tensors on. Defaults to None.
+            scaling_factor (float): Scaling factor (currently unused, reserved).
+                Defaults to 1.0.
+            original_max_position_embeddings (int): Original context window size.
+                Defaults to 2048.
+            dynamic (bool): Whether to dynamically recompute frequencies (unused).
+                Defaults to False.
+        """
+        super().__init__()
+        self.dim = dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+        self.scaling_factor = max(1.0, scaling_factor)
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.dynamic = dynamic
+
+        inv_freq = 1.0 / (
+            self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
+        )
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        r = original_max_position_embeddings * inv_freq / (2.0 * math.pi)
+        i_star = int((r >= 1.0).sum().item())
+        self.i_star = max(1, min(i_star, dim // 2 - 1))
+
+        self.register_buffer("inv_freq_1", inv_freq[: self.i_star], persistent=False)
+        self.register_buffer("inv_freq_2", inv_freq[self.i_star :], persistent=False)
+
+        self._set_cos_sin_cache(
+            seq_len=max_position_embeddings,
+            device=self.inv_freq.device,
+            dtype=torch.get_default_dtype(),
+        )
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        """Compute and cache cos/sin values with inverse dual position encoding.
+
+        Swaps the assignment compared to Dual-RoPE: high frequencies get raw position
+        indices (t, monotonic) and low frequencies get cyclic positions (mod L_0).
+
+        Args:
+            seq_len (int): Sequence length to cache embeddings for.
+            device (torch.device): Device to place cached tensors on.
+            dtype (torch.dtype): Data type for cached tensors.
+
+        Returns:
+            None
+        """
+        self.max_seq_len_cached = seq_len
+        L_0 = self.original_max_position_embeddings
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        pos_1 = t
+        period = 2 * (L_0 - 1)
+        pos_in_period = t % period
+        pos_2 = torch.where(
+            pos_in_period < L_0,
+            pos_in_period,
+            period - pos_in_period,
+        )
+        self.register_buffer("pos_1_cached", pos_1, persistent=False)
+        self.register_buffer("pos_2_cached", pos_2, persistent=False)
+        inv_freq_1 = self.inv_freq_1.to(device=device)
+        inv_freq_2 = self.inv_freq_2.to(device=device)
+        freqs_1 = pos_1.unsqueeze(1) * inv_freq_1.unsqueeze(0)
+        freqs_2 = pos_2.unsqueeze(1) * inv_freq_2.unsqueeze(0)
+        freqs = torch.cat([freqs_1, freqs_2], dim=-1)
+        cos = freqs.cos().repeat(1, 2)
+        sin = freqs.sin().repeat(1, 2)
+        self.register_buffer("cos_cached", cos.contiguous().to(dtype), persistent=False)
+        self.register_buffer("sin_cached", sin.contiguous().to(dtype), persistent=False)
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        """Forward pass to retrieve inverse dual RoPE embeddings.
+
+        Returns cached embeddings, recomputing only if sequence length exceeds cache.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch, num_heads, seq_len, head_dim).
+            seq_len (int, optional): Requested sequence length. If None, inferred
+                from input. Defaults to None.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+                - cos: Inverse dual cosine values of shape (seq_len, dim).
+                - sin: Inverse dual sine values of shape (seq_len, dim).
+        """
+        device, dtype = x.device, x.dtype
+        if seq_len is None:
+            seq_len = x.shape[2]
+        if seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len=seq_len, device=device, dtype=dtype)
+        return (
+            self.cos_cached[:seq_len].to(dtype),
+            self.sin_cached[:seq_len].to(dtype),
+        )
+
+
+class LlamaInverseDualTangleRoPEScaledEmbedding(LlamaInverseDualTangleRoPEEmbedding):
+    """Inverse Dual Tangle RoPE Embedding with piecewise global-local attention scaling.
+    Normal name: BS2——BiSpace & BiFactor Extension.
+
+    Inherits the inverse dual-position encoding from LlamaInverseDualTangleRoPEEmbedding and
+    adds a decomposed scaling function s(t) = global(t) × local(t) for better
+    long-context handling.
+
+    Design idea: Decompose the scaling function s(t) into global term × local term:
+
+        s(t) = 1                                        t < L_0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·e^(1-γr))       t ≥ L_0    1.0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γk))   t ≥ L_0    2.0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γ))    t ≥ L_0    3.0
+
+    where:
+        k = ⌊t / L_0⌋ ≥ 1          (segment index, global)
+        r = (t mod L_0) / L_0 ∈ [0, 1]  (intra-segment position, local)
+
+    Parameter meanings:
+        α : Global term growth rate with segment index (YaRN-like ln growth). Default: 0.1
+        β : Jump compensation amplitude at segment boundaries. Default: 0.5
+        γ : Intra-segment decay rate for local compensation. Default: 2.0
+
+    Attributes:
+        Inherits all attributes from LlamaInverseDualRoPEEmbedding.
+        alpha (float): Global term growth rate coefficient.
+        beta (float): Boundary jump compensation amplitude.
+        gamma (float): Intra-segment exponential decay rate.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        dynamic: bool = False,
+        alpha: float = 0.1,
+        beta: float = 0.5,
+        gamma: float = 2.0,
+    ):
+        """Initialize Inverse Dual RoPE Embedding with global-local scaling.
+
+        Args:
+            dim (int): Dimension of the embedding (must be even).
+            max_position_embeddings (int): Maximum sequence length for caching.
+                Defaults to 2048.
+            base (int): Base frequency. Defaults to 10000.
+            device (torch.device): Device to place tensors on. Defaults to None.
+            scaling_factor (float): Scaling factor (currently unused, reserved).
+                Defaults to 1.0.
+            original_max_position_embeddings (int): Original context window size L_0.
+                Defaults to 2048.
+            dynamic (bool): Whether to dynamically recompute frequencies (unused).
+                Defaults to False.
+            alpha (float): Global term growth rate (YaRN-like ln growth).
+                Controls how fast the global scale grows with segment index k.
+                Defaults to 0.1.
+            beta (float): Boundary jump compensation amplitude.
+                Controls the magnitude of local compensation at segment boundaries.
+                Defaults to 0.5.
+            gamma (float): Intra-segment decay rate.
+                Controls how quickly the local compensation decays within each segment.
+                Defaults to 2.0.
+        """
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        super().__init__(
+            dim=dim,
+            max_position_embeddings=max_position_embeddings,
+            base=base,
+            device=device,
+            scaling_factor=scaling_factor,
+            original_max_position_embeddings=original_max_position_embeddings,
+            dynamic=dynamic,
+        )
+
+    def _compute_attn_scale(self, seq_len: int, device):
+        """Compute global-local decomposed attention scaling factor.
+        Normal name: BiFactor-Scaling.
+
+        Implements the piecewise scaling function:
+            s(t) = 1                                        t < L_0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·e^(-γr))        t ≥ L_0    1.0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γk))   t ≥ L_0    2.0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γ))    t ≥ L_0    3.0
+
+        where k = floor(t / L_0) is the segment index (global coordinate),
+        and r = (t mod L_0) / L_0 is the normalized intra-segment position (local coordinate).
+
+        The global term (1 + α·ln(k+1)) provides monotonic YaRN-like logarithmic growth
+        across segments, compensating for cumulative attention entropy loss.
+
+        The local term (1 + β·e^(-γr)) provides a jump-up compensation at each segment
+        boundary (r ≈ 0) that decays exponentially within the segment (r → 1),
+        addressing the discontinuity issue at segment transitions.
+
+        Args:
+            seq_len (int): Current sequence length.
+            device (torch.device): Device to place result on.
+
+        Returns:
+            torch.Tensor: Attention scaling factors of shape (seq_len, 1).
+        """
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        L_0 = self.original_max_position_embeddings
+
+        mask = t < L_0
+        k = torch.floor(t / L_0).clamp(min=1.0)
+        r = (t % L_0) / L_0
+
+        global_term = 1.0 + self.alpha * torch.log(k + 1.0)
+        # local_term = 1.0 + self.beta * torch.exp(-self.gamma * r) # 1.0
+        # exponent = 1.0 / (self.gamma * k)
+        exponent = 1.0 / self.gamma
+        local_term = 1.0 + self.beta * torch.pow(
+            torch.clamp(1.0 - r, min=1e-9),
+            exponent,
+        )  # 2.0
+
+        s_t = torch.where(
+            mask,
+            torch.tensor(1.0, device=device),
+            global_term * local_term,
+        )
+        return s_t.unsqueeze(-1)
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        """Compute and cache cos/sin values with inverse dual encoding and global-local scaling.
+
+        Extends parent class by applying the decomposed scaling function s(t) =
+        global(t) × local(t) to the inverse dual-encoded embeddings, where the global
+        term captures cross-segment accumulation and the local term handles intra-segment
+        boundary compensation.
+
+        Args:
+            seq_len (int): Sequence length to cache embeddings for.
+            device (torch.device): Device to place cached tensors on.
+            dtype (torch.dtype): Data type for cached tensors.
+
+        Returns:
+            None
+        """
+        self.max_seq_len_cached = seq_len
+        L_0 = self.original_max_position_embeddings
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        pos_1 = t
+        period = 2 * (L_0 - 1)
+        pos_in_period = t % period
+        pos_2 = torch.where(
+            pos_in_period < L_0,
+            pos_in_period,
+            period - pos_in_period,
+        )
+        inv_freq_1 = self.inv_freq_1.to(device=device)
+        inv_freq_2 = self.inv_freq_2.to(device=device)
+        freqs_1 = pos_1.unsqueeze(1) * inv_freq_1.unsqueeze(0)
+        freqs_2 = pos_2.unsqueeze(1) * inv_freq_2.unsqueeze(0)
+        freqs = torch.cat([freqs_1, freqs_2], dim=-1)
+        cos = freqs.cos().repeat(1, 2)
+        sin = freqs.sin().repeat(1, 2)
+        attn_scale = self._compute_attn_scale(seq_len, device)
+        self.register_buffer(
+            "cos_cached",
+            (cos * attn_scale).contiguous().to(dtype),
+            persistent=False,
+        )
+        self.register_buffer(
+            "sin_cached",
+            (sin * attn_scale).contiguous().to(dtype),
+            persistent=False,
+        )
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        """Forward pass with inverse dual position encoding and global-local scaling.
+
+        Returns cached embeddings with the decomposed attention temperature applied.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch, num_heads, seq_len, head_dim).
+            seq_len (int, optional): Requested sequence length. If None, inferred
+                from input. Defaults to None.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+                - cos: Scaled inverse dual cosine values of shape (seq_len, dim).
+                - sin: Scaled inverse dual sine values of shape (seq_len, dim).
+        """
+        if seq_len is None:
+            seq_len = x.shape[2]
+        if seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
+        return (
+            self.cos_cached[:seq_len].to(x.dtype),
+            self.sin_cached[:seq_len].to(x.dtype),
+        )
+
+
+class LlamaInverseDualNoPosRoPEEmbedding(nn.Module):
+    """Inverse Dual NoPos RoPE Embedding. Normal name: BiSpaceNoPos-RoPE.
+
+    A variant of LlamaInverseDualRoPEEmbedding where low-frequency dimensions (i >= i_star)
+    have position index fixed to 0, resulting in cos=1 and sin=0 (no positional encoding).
+
+    This is the INVERSE of LlamaDualRoPEEmbedding — the high/low frequency operations
+    are swapped:
+
+    - inv_freq: complete, size = dim // 2 (e.g., [f_0, f_1, f_2, ..., f_{dim//2-1}])
+    - High-frequency dimensions (i < i_star): position index = t (global, monotonic)
+    - Low-frequency dimensions (i >= i_star): position index = 0 (constant, no encoding)
+
+    Design principle:
+    - High frequencies retain standard RoPE for local pattern recognition
+    - Low frequencies have NO positional information, acting as a "global context channel"
+    - This creates a clean separation between positional and content-based attention
+
+    The critical dimension i_star is computed as the number of dimensions that complete
+    at least one full rotation within the original context window::
+        r_i = L_0 * θ_i / (2π),  i_star = first index where r_i < 1
+
+    Key difference from InverseDual-RoPE:
+        pos_2 = zeros (no position) instead of t % L_0 (cyclic position)
+
+    Attributes:
+        dim (int): Dimension of the embedding (head dimension).
+        max_position_embeddings (int): Maximum sequence length for caching.
+        base (int): Base frequency for computing inverse frequencies.
+        scaling_factor (float): Scaling factor for position interpolation.
+        original_max_position_embeddings (int): Original context window size.
+        dynamic (bool): Whether to dynamically recompute frequencies (currently unused).
+        i_star (int): Critical dimension index for splitting position indices.
+        inv_freq (torch.Tensor): Complete inverse frequency buffer.
+        inv_freq_1 (torch.Tensor): High-frequency inverse frequencies (i < i_star).
+        inv_freq_2 (torch.Tensor): Low-frequency inverse frequencies (i >= i_star).
+        cos_cached (torch.Tensor): Cached cosine values.
+        sin_cached (torch.Tensor): Cached sine values.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        dynamic: bool = False,
+    ):
+        """Initialize Inverse Dual NoPos RoPE Embedding.
+
+        Args:
+            dim (int): Dimension of the embedding (must be even).
+            max_position_embeddings (int): Maximum sequence length for caching.
+                Defaults to 2048.
+            base (int): Base frequency. Defaults to 10000.
+            device (torch.device): Device to place tensors on. Defaults to None.
+            scaling_factor (float): Scaling factor (currently unused, reserved).
+                Defaults to 1.0.
+            original_max_position_embeddings (int): Original context window size.
+                Defaults to 2048.
+            dynamic (bool): Whether to dynamically recompute frequencies (unused).
+                Defaults to False.
+        """
+        super().__init__()
+        self.dim = dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+        self.scaling_factor = max(1.0, scaling_factor)
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.dynamic = dynamic
+
+        inv_freq = 1.0 / (
+            self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
+        )
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        r = original_max_position_embeddings * inv_freq / (2.0 * math.pi)
+        i_star = int((r >= 1.0).sum().item())
+        self.i_star = max(1, min(i_star, dim // 2 - 1))
+
+        self.register_buffer("inv_freq_1", inv_freq[: self.i_star], persistent=False)
+        self.register_buffer("inv_freq_2", inv_freq[self.i_star :], persistent=False)
+
+        self._set_cos_sin_cache(
+            seq_len=max_position_embeddings,
+            device=self.inv_freq.device,
+            dtype=torch.get_default_dtype(),
+        )
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        """Compute and cache cos/sin values with inverse dual no-position encoding.
+
+        Swaps the assignment compared to Dual-RoPE: high frequencies get raw position
+        indices (t, monotonic) and low frequencies get ZERO position (no encoding).
+
+        For low-frequency dimensions (i >= i_star):
+            pos_2 = 0 → freqs_2 = 0 → cos = 1, sin = 0
+        This effectively removes positional encoding from low-frequency components.
+
+        Args:
+            seq_len (int): Sequence length to cache embeddings for.
+            device (torch.device): Device to place cached tensors on.
+            dtype (torch.dtype): Data type for cached tensors.
+
+        Returns:
+            None
+        """
+        self.max_seq_len_cached = seq_len
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        pos_1 = t
+        pos_2 = torch.zeros_like(t, device=device, dtype=torch.float32)
+        self.register_buffer("pos_1_cached", pos_1, persistent=False)
+        self.register_buffer("pos_2_cached", pos_2, persistent=False)
+        inv_freq_1 = self.inv_freq_1.to(device=device)
+        inv_freq_2 = self.inv_freq_2.to(device=device)
+        freqs_1 = pos_1.unsqueeze(1) * inv_freq_1.unsqueeze(0)
+        freqs_2 = pos_2.unsqueeze(1) * inv_freq_2.unsqueeze(0)
+        freqs = torch.cat([freqs_1, freqs_2], dim=-1)
+        cos = freqs.cos().repeat(1, 2)
+        sin = freqs.sin().repeat(1, 2)
+        self.register_buffer("cos_cached", cos.contiguous().to(dtype), persistent=False)
+        self.register_buffer("sin_cached", sin.contiguous().to(dtype), persistent=False)
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        """Forward pass to retrieve inverse dual NoPos RoPE embeddings.
+
+        Returns cached embeddings, recomputing only if sequence length exceeds cache.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch, num_heads, seq_len, head_dim).
+            seq_len (int, optional): Requested sequence length. If None, inferred
+                from input. Defaults to None.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+                - cos: Inverse dual NoPos cosine values of shape (seq_len, dim).
+                - sin: Inverse dual NoPos sine values of shape (seq_len, dim).
+        """
+        device, dtype = x.device, x.dtype
+        if seq_len is None:
+            seq_len = x.shape[2]
+        if seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len=seq_len, device=device, dtype=dtype)
+        return (
+            self.cos_cached[:seq_len].to(dtype),
+            self.sin_cached[:seq_len].to(dtype),
+        )
+
+
+class LlamaInverseDualNoPosRoPEScaledEmbedding(LlamaInverseDualNoPosRoPEEmbedding):
+    """Inverse Dual NoPos RoPE with BiFactor scaling.
+    Normal name: BS2-NoPos —— BiSpace-NoPos & BiFactor Extension.
+
+    Inherits the inverse dual no-position encoding from LlamaInverseDualNoPosRoPEEmbedding and
+    adds a decomposed scaling function s(t) = global(t) × local(t) for better
+    long-context handling.
+
+    Design idea: Decompose the scaling function s(t) into global term × local term:
+
+        s(t) = 1                                        t < L_0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·e^(1-γr))       t ≥ L_0    1.0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γk))   t ≥ L_0    2.0
+        s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γ))    t ≥ L_0    3.0
+
+    where:
+        k = ⌊t / L_0⌋ ≥ 1          (segment index, global)
+        r = (t mod L_0) / L_0 ∈ [0, 1]  (intra-segment position, local)
+
+    Parameter meanings:
+        α : Global term growth rate with segment index (YaRN-like ln growth). Default: 0.1
+        β : Jump compensation amplitude at segment boundaries. Default: 0.5
+        γ : Intra-segment decay rate for local compensation. Default: 2.0
+
+    Attributes:
+        Inherits all attributes from LlamaInverseDualNoPosRoPEEmbedding.
+        alpha (float): Global term growth rate coefficient.
+        beta (float): Boundary jump compensation amplitude.
+        gamma (float): Intra-segment exponential decay rate.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 2048,
+        base: int = 10000,
+        device=None,
+        scaling_factor: float = 1.0,
+        original_max_position_embeddings: int = 2048,
+        dynamic: bool = False,
+        alpha: float = 0.1,
+        beta: float = 0.5,
+        gamma: float = 2.0,
+    ):
+        """Initialize Inverse Dual NoPos RoPE Embedding with global-local scaling.
+
+        Args:
+            dim (int): Dimension of the embedding (must be even).
+            max_position_embeddings (int): Maximum sequence length for caching.
+                Defaults to 2048.
+            base (int): Base frequency. Defaults to 10000.
+            device (torch.device): Device to place tensors on. Defaults to None.
+            scaling_factor (float): Scaling factor (currently unused, reserved).
+                Defaults to 1.0.
+            original_max_position_embeddings (int): Original context window size L_0.
+                Defaults to 2048.
+            dynamic (bool): Whether to dynamically recompute frequencies (unused).
+                Defaults to False.
+            alpha (float): Global term growth rate (YaRN-like ln growth).
+                Controls how fast the global scale grows with segment index k.
+                Defaults to 0.1.
+            beta (float): Boundary jump compensation amplitude.
+                Controls the magnitude of local compensation at segment boundaries.
+                Defaults to 0.5.
+            gamma (float): Intra-segment decay rate.
+                Controls how quickly the local compensation decays within each segment.
+                Defaults to 2.0.
+        """
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        super().__init__(
+            dim=dim,
+            max_position_embeddings=max_position_embeddings,
+            base=base,
+            device=device,
+            scaling_factor=scaling_factor,
+            original_max_position_embeddings=original_max_position_embeddings,
+            dynamic=dynamic,
+        )
+
+    def _compute_attn_scale(self, seq_len: int, device):
+        """Compute global-local decomposed attention scaling factor.
+        Normal name: BiFactor-Scaling.
+
+        Implements the piecewise scaling function:
+            s(t) = 1                                        t < L_0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·e^(-γr))        t ≥ L_0    1.0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γk))   t ≥ L_0    2.0
+            s(t) = (1 + α·ln(k+1)) · (1 + β·(1-r)^(1/γ))    t ≥ L_0    3.0
+
+        where k = floor(t / L_0) is the segment index (global coordinate),
+        and r = (t mod L_0) / L_0 is the normalized intra-segment position (local coordinate).
+
+        The global term (1 + α·ln(k+1)) provides monotonic YaRN-like logarithmic growth
+        across segments, compensating for cumulative attention entropy loss.
+
+        The local term (1 + β·e^(-γr)) provides a jump-up compensation at each segment
+        boundary (r ≈ 0) that decays exponentially within the segment (r → 1),
+        addressing the discontinuity issue at segment transitions.
+
+        Args:
+            seq_len (int): Current sequence length.
+            device (torch.device): Device to place result on.
+
+        Returns:
+            torch.Tensor: Attention scaling factors of shape (seq_len, 1).
+        """
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        L_0 = self.original_max_position_embeddings
+
+        mask = t < L_0
+        k = torch.floor(t / L_0).clamp(min=1.0)
+        r = (t % L_0) / L_0
+
+        global_term = 1.0 + self.alpha * torch.log(k + 1.0)
+        exponent = 1.0 / self.gamma
+        local_term = 1.0 + self.beta * torch.pow(
+            torch.clamp(1.0 - r, min=1e-9),
+            exponent,
+        )
+
+        s_t = torch.where(
+            mask,
+            torch.tensor(1.0, device=device),
+            global_term * local_term,
+        )
+        return s_t.unsqueeze(-1)
+
+    def _set_cos_sin_cache(self, seq_len: int, device, dtype):
+        """Compute and cache cos/sin values with inverse dual no-pos encoding and global-local scaling.
+
+        Extends parent class by applying the decomposed scaling function s(t) =
+        global(t) × local(t) to the inverse dual no-pos-encoded embeddings, where the global
+        term captures cross-segment accumulation and the local term handles intra-segment
+        boundary compensation.
+
+        Args:
+            seq_len (int): Sequence length to cache embeddings for.
+            device (torch.device): Device to place cached tensors on.
+            dtype (torch.dtype): Data type for cached tensors.
+
+        Returns:
+            None
+        """
+        self.max_seq_len_cached = seq_len
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        pos_1 = t
+        pos_2 = torch.zeros_like(t, device=device, dtype=torch.float32)
+        inv_freq_1 = self.inv_freq_1.to(device=device)
+        inv_freq_2 = self.inv_freq_2.to(device=device)
+        freqs_1 = pos_1.unsqueeze(1) * inv_freq_1.unsqueeze(0)
+        freqs_2 = pos_2.unsqueeze(1) * inv_freq_2.unsqueeze(0)
+        freqs = torch.cat([freqs_1, freqs_2], dim=-1)
+        cos = freqs.cos().repeat(1, 2)
+        sin = freqs.sin().repeat(1, 2)
+        attn_scale = self._compute_attn_scale(seq_len, device)
+        self.register_buffer(
+            "cos_cached",
+            (cos * attn_scale).contiguous().to(dtype),
+            persistent=False,
+        )
+        self.register_buffer(
+            "sin_cached",
+            (sin * attn_scale).contiguous().to(dtype),
+            persistent=False,
+        )
+
+    def forward(self, x: torch.Tensor, seq_len: int = None):
+        """Forward pass with inverse dual no-position encoding and global-local scaling.
+
+        Returns cached embeddings with the decomposed attention temperature applied.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch, num_heads, seq_len, head_dim).
+            seq_len (int, optional): Requested sequence length. If None, inferred
+                from input. Defaults to None.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+                - cos: Scaled inverse dual NoPos cosine values of shape (seq_len, dim).
+                - sin: Scaled inverse dual NoPos sine values of shape (seq_len, dim).
         """
         if seq_len is None:
             seq_len = x.shape[2]

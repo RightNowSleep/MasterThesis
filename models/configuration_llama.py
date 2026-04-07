@@ -78,7 +78,9 @@ class LlamaConfig(PretrainedConfig):
             "my-rope-scaled", "my-rope2", "my-rope2-scaled", "block-layered", "block-layered-scaled",
             "freq-smooth", "freq-smooth-scaled", "freq-reciprocal", "freq-reciprocal-scaled",
             "freq-reciprocal-scaled-no-layer", "freq-reciprocal-scaled-adaptive",
-            "dual-rope", "dual-rope-scaled", "inverse-dual-rope", "inverse-dual-rope-scaled".
+            "dual-rope", "dual-rope-scaled", "inverse-dual-rope", "inverse-dual-rope-scaled",
+            "inverse-dual-tangle-rope", "inverse-dual-tangle-rope-scaled",
+            "inverse-dual-nopos-rope", "inverse-dual-nopos-rope-scaled".
 
             All types support the same mutually exclusive "factor" / "dynamic" interface:
 
@@ -206,6 +208,10 @@ class LlamaConfig(PretrainedConfig):
             - "dual-rope-scaled": dual RoPE + attention temperature
             - "inverse-dual-rope": inverse dual RoPE (position only)
             - "inverse-dual-rope-scaled": inverse dual RoPE + attention temperature
+            - "inverse-dual-tangle-rope": inverse dual tangle RoPE (position only)
+            - "inverse-dual-tangle-rope-scaled": inverse dual tangle RoPE + attention temperature
+            - "inverse-dual-nopos-rope": inverse dual no-pos RoPE (position only)
+            - "inverse-dual-nopos-rope-scaled": inverse dual no-pos RoPE + attention temperature
 
         All types share the same "factor" / "dynamic" interface:
             - "factor" (float > 1.0): static mode with a fixed scaling ratio.
@@ -216,6 +222,10 @@ class LlamaConfig(PretrainedConfig):
 
         Type-specific optional parameters (only validated when type matches):
             - "inverse-dual-rope-scaled":
+                * "alpha" (int or float > 0, default=0.1): alpha coefficient
+                * "beta" (int or float > 0, default=0.5): beta coefficient
+                * "gamma" (int or float > 0, default=2.0): gamma coefficient
+            - "inverse-dual-nopos-rope-scaled":
                 * "alpha" (int or float > 0, default=0.1): alpha coefficient
                 * "beta" (int or float > 0, default=0.5): beta coefficient
                 * "gamma" (int or float > 0, default=2.0): gamma coefficient
@@ -263,6 +273,10 @@ class LlamaConfig(PretrainedConfig):
             "dynamic-dual-rope-scaled": "dual-rope-scaled",
             "dynamic-inverse-dual-rope": "inverse-dual-rope",
             "dynamic-inverse-dual-rope-scaled": "inverse-dual-rope-scaled",
+            "dynamic-inverse-dual-tangle-rope": "inverse-dual-tangle-rope",
+            "dynamic-inverse-dual-tangle-rope-scaled": "inverse-dual-tangle-rope-scaled",
+            "dynamic-inverse-dual-nopos-rope": "inverse-dual-nopos-rope",
+            "dynamic-inverse-dual-nopos-rope-scaled": "inverse-dual-nopos-rope-scaled",
         }
         if rope_scaling_type in _deprecated_dynamic_map:
             new_type = _deprecated_dynamic_map[rope_scaling_type]
@@ -298,6 +312,10 @@ class LlamaConfig(PretrainedConfig):
             "dual-rope-scaled",
             "inverse-dual-rope",
             "inverse-dual-rope-scaled",
+            "inverse-dual-tangle-rope",
+            "inverse-dual-tangle-rope-scaled",
+            "inverse-dual-nopos-rope",
+            "inverse-dual-nopos-rope-scaled",
         ]
         if rope_scaling_type is None or rope_scaling_type not in valid_types:
             raise ValueError(
@@ -356,7 +374,10 @@ class LlamaConfig(PretrainedConfig):
         # ------------------------------------------------------------------ #
         # Validate type-specific optional parameters                          #
         # ------------------------------------------------------------------ #
-        if rope_scaling_type == "inverse-dual-rope-scaled":
+        if rope_scaling_type in [
+            "inverse-dual-rope-scaled",
+            "inverse-dual-nopos-rope-scaled",
+        ]:
             _defaults = {"alpha": 0.1, "beta": 0.5, "gamma": 2.0}
             for param_name, default_val in _defaults.items():
                 param_val = self.rope_scaling.get(param_name)

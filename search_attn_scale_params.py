@@ -209,12 +209,19 @@ def objective(trial, model, tokenizer, args):
     return weighted_ppl
 
 
-def save_results(study, output_dir: str, args):
-    """Save Optuna study results to JSON."""
+def save_results(study, output_dir: str, args, rope_type: str):
+    """Save Optuna study results to JSON.
+
+    Args:
+        study: Optuna study object.
+        output_dir: Directory to save results.
+        args: Command-line arguments.
+        rope_type: RoPE scaling type string for filename.
+    """
     os.makedirs(output_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"optuna_search_results_{timestamp}.json"
+    filename = f"{rope_type}_{timestamp}.json"
     filepath = os.path.join(output_dir, filename)
 
     best_trial = study.best_trial
@@ -295,6 +302,12 @@ def main():
         n_min_trials=args.pruner_n_min_steps,
     )
 
+    # Auto-generate storage path if not specified
+    if not args.storage or args.storage.strip() == "":
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        args.storage = f"sqlite:///results/param_search/{args.rope_type}_{timestamp}.db"
+        print(f"[INFO] Auto-generated storage: {args.storage}")
+
     study = optuna.create_study(
         study_name=args.study_name,
         storage=args.storage,
@@ -337,7 +350,7 @@ def main():
     print(f"Best params: {study.best_params}")
     print(f"Best weighted perplexity: {study.best_value:.4f}")
 
-    save_results(study, args.output_dir, args)
+    save_results(study, args.output_dir, args, args.rope_type)
 
     print("\n" + "=" * 60)
     print("Search completed!")

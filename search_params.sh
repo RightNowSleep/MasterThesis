@@ -102,7 +102,7 @@ ROPE_DYNAMIC="--rope-dynamic"
 # ── Optuna Configuration ─────────────────────────────────────────────────────
 N_TRIALS=100
 STUDY_NAME="inverse-dual-rope-scaled-search"
-STORAGE=""  # Empty = in-memory; set e.g. "sqlite:///optuna.db" for persistence
+STORAGE=""  # Empty = in-memory; auto-generate as {rope_type}_{timestamp}.db
 SAMPLER_SEED=42
 PRUNER_N_WARMUP_STEPS=10
 PRUNER_N_MIN_STEPS=5
@@ -110,7 +110,8 @@ PRUNER_N_MIN_STEPS=5
 # ── Parameter Search Space ────────────────────────────────────────────────────
 ALPHA_RANGE="0.05,0.40"
 BETA_RANGE="0.20,1.50"
-GAMMA_RANGE="0.50,5.00"
+# GAMMA_RANGE="0.50,5.00"
+GAMMA_RANGE="1.10,5.00"
 
 # ── Evaluation Configuration ─────────────────────────────────────────────────
 EVAL_MIN_LENGTH=4096
@@ -187,6 +188,7 @@ python search_attn_scale_params.py \
     ${QUANT} \
     --n-trials ${N_TRIALS} \
     --study-name "${STUDY_NAME}" \
+    --storage "${STORAGE}" \
     --sampler-seed ${SAMPLER_SEED} \
     --pruner-n-warmup-steps ${PRUNER_N_WARMUP_STEPS} \
     --pruner-n-min-steps ${PRUNER_N_MIN_STEPS} \

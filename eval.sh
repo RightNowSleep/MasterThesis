@@ -43,7 +43,7 @@ export DISABLE_FLASH_ATTN=1
 export USE_FLASH_ATTN=0
 export HF_ALLOW_CODE_EVAL=1
 
-CUDA_DEVICES="2,3"
+CUDA_DEVICES="1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 # ── Model Configuration ──────────────────────────────────────────────────────
@@ -57,8 +57,8 @@ BATCH_SIZE=1
 OUTPUT_DIR="results"
 
 # ── Evaluation Mode Flags ────────────────────────────────────────────────────
-ROPE=false
-ADAPTER=true
+ROPE=true
+ADAPTER=false
 ADAPTER_DIR="finetunes/continued_pretrain"
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
@@ -75,6 +75,10 @@ ROPE_METHODS=(
     # "--rope-type dual-rope-scaled --rope-dynamic"
     "--rope-type inverse-dual-rope --rope-dynamic"
     # "--rope-type inverse-dual-rope-scaled --rope-dynamic"
+    # "--rope-type inverse-dual-tangle-rope --rope-dynamic"
+    # "--rope-type inverse-dual-tangle-rope-scaled --rope-dynamic"
+    # "--rope-type inverse-dual-nopos-rope --rope-dynamic"
+    # "--rope-type inverse-dual-nopos-rope-scaled --rope-dynamic"
 )
 
 # ── Adapter Paths Configuration ──────────────────────────────────────────────
@@ -118,10 +122,10 @@ for combo in "${BASE_COMBOS[@]}"; do
 done
 
 # ── Evaluation Type Flags ────────────────────────────────────────────────────
-PERPLEXITY=false
+PERPLEXITY=true
 PERFORMANCE=false
 PASSKEY=false
-EVAL_HARNESS=true
+EVAL_HARNESS=false
 
 # ── Evaluation Arguments ─────────────────────────────────────────────────────
 PERPLEXITY_ARGS="--dataset-name emozilla/proofpile-test-tokenized \

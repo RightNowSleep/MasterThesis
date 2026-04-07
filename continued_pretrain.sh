@@ -29,13 +29,13 @@
 
 # ── Model Configuration ──────────────────────────────────────────────────────
 MODEL_NAME="huggyllama/llama-7b"
-MAX_LENGTH=16384
+MAX_LENGTH=2048
 DTYPE="bfloat16"
-ROPE_FACTOR=8.0
+ROPE_FACTOR=1.0
 
 # ── Training Hyperparameters ─────────────────────────────────────────────────
-BATCH_SIZE=1
-GRADIENT_ACCUMULATE_EVERY=2
+BATCH_SIZE=4
+GRADIENT_ACCUMULATE_EVERY=4
 MAX_TRAIN_STEPS=400
 WARMUP_STEPS=40
 LEARNING_RATE=2e-4
@@ -83,7 +83,9 @@ ROPE_METHODS=(
     # "--rope-type freq-reciprocal-scaled-no-layer --rope-factor $ROPE_FACTOR"
     # "--rope-type dual-rope --rope-factor $ROPE_FACTOR"
     # "--rope-type inverse-dual-rope --rope-factor $ROPE_FACTOR"
-    "--rope-type inverse-dual-rope-scaled --rope-factor $ROPE_FACTOR"
+    # "--rope-type inverse-dual-rope-scaled --rope-factor $ROPE_FACTOR"
+    "--rope-type inverse-dual-nopos-rope --rope-factor $ROPE_FACTOR"
+    # "--rope-type inverse-dual-nopos-rope-scaled --rope-factor $ROPE_FACTOR"
 )
 
 # ── Base Adapter Configuration ─────────────────────────────────────────────
@@ -96,8 +98,8 @@ ROPE_METHODS=(
 # Example: Train inverse-dual-rope-scaled on top of inverse-dual-rope
 # BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
 # BASE_ADAPTER_ROPE_TYPE="inverse-dual-rope-scaled"
-BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
-BASE_ADAPTER_ROPE_TYPE="inverse-dual-rope"
+BASE_ADAPTER_PATH=""
+BASE_ADAPTER_ROPE_TYPE=""
 
 # Uncomment to enable:
 # BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
