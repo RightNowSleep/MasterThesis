@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # =============================================================================
-# eval2.sh
+# eval1.sh
 # -----------------------------------------------------------------------------
 # Purpose: Comprehensive evaluation script for long-context language models
-#          (Variant 2: math benchmarks on GPUs 2,3)
+#          (Variant 1: reasoning benchmarks on GPUs 0,1)
 # -----------------------------------------------------------------------------
 # Description:
 #   This script provides a unified evaluation framework that supports multiple
@@ -16,18 +16,18 @@
 #   allowing evaluation of adapter stacking scenarios (e.g., evaluating
 #   inverse-dual-rope-scaled on top of inverse-dual-rope).
 #
-#   This variant runs math reasoning tasks (gsm8k, aime, hendrycks_math) on
-#   GPU devices 2,3.
+#   This variant runs reasoning tasks (arc_challenge, truthfulqa, hellaswag,
+#   mmlu) on GPU devices 0,1.
 # -----------------------------------------------------------------------------
 # Usage:
-#   bash eval2.sh
+#   bash eval1.sh
 # -----------------------------------------------------------------------------
 # Parameters:
 #   None (all configuration is done via variables below)
 # -----------------------------------------------------------------------------
 # Globals:
 #   PYTHONPATH             - Project root added to Python module search path
-#   CUDA_VISIBLE_DEVICES   - GPU device IDs for computation (default: "2,3")
+#   CUDA_VISIBLE_DEVICES   - GPU device IDs for computation (default: "0,1")
 #   DISABLE_FLASH_ATTN     - Disable flash attention (set to 1)
 #   USE_FLASH_ATTN         - Flash attention flag (set to 0)
 #   HF_ALLOW_CODE_EVAL     - Allow HuggingFace code evaluation (set to 1)
@@ -47,7 +47,7 @@ export DISABLE_FLASH_ATTN=1
 export USE_FLASH_ATTN=0
 export HF_ALLOW_CODE_EVAL=1
 
-CUDA_DEVICES="2,3"
+CUDA_DEVICES="1"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 # ── Model Configuration ──────────────────────────────────────────────────────
@@ -83,16 +83,18 @@ ROPE_METHODS=(
 
 # ── Adapter Paths Configuration ──────────────────────────────────────────────
 ADAPTER_PATHS=(
-    "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
-    "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
+    # "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope-scaled_20260406_070155"
+    # "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
+    # "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
     "--adapter-path ${ADAPTER_DIR}/part-ntk_20260315_233845"
-    "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
+    # "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
     "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
     "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
-    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
-    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
-    "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
-    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
+    # "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
+    # "--adapter-path ${ADAPTER_DIR}/inverse-dual-nopos-rope_20260408_074354"
 )
 
 # ── Base Adapter Combinations ────────────────────────────────────────────
@@ -149,12 +151,15 @@ PASSKEY_ARGS="--num-keys 5 \
 --save-dir ${OUTPUT_DIR}/passkey"
 
 # Available tasks:
+# niah: niah_single_1,niah_single_2,niah_single_3,niah_multikey_1,niah_multikey_2,niah_multikey_3,niah_multiquery,niah_multivalue
 # long_context: longbench,longbench2,longcxt,passkey,ruler,babilong
 # reasoning: arc_challenge,truthfulqa,hellaswag,bbh,mmlu
-# math: gsm8k,aime,hendrycks_math
-# code: humaneval,mbpp,humaneval_infilling
+# math: gsm8k,aime,hendrycks_math,mathqa,arithmetic
+# code: humaneval,mbpp,codex2text
 # Too long tasks: bbh
-TASKS="gsm8k,aime,hendrycks_math"
+# false tasks: humaneval_infilling,aime
+# new tasks: asdiv,bbq,hendrycks_math500,triviaqa,math_word_problems,hrm8k,agieval_math
+TASKS="minerva_math"
 EVAL_HARNESS_ARGS="--tasks ${TASKS} --batch-size ${BATCH_SIZE} --output-dir ${OUTPUT_DIR}/eval_harness"
 
 echo "=========================================="
@@ -318,6 +323,7 @@ run_eval_harness_eval() {
         --max-length ${MAX_LENGTH} \
         --min-length ${MAX_LENGTH} \
         --dtype ${DTYPE} \
+        --use-cache \
         ${QUANT} \
         ${EVAL_HARNESS_ARGS}"
 

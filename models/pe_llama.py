@@ -3391,13 +3391,13 @@ class LlamaInverseDualRoPEScaledEmbedding(LlamaInverseDualRoPEEmbedding):
         r = (t % L_0) / L_0
 
         global_term = 1.0 + self.alpha * torch.log(k + 1.0)
-        # local_term = 1.0 + self.beta * torch.exp(-self.gamma * r) # 1.0
-        # exponent = 1.0 / (self.gamma * k)
-        exponent = 1.0 / self.gamma
-        local_term = 1.0 + self.beta * torch.pow(
-            torch.clamp(1.0 - r, min=1e-9),
-            exponent,
-        )  # 2.0
+        local_term = 1.0 + self.beta * torch.exp(-self.gamma * r) # 1.0
+        # exponent = 1.0 / (self.gamma * k) # 2.0
+        # exponent = 1.0 / self.gamma # 3.0
+        # local_term = 1.0 + self.beta * torch.pow(
+        #     torch.clamp(1.0 - r, min=1e-9),
+        #     exponent,
+        # )
 
         s_t = torch.where(
             mask,

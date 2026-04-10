@@ -136,6 +136,58 @@ def _build_rope_scaling(args) -> Optional[Dict]:
     return rope_scaling
 
 
+def _can_cache(rope_scaling: Optional[Dict]) -> bool:
+    """
+    Determine whether KV Cache can be used based on RoPE scaling configuration.
+
+    KV Cache compatibility depends on the RoPE scaling method:
+        - No scaling (rope_scaling is None): KV Cache is supported.
+        - Static scaling (has 'factor'): KV Cache is supported.
+        - Dynamic scaling (has 'dynamic=True'):
+            - Inverse series (inverse-dual-rope, inverse-dual-rope-scaled, etc.):
+              KV Cache is supported because dynamic mode behaves identically to
+              static mode for these methods.
+            - All other methods (linear, ntk, part-ntk, yarn, etc.):
+              KV Cache is NOT supported because position embeddings change
+              dynamically with sequence length, making cached KV values invalid.
+
+    Args:
+        rope_scaling: The RoPE scaling configuration dictionary, typically from
+            config.rope_scaling. Can be None if no scaling is applied.
+
+    Returns:
+        bool: True if KV Cache can be safely used, False otherwise.
+
+    Examples:
+        >>> _can_cache(None)
+        True
+        >>> _can_cache({'type': 'linear', 'factor': 4.0})
+        True
+        >>> _can_cache({'type': 'linear', 'dynamic': True})
+        False
+        >>> _can_cache({'type': 'inverse-dual-rope', 'dynamic': True})
+        True
+    """
+    if rope_scaling is None:
+        return True
+
+    is_dynamic = rope_scaling.get("dynamic", False)
+    if not is_dynamic:
+        return True
+
+    rope_type = rope_scaling.get("type", "")
+    inverse_types = {
+        "inverse-dual-rope",
+        "inverse-dual-rope-scaled",
+        "inverse-dual-tangle-rope",
+        "inverse-dual-tangle-rope-scaled",
+        "inverse-dual-nopos-rope",
+        "inverse-dual-nopos-rope-scaled",
+    }
+
+    return rope_type in inverse_types
+
+
 def _resolve_torch_dtype(dtype_str: str):
     """
     Map a dtype string to a torch.dtype (or the literal string 'auto').
@@ -201,8 +253,10 @@ def load_model(args, quantization_config=None):
             )
 
         # Step 3: Set runtime parameters
+        rope_scaling = config.rope_scaling
+        can_cache = _can_cache(rope_scaling)
         config.max_position_embeddings = args.max_length
-        config.use_cache = args.use_cache
+        config.use_cache = args.use_cache if can_cache else False
 
         print(
             f"  rope-scaling   : {config.rope_scaling}\n"
@@ -278,8 +332,10 @@ def load_model(args, quantization_config=None):
             )
 
         # Step 2: Set runtime parameters
+        rope_scaling = config.rope_scaling
+        can_cache = _can_cache(rope_scaling)
         config.max_position_embeddings = args.max_length
-        config.use_cache = args.use_cache
+        config.use_cache = args.use_cache if can_cache else False
 
         print(
             f"  rope-scaling   : {config.rope_scaling}\n"
@@ -342,8 +398,9 @@ def load_model(args, quantization_config=None):
         config._rope_scaling_validation()
 
         # Step 3: Set runtime parameters
+        can_cache = _can_cache(rope_scaling)
         config.max_position_embeddings = args.max_length
-        config.use_cache = args.use_cache
+        config.use_cache = args.use_cache if can_cache else False
 
         print(
             f"  rope-scaling   : {config.rope_scaling}\n"

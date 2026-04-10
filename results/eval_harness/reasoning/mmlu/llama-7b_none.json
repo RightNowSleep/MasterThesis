@@ -1,340 +1,340 @@
 {
   "results": {
     "mmlu": {
-      "acc,none": 0.2982456140350877,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.3220338983050847,
+      "acc_stderr,none": 0.00391370034149715,
       "alias": "mmlu"
     },
     "mmlu_humanities": {
-      "acc,none": 0.15384615384615385,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.2882040382571732,
+      "acc_stderr,none": 0.006583788251927628,
       "alias": " - humanities"
     },
     "mmlu_formal_logic": {
       "alias": "  - formal_logic",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.30158730158730157,
+      "acc_stderr,none": 0.04104947269903394
     },
     "mmlu_high_school_european_history": {
       "alias": "  - high_school_european_history",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.23030303030303031,
+      "acc_stderr,none": 0.0328766675860349
     },
     "mmlu_high_school_us_history": {
       "alias": "  - high_school_us_history",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.25,
+      "acc_stderr,none": 0.03039153369274154
     },
     "mmlu_high_school_world_history": {
       "alias": "  - high_school_world_history",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.35443037974683544,
+      "acc_stderr,none": 0.0311373042971858
     },
     "mmlu_international_law": {
       "alias": "  - international_law",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.2644628099173554,
+      "acc_stderr,none": 0.040261875275912046
     },
     "mmlu_jurisprudence": {
       "alias": "  - jurisprudence",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3333333333333333,
+      "acc_stderr,none": 0.04557239513497752
     },
     "mmlu_logical_fallacies": {
       "alias": "  - logical_fallacies",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.25766871165644173,
+      "acc_stderr,none": 0.03436150827846917
     },
     "mmlu_moral_disputes": {
       "alias": "  - moral_disputes",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.315028901734104,
+      "acc_stderr,none": 0.025009313790069695
     },
     "mmlu_moral_scenarios": {
       "alias": "  - moral_scenarios",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.23798882681564246,
+      "acc_stderr,none": 0.014242630070574885
     },
     "mmlu_philosophy": {
       "alias": "  - philosophy",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3022508038585209,
+      "acc_stderr,none": 0.026082700695399655
     },
     "mmlu_prehistory": {
       "alias": "  - prehistory",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3395061728395062,
+      "acc_stderr,none": 0.026348564412011624
     },
     "mmlu_professional_law": {
       "alias": "  - professional_law",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.2861799217731421,
+      "acc_stderr,none": 0.011543642878150757
     },
     "mmlu_world_religions": {
       "alias": "  - world_religions",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.4093567251461988,
+      "acc_stderr,none": 0.037712831076265434
     },
     "mmlu_other": {
-      "acc,none": 0.46153846153846156,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.3607981976182813,
+      "acc_stderr,none": 0.008548225719919592,
       "alias": " - other"
     },
     "mmlu_business_ethics": {
       "alias": "  - business_ethics",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.34,
+      "acc_stderr,none": 0.047609522856952344
     },
     "mmlu_clinical_knowledge": {
       "alias": "  - clinical_knowledge",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.2943396226415094,
+      "acc_stderr,none": 0.028049186315695248
     },
     "mmlu_college_medicine": {
       "alias": "  - college_medicine",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3179190751445087,
+      "acc_stderr,none": 0.03550683989165581
     },
     "mmlu_global_facts": {
       "alias": "  - global_facts",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.32,
+      "acc_stderr,none": 0.04688261722621504
     },
     "mmlu_human_aging": {
       "alias": "  - human_aging",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.2600896860986547,
+      "acc_stderr,none": 0.029442495585857487
     },
     "mmlu_management": {
       "alias": "  - management",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3883495145631068,
+      "acc_stderr,none": 0.048257293373563895
     },
     "mmlu_marketing": {
       "alias": "  - marketing",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.4658119658119658,
+      "acc_stderr,none": 0.03267942734081228
     },
     "mmlu_medical_genetics": {
       "alias": "  - medical_genetics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.42,
+      "acc_stderr,none": 0.049604496374885836
     },
     "mmlu_miscellaneous": {
       "alias": "  - miscellaneous",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.40229885057471265,
+      "acc_stderr,none": 0.01753529452906896
     },
     "mmlu_nutrition": {
       "alias": "  - nutrition",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.37254901960784315,
+      "acc_stderr,none": 0.027684181883302895
     },
     "mmlu_professional_accounting": {
       "alias": "  - professional_accounting",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.25886524822695034,
+      "acc_stderr,none": 0.026129572527180848
     },
     "mmlu_professional_medicine": {
       "alias": "  - professional_medicine",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.4485294117647059,
+      "acc_stderr,none": 0.030211479609121593
     },
     "mmlu_virology": {
       "alias": "  - virology",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.29518072289156627,
+      "acc_stderr,none": 0.03550920185689631
     },
     "mmlu_social_sciences": {
-      "acc,none": 0.3333333333333333,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.35196620084497887,
+      "acc_stderr,none": 0.00857649278592156,
       "alias": " - social sciences"
     },
     "mmlu_econometrics": {
       "alias": "  - econometrics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.2894736842105263,
+      "acc_stderr,none": 0.04266339443159394
     },
     "mmlu_high_school_geography": {
       "alias": "  - high_school_geography",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.41414141414141414,
+      "acc_stderr,none": 0.03509438348879629
     },
     "mmlu_high_school_government_and_politics": {
       "alias": "  - high_school_government_and_politics",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.41450777202072536,
+      "acc_stderr,none": 0.03555300319557672
     },
     "mmlu_high_school_macroeconomics": {
       "alias": "  - high_school_macroeconomics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.35384615384615387,
+      "acc_stderr,none": 0.024243783994062167
     },
     "mmlu_high_school_microeconomics": {
       "alias": "  - high_school_microeconomics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3403361344537815,
+      "acc_stderr,none": 0.030778057422931673
     },
     "mmlu_high_school_psychology": {
       "alias": "  - high_school_psychology",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.4,
+      "acc_stderr,none": 0.021004201260420075
     },
     "mmlu_human_sexuality": {
       "alias": "  - human_sexuality",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.32061068702290074,
+      "acc_stderr,none": 0.04093329229834277
     },
     "mmlu_professional_psychology": {
       "alias": "  - professional_psychology",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.28104575163398693,
+      "acc_stderr,none": 0.01818521895431808
     },
     "mmlu_public_relations": {
       "alias": "  - public_relations",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3,
+      "acc_stderr,none": 0.04389311454644286
     },
     "mmlu_security_studies": {
       "alias": "  - security_studies",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.37142857142857144,
+      "acc_stderr,none": 0.03093285879278985
     },
     "mmlu_sociology": {
       "alias": "  - sociology",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.417910447761194,
+      "acc_stderr,none": 0.03487558640462063
     },
     "mmlu_us_foreign_policy": {
       "alias": "  - us_foreign_policy",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.29,
+      "acc_stderr,none": 0.045604802157206845
     },
     "mmlu_stem": {
-      "acc,none": 0.2631578947368421,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.3051062480177609,
+      "acc_stderr,none": 0.00814071767889536,
       "alias": " - stem"
     },
     "mmlu_abstract_algebra": {
       "alias": "  - abstract_algebra",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.25,
+      "acc_stderr,none": 0.04351941398892446
     },
     "mmlu_anatomy": {
       "alias": "  - anatomy",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3333333333333333,
+      "acc_stderr,none": 0.04072314811876837
     },
     "mmlu_astronomy": {
       "alias": "  - astronomy",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.4144736842105263,
+      "acc_stderr,none": 0.04008973785779206
     },
     "mmlu_college_biology": {
       "alias": "  - college_biology",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.3055555555555556,
+      "acc_stderr,none": 0.03852084696008534
     },
     "mmlu_college_chemistry": {
       "alias": "  - college_chemistry",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.37,
+      "acc_stderr,none": 0.04852365870939099
     },
     "mmlu_college_computer_science": {
       "alias": "  - college_computer_science",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.34,
+      "acc_stderr,none": 0.04760952285695235
     },
     "mmlu_college_mathematics": {
       "alias": "  - college_mathematics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.27,
+      "acc_stderr,none": 0.0446196043338474
     },
     "mmlu_college_physics": {
       "alias": "  - college_physics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.2647058823529412,
+      "acc_stderr,none": 0.04389869956808778
     },
     "mmlu_computer_security": {
       "alias": "  - computer_security",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.36,
+      "acc_stderr,none": 0.048241815132442176
     },
     "mmlu_conceptual_physics": {
       "alias": "  - conceptual_physics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.2936170212765957,
+      "acc_stderr,none": 0.029771642712491223
     },
     "mmlu_electrical_engineering": {
       "alias": "  - electrical_engineering",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.27586206896551724,
+      "acc_stderr,none": 0.037245636197746325
     },
     "mmlu_elementary_mathematics": {
       "alias": "  - elementary_mathematics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.25925925925925924,
+      "acc_stderr,none": 0.022569897074918407
     },
     "mmlu_high_school_biology": {
       "alias": "  - high_school_biology",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.36774193548387096,
+      "acc_stderr,none": 0.027430866579973467
     },
     "mmlu_high_school_chemistry": {
       "alias": "  - high_school_chemistry",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.21182266009852216,
+      "acc_stderr,none": 0.02874898368994107
     },
     "mmlu_high_school_computer_science": {
       "alias": "  - high_school_computer_science",
-      "acc,none": 1.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.31,
+      "acc_stderr,none": 0.04648231987117316
     },
     "mmlu_high_school_mathematics": {
       "alias": "  - high_school_mathematics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.24444444444444444,
+      "acc_stderr,none": 0.026202766534652148
     },
     "mmlu_high_school_physics": {
       "alias": "  - high_school_physics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.2913907284768212,
+      "acc_stderr,none": 0.03710185726119995
     },
     "mmlu_high_school_statistics": {
       "alias": "  - high_school_statistics",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.4444444444444444,
+      "acc_stderr,none": 0.03388857118502325
     },
     "mmlu_machine_learning": {
       "alias": "  - machine_learning",
-      "acc,none": 0.0,
-      "acc_stderr,none": "N/A"
+      "acc,none": 0.20535714285714285,
+      "acc_stderr,none": 0.03834241021419072
     }
   },
   "groups": {
     "mmlu": {
-      "acc,none": 0.2982456140350877,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.3220338983050847,
+      "acc_stderr,none": 0.00391370034149715,
       "alias": "mmlu"
     },
     "mmlu_humanities": {
-      "acc,none": 0.15384615384615385,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.2882040382571732,
+      "acc_stderr,none": 0.006583788251927628,
       "alias": " - humanities"
     },
     "mmlu_other": {
-      "acc,none": 0.46153846153846156,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.3607981976182813,
+      "acc_stderr,none": 0.008548225719919592,
       "alias": " - other"
     },
     "mmlu_social_sciences": {
-      "acc,none": 0.3333333333333333,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.35196620084497887,
+      "acc_stderr,none": 0.00857649278592156,
       "alias": " - social sciences"
     },
     "mmlu_stem": {
-      "acc,none": 0.2631578947368421,
-      "acc_stderr,none": "N/A",
+      "acc,none": 0.3051062480177609,
+      "acc_stderr,none": 0.00814071767889536,
       "alias": " - stem"
     }
   },
@@ -3748,231 +3748,231 @@
   "n-samples": {
     "mmlu_abstract_algebra": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_anatomy": {
       "original": 135,
-      "effective": 1
+      "effective": 135
     },
     "mmlu_astronomy": {
       "original": 152,
-      "effective": 1
+      "effective": 152
     },
     "mmlu_college_biology": {
       "original": 144,
-      "effective": 1
+      "effective": 144
     },
     "mmlu_college_chemistry": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_college_computer_science": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_college_mathematics": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_college_physics": {
       "original": 102,
-      "effective": 1
+      "effective": 102
     },
     "mmlu_computer_security": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_conceptual_physics": {
       "original": 235,
-      "effective": 1
+      "effective": 235
     },
     "mmlu_electrical_engineering": {
       "original": 145,
-      "effective": 1
+      "effective": 145
     },
     "mmlu_elementary_mathematics": {
       "original": 378,
-      "effective": 1
+      "effective": 378
     },
     "mmlu_high_school_biology": {
       "original": 310,
-      "effective": 1
+      "effective": 310
     },
     "mmlu_high_school_chemistry": {
       "original": 203,
-      "effective": 1
+      "effective": 203
     },
     "mmlu_high_school_computer_science": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_high_school_mathematics": {
       "original": 270,
-      "effective": 1
+      "effective": 270
     },
     "mmlu_high_school_physics": {
       "original": 151,
-      "effective": 1
+      "effective": 151
     },
     "mmlu_high_school_statistics": {
       "original": 216,
-      "effective": 1
+      "effective": 216
     },
     "mmlu_machine_learning": {
       "original": 112,
-      "effective": 1
+      "effective": 112
     },
     "mmlu_business_ethics": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_clinical_knowledge": {
       "original": 265,
-      "effective": 1
+      "effective": 265
     },
     "mmlu_college_medicine": {
       "original": 173,
-      "effective": 1
+      "effective": 173
     },
     "mmlu_global_facts": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_human_aging": {
       "original": 223,
-      "effective": 1
+      "effective": 223
     },
     "mmlu_management": {
       "original": 103,
-      "effective": 1
+      "effective": 103
     },
     "mmlu_marketing": {
       "original": 234,
-      "effective": 1
+      "effective": 234
     },
     "mmlu_medical_genetics": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_miscellaneous": {
       "original": 783,
-      "effective": 1
+      "effective": 783
     },
     "mmlu_nutrition": {
       "original": 306,
-      "effective": 1
+      "effective": 306
     },
     "mmlu_professional_accounting": {
       "original": 282,
-      "effective": 1
+      "effective": 282
     },
     "mmlu_professional_medicine": {
       "original": 272,
-      "effective": 1
+      "effective": 272
     },
     "mmlu_virology": {
       "original": 166,
-      "effective": 1
+      "effective": 166
     },
     "mmlu_econometrics": {
       "original": 114,
-      "effective": 1
+      "effective": 114
     },
     "mmlu_high_school_geography": {
       "original": 198,
-      "effective": 1
+      "effective": 198
     },
     "mmlu_high_school_government_and_politics": {
       "original": 193,
-      "effective": 1
+      "effective": 193
     },
     "mmlu_high_school_macroeconomics": {
       "original": 390,
-      "effective": 1
+      "effective": 390
     },
     "mmlu_high_school_microeconomics": {
       "original": 238,
-      "effective": 1
+      "effective": 238
     },
     "mmlu_high_school_psychology": {
       "original": 545,
-      "effective": 1
+      "effective": 545
     },
     "mmlu_human_sexuality": {
       "original": 131,
-      "effective": 1
+      "effective": 131
     },
     "mmlu_professional_psychology": {
       "original": 612,
-      "effective": 1
+      "effective": 612
     },
     "mmlu_public_relations": {
       "original": 110,
-      "effective": 1
+      "effective": 110
     },
     "mmlu_security_studies": {
       "original": 245,
-      "effective": 1
+      "effective": 245
     },
     "mmlu_sociology": {
       "original": 201,
-      "effective": 1
+      "effective": 201
     },
     "mmlu_us_foreign_policy": {
       "original": 100,
-      "effective": 1
+      "effective": 100
     },
     "mmlu_formal_logic": {
       "original": 126,
-      "effective": 1
+      "effective": 126
     },
     "mmlu_high_school_european_history": {
       "original": 165,
-      "effective": 1
+      "effective": 165
     },
     "mmlu_high_school_us_history": {
       "original": 204,
-      "effective": 1
+      "effective": 204
     },
     "mmlu_high_school_world_history": {
       "original": 237,
-      "effective": 1
+      "effective": 237
     },
     "mmlu_international_law": {
       "original": 121,
-      "effective": 1
+      "effective": 121
     },
     "mmlu_jurisprudence": {
       "original": 108,
-      "effective": 1
+      "effective": 108
     },
     "mmlu_logical_fallacies": {
       "original": 163,
-      "effective": 1
+      "effective": 163
     },
     "mmlu_moral_disputes": {
       "original": 346,
-      "effective": 1
+      "effective": 346
     },
     "mmlu_moral_scenarios": {
       "original": 895,
-      "effective": 1
+      "effective": 895
     },
     "mmlu_philosophy": {
       "original": 311,
-      "effective": 1
+      "effective": 311
     },
     "mmlu_prehistory": {
       "original": 324,
-      "effective": 1
+      "effective": 324
     },
     "mmlu_professional_law": {
       "original": 1534,
-      "effective": 1
+      "effective": 1534
     },
     "mmlu_world_religions": {
       "original": 171,
-      "effective": 1
+      "effective": 171
     }
   },
   "config": {
@@ -3986,7 +3986,7 @@
     "batch_sizes": [],
     "device": null,
     "use_cache": null,
-    "limit": 1,
+    "limit": null,
     "bootstrap_iters": 100000,
     "gen_kwargs": null,
     "random_seed": 0,
@@ -3994,9 +3994,9 @@
     "torch_seed": 1234,
     "fewshot_seed": 1234
   },
-  "git_hash": "d2670cc",
-  "date": 1774584213.6934667,
-  "pretty_env_info": "PyTorch version: 2.7.1+cu126\nIs debug build: False\nCUDA used to build PyTorch: 12.6\nROCM used to build PyTorch: N/A\n\nOS: Ubuntu 20.04.6 LTS (x86_64)\nGCC version: (Ubuntu 7.5.0-6ubuntu2) 7.5.0\nClang version: Could not collect\nCMake version: version 3.16.3\nLibc version: glibc-2.31\n\nPython version: 3.10.16 (main, Dec 11 2024, 16:24:50) [GCC 11.2.0] (64-bit runtime)\nPython platform: Linux-5.15.0-67-generic-x86_64-with-glibc2.31\nIs CUDA available: True\nCUDA runtime version: 12.6.20\nCUDA_MODULE_LOADING set to: LAZY\nGPU models and configuration: \nGPU 0: NVIDIA GeForce RTX 4090\nGPU 1: NVIDIA GeForce RTX 4090\nGPU 2: NVIDIA GeForce RTX 4090\nGPU 3: NVIDIA GeForce RTX 4090\n\nNvidia driver version: 575.57.08\ncuDNN version: /usr/local/cuda-12.6/targets/x86_64-linux/lib/libcudnn.so.7\nHIP runtime version: N/A\nMIOpen runtime version: N/A\nIs XNNPACK available: True\n\nCPU:\nArchitecture:                    x86_64\nCPU op-mode(s):                  32-bit, 64-bit\nByte Order:                      Little Endian\nAddress sizes:                   46 bits physical, 57 bits virtual\nCPU(s):                          160\nOn-line CPU(s) list:             0-159\nThread(s) per core:              2\nCore(s) per socket:              40\nSocket(s):                       2\nNUMA node(s):                    2\nVendor ID:                       GenuineIntel\nCPU family:                      6\nModel:                           106\nModel name:                      Intel(R) Xeon(R) Platinum 8383C CPU @ 2.70GHz\nStepping:                        6\nCPU MHz:                         900.000\nCPU max MHz:                     3600.0000\nCPU min MHz:                     800.0000\nBogoMIPS:                        5400.00\nVirtualization:                  VT-x\nL1d cache:                       3.8 MiB\nL1i cache:                       2.5 MiB\nL2 cache:                        100 MiB\nL3 cache:                        120 MiB\nNUMA node0 CPU(s):               0-39,80-119\nNUMA node1 CPU(s):               40-79,120-159\nVulnerability Itlb multihit:     Not affected\nVulnerability L1tf:              Not affected\nVulnerability Mds:               Not affected\nVulnerability Meltdown:          Not affected\nVulnerability Mmio stale data:   Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Retbleed:          Not affected\nVulnerability Spec store bypass: Mitigation; Speculative Store Bypass disabled via prctl and seccomp\nVulnerability Spectre v1:        Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:        Mitigation; Enhanced IBRS, IBPB conditional, RSB filling, PBRSB-eIBRS SW sequence\nVulnerability Srbds:             Not affected\nVulnerability Tsx async abort:   Not affected\nFlags:                           fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l3 invpcid_single ssbd mba ibrs ibpb stibp ibrs_enhanced tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb intel_pt avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local split_lock_detect wbnoinvd dtherm ida arat pln pts avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg tme avx512_vpopcntdq la57 rdpid fsrm md_clear pconfig flush_l1d arch_capabilities\n\nVersions of relevant libraries:\n[pip3] apollo-torch==1.0.3\n[pip3] galore-torch==1.0\n[pip3] mypy_extensions==1.1.0\n[pip3] numpy==1.26.4\n[pip3] nvidia-cublas-cu12==12.6.4.1\n[pip3] nvidia-cuda-cupti-cu12==12.6.80\n[pip3] nvidia-cuda-nvrtc-cu12==12.6.77\n[pip3] nvidia-cuda-runtime-cu12==12.6.77\n[pip3] nvidia-cudnn-cu12==9.5.1.17\n[pip3] nvidia-cudnn-frontend==1.16.0\n[pip3] nvidia-cufft-cu12==11.3.0.4\n[pip3] nvidia-curand-cu12==10.3.7.77\n[pip3] nvidia-cusolver-cu12==11.7.1.2\n[pip3] nvidia-cusparse-cu12==12.5.4.2\n[pip3] nvidia-cusparselt-cu12==0.6.3\n[pip3] nvidia-nccl-cu12==2.26.2\n[pip3] nvidia-nvjitlink-cu12==12.6.85\n[pip3] nvidia-nvtx-cu12==12.6.77\n[pip3] nvtx==0.2.14\n[pip3] onnx==1.19.1\n[pip3] onnx_graphsurgeon==0.5.8\n[pip3] torch==2.7.1\n[pip3] torchaudio==2.9.0\n[pip3] torchdata==0.11.0\n[pip3] torchprofile==0.0.4\n[pip3] torchtitan==0.2.0\n[pip3] torchvision==0.22.1\n[pip3] triton==3.3.1\n[conda] apollo-torch              1.0.3                    pypi_0    pypi\n[conda] galore-torch              1.0                      pypi_0    pypi\n[conda] numpy                     1.26.4                   pypi_0    pypi\n[conda] nvidia-cublas-cu12        12.6.4.1                 pypi_0    pypi\n[conda] nvidia-cuda-cupti-cu12    12.6.80                  pypi_0    pypi\n[conda] nvidia-cuda-nvrtc-cu12    12.6.77                  pypi_0    pypi\n[conda] nvidia-cuda-runtime-cu12  12.6.77                  pypi_0    pypi\n[conda] nvidia-cudnn-cu12         9.5.1.17                 pypi_0    pypi\n[conda] nvidia-cudnn-frontend     1.16.0                   pypi_0    pypi\n[conda] nvidia-cufft-cu12         11.3.0.4                 pypi_0    pypi\n[conda] nvidia-curand-cu12        10.3.7.77                pypi_0    pypi\n[conda] nvidia-cusolver-cu12      11.7.1.2                 pypi_0    pypi\n[conda] nvidia-cusparse-cu12      12.5.4.2                 pypi_0    pypi\n[conda] nvidia-cusparselt-cu12    0.6.3                    pypi_0    pypi\n[conda] nvidia-nccl-cu12          2.26.2                   pypi_0    pypi\n[conda] nvidia-nvjitlink-cu12     12.6.85                  pypi_0    pypi\n[conda] nvidia-nvtx-cu12          12.6.77                  pypi_0    pypi\n[conda] nvtx                      0.2.14                   pypi_0    pypi\n[conda] torch                     2.7.1                    pypi_0    pypi\n[conda] torchaudio                2.9.0                    pypi_0    pypi\n[conda] torchdata                 0.11.0                   pypi_0    pypi\n[conda] torchprofile              0.0.4                    pypi_0    pypi\n[conda] torchtitan                0.2.0                    pypi_0    pypi\n[conda] torchvision               0.22.1                   pypi_0    pypi\n[conda] triton                    3.3.1                    pypi_0    pypi",
+  "git_hash": "2afa121",
+  "date": 1775466361.0165203,
+  "pretty_env_info": "PyTorch version: 2.8.0+cu128\nIs debug build: False\nCUDA used to build PyTorch: 12.8\nROCM used to build PyTorch: N/A\n\nOS: Ubuntu 22.04.5 LTS (x86_64)\nGCC version: (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nClang version: Could not collect\nCMake version: version 3.22.1\nLibc version: glibc-2.35\n\nPython version: 3.10.19 (main, Oct 21 2025, 16:43:05) [GCC 11.2.0] (64-bit runtime)\nPython platform: Linux-5.15.0-94-generic-x86_64-with-glibc2.35\nIs CUDA available: True\nCUDA runtime version: 12.8.93\nCUDA_MODULE_LOADING set to: LAZY\nGPU models and configuration: \nGPU 0: NVIDIA GeForce RTX 5090\nGPU 1: NVIDIA GeForce RTX 5090\n\nNvidia driver version: 580.105.08\ncuDNN version: Probably one of the following:\n/usr/lib/x86_64-linux-gnu/libcudnn.so.9.8.0\n/usr/lib/x86_64-linux-gnu/libcudnn_adv.so.9.8.0\n/usr/lib/x86_64-linux-gnu/libcudnn_cnn.so.9.8.0\n/usr/lib/x86_64-linux-gnu/libcudnn_engines_precompiled.so.9.8.0\n/usr/lib/x86_64-linux-gnu/libcudnn_engines_runtime_compiled.so.9.8.0\n/usr/lib/x86_64-linux-gnu/libcudnn_graph.so.9.8.0\n/usr/lib/x86_64-linux-gnu/libcudnn_heuristic.so.9.8.0\n/usr/lib/x86_64-linux-gnu/libcudnn_ops.so.9.8.0\nHIP runtime version: N/A\nMIOpen runtime version: N/A\nIs XNNPACK available: True\n\nCPU:\nArchitecture:                       x86_64\nCPU op-mode(s):                     32-bit, 64-bit\nAddress sizes:                      52 bits physical, 57 bits virtual\nByte Order:                         Little Endian\nCPU(s):                             208\nOn-line CPU(s) list:                0-207\nVendor ID:                          GenuineIntel\nModel name:                         Intel(R) Xeon(R) Platinum 8470Q\nCPU family:                         6\nModel:                              143\nThread(s) per core:                 2\nCore(s) per socket:                 52\nSocket(s):                          2\nStepping:                           8\nFrequency boost:                    enabled\nCPU max MHz:                        2101.0000\nCPU min MHz:                        800.0000\nBogoMIPS:                           4200.00\nFlags:                              fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l3 cat_l2 cdp_l3 invpcid_single intel_ppin cdp_l2 ssbd mba ibrs ibpb stibp ibrs_enhanced tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb intel_pt avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local split_lock_detect avx_vnni avx512_bf16 wbnoinvd dtherm ida arat pln pts avx512vbmi umip pku ospke waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg tme avx512_vpopcntdq la57 rdpid bus_lock_detect cldemote movdiri movdir64b enqcmd fsrm md_clear serialize tsxldtrk pconfig arch_lbr amx_bf16 avx512_fp16 amx_tile amx_int8 flush_l1d arch_capabilities\nVirtualization:                     VT-x\nL1d cache:                          4.9 MiB (104 instances)\nL1i cache:                          3.3 MiB (104 instances)\nL2 cache:                           208 MiB (104 instances)\nL3 cache:                           210 MiB (2 instances)\nNUMA node(s):                       2\nNUMA node0 CPU(s):                  0-51,104-155\nNUMA node1 CPU(s):                  52-103,156-207\nVulnerability Gather data sampling: Not affected\nVulnerability Itlb multihit:        Not affected\nVulnerability L1tf:                 Not affected\nVulnerability Mds:                  Not affected\nVulnerability Meltdown:             Not affected\nVulnerability Mmio stale data:      Not affected\nVulnerability Retbleed:             Not affected\nVulnerability Spec rstack overflow: Not affected\nVulnerability Spec store bypass:    Mitigation; Speculative Store Bypass disabled via prctl and seccomp\nVulnerability Spectre v1:           Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:           Mitigation; Enhanced IBRS, IBPB conditional, RSB filling, PBRSB-eIBRS SW sequence\nVulnerability Srbds:                Not affected\nVulnerability Tsx async abort:      Not affected\n\nVersions of relevant libraries:\n[pip3] numpy==2.2.6\n[pip3] nvidia-cublas-cu12==12.8.4.1\n[pip3] nvidia-cuda-cupti-cu12==12.8.90\n[pip3] nvidia-cuda-nvrtc-cu12==12.8.93\n[pip3] nvidia-cuda-runtime-cu12==12.8.90\n[pip3] nvidia-cudnn-cu12==9.10.2.21\n[pip3] nvidia-cufft-cu12==11.3.3.83\n[pip3] nvidia-curand-cu12==10.3.9.90\n[pip3] nvidia-cusolver-cu12==11.7.3.90\n[pip3] nvidia-cusparse-cu12==12.5.8.93\n[pip3] nvidia-cusparselt-cu12==0.7.1\n[pip3] nvidia-nccl-cu12==2.27.3\n[pip3] nvidia-nvjitlink-cu12==12.8.93\n[pip3] nvidia-nvtx-cu12==12.8.90\n[pip3] torch==2.8.0+cu128\n[pip3] torchaudio==2.8.0+cu128\n[pip3] torchvision==0.23.0+cu128\n[pip3] triton==3.4.0\n[conda] numpy                     2.2.6                    pypi_0    pypi\n[conda] nvidia-cublas-cu12        12.8.4.1                 pypi_0    pypi\n[conda] nvidia-cuda-cupti-cu12    12.8.90                  pypi_0    pypi\n[conda] nvidia-cuda-nvrtc-cu12    12.8.93                  pypi_0    pypi\n[conda] nvidia-cuda-runtime-cu12  12.8.90                  pypi_0    pypi\n[conda] nvidia-cudnn-cu12         9.10.2.21                pypi_0    pypi\n[conda] nvidia-cufft-cu12         11.3.3.83                pypi_0    pypi\n[conda] nvidia-curand-cu12        10.3.9.90                pypi_0    pypi\n[conda] nvidia-cusolver-cu12      11.7.3.90                pypi_0    pypi\n[conda] nvidia-cusparse-cu12      12.5.8.93                pypi_0    pypi\n[conda] nvidia-cusparselt-cu12    0.7.1                    pypi_0    pypi\n[conda] nvidia-nccl-cu12          2.27.3                   pypi_0    pypi\n[conda] nvidia-nvjitlink-cu12     12.8.93                  pypi_0    pypi\n[conda] nvidia-nvtx-cu12          12.8.90                  pypi_0    pypi\n[conda] torch                     2.8.0+cu128              pypi_0    pypi\n[conda] torchaudio                2.8.0+cu128              pypi_0    pypi\n[conda] torchvision               0.23.0+cu128             pypi_0    pypi\n[conda] triton                    3.4.0                    pypi_0    pypi",
   "transformers_version": "4.46.0",
   "lm_eval_version": "0.4.11",
   "upper_git_hash": null,
@@ -4016,7 +4016,7 @@
   "max_length": 16384,
   "metadata": {
     "model_name": "huggyllama/llama-7b",
-    "adapter_path": null,
+    "adapter_path": "finetunes/continued_pretrain/none_20260315_003356",
     "rope_type": "none",
     "rope_factor": "None",
     "rope_dynamic": "False",

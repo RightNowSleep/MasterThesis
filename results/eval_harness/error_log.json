@@ -10,21 +10,49 @@
     "error": "Answer is not a string! : [-9, 9]",
     "type": "AssertionError",
     "model_name": "huggyllama/llama-7b",
-    "rope_type": "part-ntk",
-    "timestamp": "2026-04-04T02:40:24.282748"
+    "rope_type": "inverse-dual-rope-scaled",
+    "timestamp": "2026-04-08T00:46:08.494523"
   },
-  "humananeval": {
-    "error": "'humananeval'",
+  "mathqa": {
+    "error": "Dataset scripts are no longer supported, but found math_qa.py",
+    "type": "RuntimeError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "inverse-dual-rope-scaled",
+    "timestamp": "2026-04-08T00:46:13.700796"
+  },
+  "arithmetic": {
+    "error": "Dataset scripts are no longer supported, but found arithmetic.py",
+    "type": "RuntimeError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "inverse-dual-rope-scaled",
+    "timestamp": "2026-04-08T00:46:19.384549"
+  },
+  "math_word_problems": {
+    "error": "Dataset scripts are no longer supported, but found math_qa.py",
+    "type": "RuntimeError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "inverse-dual-rope-scaled",
+    "timestamp": "2026-04-08T14:37:23.240006"
+  },
+  "aime25": {
+    "error": "Invalid configuration: requested max tokens to generate (32768) must be less than model's maximum sequence length (16384).",
+    "type": "AssertionError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "inverse-dual-rope-scaled",
+    "timestamp": "2026-04-09T08:43:11.857226"
+  },
+  "aime24": {
+    "error": "Invalid configuration: requested max tokens to generate (32768) must be less than model's maximum sequence length (16384).",
+    "type": "AssertionError",
+    "model_name": "huggyllama/llama-7b",
+    "rope_type": "inverse-dual-rope-scaled",
+    "timestamp": "2026-04-09T08:43:33.954585"
+  },
+  "mineva_math": {
+    "error": "'mineva_math'",
     "type": "KeyError",
     "model_name": "huggyllama/llama-7b",
     "rope_type": "part-ntk",
-    "timestamp": "2026-04-04T02:40:28.119243"
-  },
-  "humananeval_infilling": {
-    "error": "'humananeval_infilling'",
-    "type": "KeyError",
-    "model_name": "huggyllama/llama-7b",
-    "rope_type": "part-ntk",
-    "timestamp": "2026-04-04T03:03:38.464419"
+    "timestamp": "2026-04-09T17:02:00.296124"
   }
 }

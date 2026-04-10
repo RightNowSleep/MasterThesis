@@ -3,9 +3,10 @@ eval/performance.py
 ---------------------
 Performance evaluator for measuring model inference runtime and GPU memory usage.
 
-Tests a language model across a range of input sequence lengths, recording:
-    - Inference time (seconds) per forward pass.
-    - Total GPU memory consumption (GB), including model weights and peak activations.
+Tests a language model from min_length to max_length (incrementing by 1 token each step),
+recording:
+    - Total inference time (seconds) across all forward passes.
+    - GPU peak memory difference (GB) between start and end of evaluation.
 
 Results are saved as JSON for further analysis and comparison across different
 RoPE configurations or model variants.
@@ -26,11 +27,15 @@ from models.model_loader import load_model, load_tokenizer, add_args_model
 
 class PerformanceEvaluator:
     """
-    Performance evaluator for measuring model runtime and GPU memory usage at different input lengths.
+    Performance evaluator for measuring model runtime and GPU memory usage
+    with autoregressive generation.
 
-    This evaluator tests model performance across a range of input lengths, recording
-    inference time and memory consumption for each length. Results are saved to JSON
-    files for further analysis.
+    This evaluator simulates autoregressive generation from min_length to
+    max_length (+1 token each step). It respects the model's use_cache config:
+    if KV Cache is enabled, it uses past_key_values for efficient decoding;
+    if KV Cache is disabled, it passes the full sequence each step.
+    It records total inference time and GPU peak memory difference.
+    Results are saved to JSON files for further analysis.
 
     Attributes:
         model: Language model to evaluate.
@@ -38,9 +43,6 @@ class PerformanceEvaluator:
         device: Compute device (cuda/cpu).
         min_length: Minimum input length (token count).
         max_length: Maximum input length (token count).
-        length_step: Input length step size.
-        length_list: List of lengths to test.
-        model_memory: GPU memory occupied by model weights (GB).
         save_dir: Directory to save results.
         save_file: Filename to save results.
     """
@@ -52,7 +54,6 @@ class PerformanceEvaluator:
         device=None,
         min_length=256,
         max_length=8192,
-        length_step=256,
         save_dir="results/performance",
         save_file=None,
     ):
@@ -66,7 +67,6 @@ class PerformanceEvaluator:
                 default is None (auto-select).
             min_length: Minimum input length in tokens, default is 256.
             max_length: Maximum input length in tokens, default is 8192.
-            length_step: Input length step size in tokens, default is 256.
             save_dir: Directory to save results, default is "results/performance".
             save_file: Filename to save results, default is None (auto-generate).
         """
@@ -88,45 +88,12 @@ class PerformanceEvaluator:
 
         self.min_length = min_length
         self.max_length = max_length
-        self.length_step = length_step
-        self.length_list = self._generate_length_list()
-
-        # Record model weight memory usage upfront, so it can be included in
-        # each per-length memory report (activation delta alone is misleading)
-        self.model_memory = (
-            sum(p.element_size() * p.nelement() for p in self.model.parameters())
-            / 1024**3
-        )
 
         self.save_dir = save_dir
         os.makedirs(self.save_dir, exist_ok=True)
         self.save_file = (
             save_file if save_file else f"{time.strftime('%Y%m%d-%H%M%S')}.json"
         )
-
-    def _generate_length_list(self):
-        """
-        Generate a list of test lengths.
-
-        Creates a list of input lengths from min_length to max_length (inclusive),
-        incremented by step_length each time.
-
-        Returns:
-            List of input lengths to test, e.g., [256, 512, 768, ...].
-        """
-        if self.length_step is not None:
-            length_list = [
-                x for x in range(self.min_length, self.max_length + 1, self.length_step)
-            ]
-        else:
-            length_list = [self.min_length]
-            while length_list[-1] <= self.max_length:
-                point = length_list[-1] * 2
-                if point <= self.max_length:
-                    length_list.append(point)
-                else:
-                    break
-        return length_list
 
     def _get_gpu_memory(self):
         """
@@ -226,7 +193,7 @@ class PerformanceEvaluator:
         with torch.no_grad():
             warmup_tokens = self._generate_sample_text(self.min_length)
             warmup_ids = torch.tensor([warmup_tokens]).to(self.device)
-            self.model(warmup_ids)
+            self.model(warmup_ids, use_cache=self.model.config.use_cache)
             del warmup_ids
         if torch.cuda.is_available():
             self._synchronize_all_devices()
@@ -234,116 +201,132 @@ class PerformanceEvaluator:
         gc.collect()
 
     @torch.no_grad()
-    def test_performance_at_length(self, input_length):
-        """
-        Test performance at a specified input length.
-
-        Measures inference runtime and total GPU memory usage (model weights +
-        peak activation) for a single forward pass with the given input length.
-
-        Args:
-            input_length: Input sequence length in tokens.
-
-        Returns:
-            A tuple of (runtime, memory_usage).
-                runtime: Inference time in seconds.
-                memory_usage: Total GPU memory in GB
-                    (model weights + peak activation during forward pass).
-        """
-        # Clear cache before each test for a clean baseline
-        torch.cuda.empty_cache()
-        gc.collect()
-
-        input_tokens = self._generate_sample_text(input_length)
-        input_ids = torch.tensor([input_tokens]).to(self.device)
-
-        # Record baseline memory across all devices before the forward pass.
-        # This captures any non-weight allocations already present (e.g. CUDA
-        # context, optimizer states) so they are not mis-attributed to activations.
-        initial_memory = self._get_gpu_memory()
-
-        # Reset peak trackers on every device so max_memory_allocated reflects
-        # only the allocations that occur during this forward pass.
-        self._reset_peak_memory_stats_all_devices()
-
-        # Synchronize all devices before starting the timer to ensure no
-        # leftover async GPU work leaks into the measurement.
-        self._synchronize_all_devices()
-        start_time = time.time()
-        outputs = self.model(input_ids)
-        # Synchronize all devices again so the clock stops only after every
-        # GPU has truly finished (GPU ops are asynchronous by default).
-        self._synchronize_all_devices()
-        end_time = time.time()
-
-        runtime = end_time - start_time
-
-        # Peak memory across all devices since the reset
-        peak_memory = self._get_peak_gpu_memory()
-        # Activation memory = peak during forward - baseline before forward.
-        # Adding model_memory separately avoids double-counting: peak_memory
-        # already includes the model weights that were present at reset time,
-        # so we subtract initial_memory (which contains those weights) and
-        # then add back the canonical model_memory figure computed from
-        # parameter sizes in __init__.
-        activation_memory = peak_memory - initial_memory
-        memory_usage = self.model_memory + activation_memory
-
-        # Clean up
-        del input_ids, outputs
-        torch.cuda.empty_cache()
-
-        return runtime, memory_usage
-
     def evaluate(self):
         """
-        Run performance tests at all configured lengths.
+        Run performance test simulating autoregressive generation.
 
-        Iterates through all lengths in length_list, measures runtime and
-        memory usage for each, and saves results to a JSON file.
+        From min_length to max_length (+1 token each step), respecting the
+        model's use_cache configuration:
+        - If use_cache=True: prefill min_length tokens, then decode one token
+          at a time with past_key_values (KV Cache).
+        - If use_cache=False: pass the full sequence each step (no KV Cache).
+
+        Measures total inference runtime and GPU peak memory difference between
+        start and end of the evaluation. Results are saved to a JSON file.
 
         Returns:
             Evaluation results containing:
-                lengths: List of input sequence lengths.
-                runtimes: List of inference times in seconds.
-                memory_usages: List of total GPU memory in GB.
+                min_length: Starting input length.
+                max_length: Ending input length.
+                use_cache: Whether KV Cache was used.
+                total_runtime_seconds: Total inference time in seconds (2 decimal places).
+                peak_memory_start_gb: GPU allocated memory at start in GB (2 decimal places).
+                peak_memory_end_gb: GPU peak memory at end in GB (2 decimal places).
+                memory_diff_gb: Peak memory difference in GB (2 decimal places).
         """
         self._warmup()
 
-        lengths = []
-        runtimes = []
-        memory_usages = []
+        use_cache = self.model.config.use_cache
 
-        print(
-            f"Starting performance test, {len(self.length_list)} length points in total"
-        )
-        pbar = tqdm(total=len(self.length_list), desc="Performance Testing")
+        self._reset_peak_memory_stats_all_devices()
+        start_memory = self._get_gpu_memory()
 
-        for length in self.length_list:
-            runtime, memory_usage = self.test_performance_at_length(length)
+        sample_text = "The quick brown fox jumps over the lazy dog. "
+        base_tokens = self.tokenizer.encode(sample_text, add_special_tokens=False)
+        all_tokens = []
+        while len(all_tokens) < self.max_length:
+            all_tokens.extend(base_tokens)
+        all_tokens = all_tokens[: self.max_length]
 
-            lengths.append(length)
-            runtimes.append(runtime)
-            memory_usages.append(memory_usage)
+        total_steps = self.max_length - self.min_length
 
-            pbar.set_postfix(
-                {
-                    "Length": length,
-                    "Runtime": f"{runtime:.4f}s",
-                    "Memory": f"{memory_usage:.4f}GB",
-                }
+        if use_cache:
+            print(
+                f"Starting performance test with KV Cache, "
+                f"prefill {self.min_length} tokens then {total_steps} autoregressive steps"
             )
+        else:
+            print(
+                f"Starting performance test without KV Cache, "
+                f"{total_steps + 1} full-sequence forward passes"
+            )
+
+        pbar = tqdm(total=total_steps + 1, desc="Performance Testing")
+
+        self._synchronize_all_devices()
+        overall_start_time = time.time()
+
+        if use_cache:
+            prefill_ids = torch.tensor([all_tokens[: self.min_length]]).to(self.device)
+            outputs = self.model(prefill_ids, use_cache=True)
+            past_key_values = outputs.past_key_values
+            del prefill_ids, outputs
+
+            pbar.set_postfix({"Length": self.min_length, "Phase": "prefill"})
             pbar.update(1)
 
+            for i in range(self.min_length, self.max_length):
+                new_token_id = torch.tensor([[all_tokens[i]]]).to(self.device)
+                outputs = self.model(
+                    new_token_id,
+                    past_key_values=past_key_values,
+                    use_cache=True,
+                )
+                past_key_values = outputs.past_key_values
+                del new_token_id, outputs
+
+                pbar.set_postfix(
+                    {
+                        "Length": i + 1,
+                        "Elapsed": f"{time.time() - overall_start_time:.2f}s",
+                    }
+                )
+                pbar.update(1)
+
+            del past_key_values
+        else:
+            for length in range(self.min_length, self.max_length + 1):
+                input_ids = torch.tensor([all_tokens[:length]]).to(self.device)
+                outputs = self.model(input_ids, use_cache=False)
+                del input_ids, outputs
+
+                if (length - self.min_length) % 1024 == 0 and length > self.min_length:
+                    torch.cuda.empty_cache()
+                    gc.collect()
+
+                pbar.set_postfix(
+                    {
+                        "Length": length,
+                        "Elapsed": f"{time.time() - overall_start_time:.2f}s",
+                    }
+                )
+                pbar.update(1)
+
         pbar.close()
+
+        self._synchronize_all_devices()
+        overall_end_time = time.time()
+
+        end_peak_memory = self._get_peak_gpu_memory()
+        total_runtime = round(overall_end_time - overall_start_time, 2)
+        memory_diff = round(end_peak_memory - start_memory, 2)
+        start_memory = round(start_memory, 2)
+        end_peak_memory = round(end_peak_memory, 2)
+
+        torch.cuda.empty_cache()
+        gc.collect()
 
         save_path = os.path.join(self.save_dir, self.save_file)
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump(
                 {
-                    "lengths": lengths,
-                    "runtimes": runtimes,
-                    "memory_usages": memory_usages,
+                    "min_length": self.min_length,
+                    "max_length": self.max_length,
+                    "use_cache": use_cache,
+                    "total_runtime_seconds": total_runtime,
+                    "peak_memory_start_gb": start_memory,
+                    "peak_memory_end_gb": end_peak_memory,
+                    "memory_diff_gb": memory_diff,
                 },
                 f,
                 ensure_ascii=False,
@@ -352,9 +335,13 @@ class PerformanceEvaluator:
 
         print(f"Performance test completed, results saved to: {save_path}")
         return {
-            "lengths": lengths,
-            "runtimes": runtimes,
-            "memory_usages": memory_usages,
+            "min_length": self.min_length,
+            "max_length": self.max_length,
+            "use_cache": use_cache,
+            "total_runtime_seconds": total_runtime,
+            "peak_memory_start_gb": start_memory,
+            "peak_memory_end_gb": end_peak_memory,
+            "memory_diff_gb": memory_diff,
         }
 
 
@@ -400,12 +387,6 @@ def add_args_performance(parser):
         Parser with added arguments.
     """
     parser.add_argument(
-        "--length-step",
-        type=int,
-        default=None,
-        help="Input length step size in tokens",
-    )
-    parser.add_argument(
         "--save-dir",
         type=str,
         default="results/performance",
@@ -438,16 +419,14 @@ if __name__ == "__main__":
         device=args.device,
         min_length=args.min_length,
         max_length=args.max_length,
-        length_step=args.length_step,
         save_dir=args.save_dir,
         save_file=args.save_file,
     )
 
     results = tester.evaluate()
     print("\nTest results overview:")
-    for i, length in enumerate(results["lengths"]):
-        print(
-            f"Input length: {length}, "
-            f"Runtime: {results['runtimes'][i]:.4f}s, "
-            f"Memory change: {results['memory_usages'][i]:.4f}GB"
-        )
+    print(
+        f"Length range: {results['min_length']} - {results['max_length']}, "
+        f"Total runtime: {results['total_runtime_seconds']}s, "
+        f"Memory diff: {results['memory_diff_gb']}GB"
+    )

@@ -1,0 +1,9 @@
+{
+  "min_length": 2048,
+  "max_length": 4096,
+  "use_cache": false,
+  "total_runtime_seconds": 2310.07,
+  "peak_memory_start_gb": 3.97,
+  "peak_memory_end_gb": 4.76,
+  "memory_diff_gb": 0.79
+}

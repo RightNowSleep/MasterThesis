@@ -47,30 +47,52 @@ _DEFAULT_FEWSHOT = {
 }
 
 _TASKS_MAP = {
+    "niah": [  # negative
+        "niah_single_1",
+        "niah_single_2",
+        "niah_single_3",
+        "niah_multikey_1",
+        "niah_multikey_2",
+        "niah_multikey_3",
+        "niah_multiquery",
+        "niah_multivalue",
+    ],
     "long_context": [
-        "longbench",
+        "longbench",  # negative
         "longbench2",
-        "longcxt",
-        "passkey",
-        "ruler",
+        "longcxt",  # too long
+        "passkey",  # negative
+        "ruler",  # negative
         "babilong",
     ],
     "reasoning": [
         "arc_challenge",
         "truthfulqa",
         "hellaswag",
-        "bbh",
+        "triviaqa",
+        "bbh",  # too long
         "mmlu",
+        "babi",
+        "bbq",
     ],
     "math": [
         "gsm8k",
-        "aime",
-        "hendrycks_math",
+        "aime",  # 32K
+        "hendrycks_math",  # negative
+        "hendrycks_math500",  # negative
+        "aime24",  # 32K
+        "aime25",  # 32K
+        "asdiv",  # negative
+        "arithmetic",  # negative
+        "math_word_problems",  # negative
+        "hrm8k",  # negative
+        "agieval_math",
+        "minerva_math",
     ],
     "code": [
-        "humaneval",
+        "humaneval",  # negative
         "mbpp",
-        "humaneval_infilling",
+        "code2text",  # too long
     ],
 }
 
@@ -321,22 +343,68 @@ def main(args):
                     elif not metric.startswith("_"):
                         print(f"    {metric}: {value}")
         except Exception as e:
-            error_msg = str(e)
-            error_type = type(e).__name__
-            ERRORS[task] = error_msg
-            error_log[task] = {
-                "error": error_msg,
-                "type": error_type,
-                "model_name": args.model_name,
-                "rope_type": rope_type,
-                "timestamp": __import__("datetime").datetime.now().isoformat(),
-            }
-            _save_error_log(args.output_dir, error_log)
-            new_errors += 1
-            print(f"Error running task '{task}': [{error_type}] {error_msg}")
-            print(
-                f"  → Error logged to {os.path.join(args.output_dir, _ERROR_LOG_FILE)}"
-            )
+            try:
+                result = lm_eval.simple_evaluate(
+                    model=lm,
+                    tasks=[task],
+                    num_fewshot=num_fewshot_task,
+                    batch_size=args.batch_size,
+                    log_samples=args.log_samples,
+                    limit=args.limit,
+                    confirm_run_unsafe_code=True,
+                    metadata=_METADATA,
+                )
+
+                # ── 4. Save results after each task ─────────────────────────────── #
+                results_to_save = dict(result)
+                results_to_save["metadata"] = {
+                    "model_name": args.model_name,
+                    "adapter_path": args.adapter_path,
+                    "rope_type": rope_type,
+                    "rope_factor": rope_factor,
+                    "rope_dynamic": rope_dynamic,
+                    "max_length": args.max_length,
+                    "task": task,
+                    "completed_tasks": task,
+                }
+
+                with open(output_path, "w", encoding="utf-8") as f:
+                    json.dump(
+                        results_to_save,
+                        f,
+                        indent=2,
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                print(
+                    f"\n[Checkpoint] Results saved after task '{task}' → {output_path}"
+                )
+
+                # Print task result immediately
+                if result and "results" in result:
+                    print(f"\n  Task '{task}' results:")
+                    for metric, value in result["results"].get(task, {}).items():
+                        if isinstance(value, float):
+                            print(f"    {metric}: {value:.4f}  ({value*100:.2f}%)")
+                        elif not metric.startswith("_"):
+                            print(f"    {metric}: {value}")
+            except Exception as e:
+                error_msg = str(e)
+                error_type = type(e).__name__
+                ERRORS[task] = error_msg
+                error_log[task] = {
+                    "error": error_msg,
+                    "type": error_type,
+                    "model_name": args.model_name,
+                    "rope_type": rope_type,
+                    "timestamp": __import__("datetime").datetime.now().isoformat(),
+                }
+                _save_error_log(args.output_dir, error_log)
+                new_errors += 1
+                print(f"Error running task '{task}': [{error_type}] {error_msg}")
+                print(
+                    f"  → Error logged to {os.path.join(args.output_dir, _ERROR_LOG_FILE)}"
+                )
 
     # ── 5. Print final summary ────────────────────────────────────────── #
     all_tasks_raw = raw_task_list

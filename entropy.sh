@@ -95,6 +95,9 @@ fi
 PART1=true
 PART2=true
 
+# ── Track generated JSON files from Part 1 ──────────────────────────────────────
+GENERATED_JSON_FILES=()
+
 mkdir -p "$SAVE_DIR"
 mkdir -p "$PLOT_DIR"
 
@@ -127,6 +130,7 @@ if [ $PART1 = true ]; then
         echo "Processing method: $method"
         echo "--------------------------------------------------"
 
+        # Run entropy evaluation
         python "$ENTROPY_SCRIPT" \
             --model-name "huggyllama/llama-7b" \
             $method \
@@ -135,6 +139,26 @@ if [ $PART1 = true ]; then
             --num-samples "$NUM_SAMPLES" \
             --dataset-name "$DATASET" \
             --save-dir "$SAVE_DIR"
+
+        # Extract rope type from method string and generate expected filename
+        # Example: "--rope-type inverse-dual-rope --rope-dynamic" → "llama-7b_inverse-dual-rope_dynamic.json"
+        ROPE_TYPE=$(echo "$method" | grep -oP '(?<=--rope-type )[^ ]+' || echo "none")
+        if echo "$method" | grep -q "--rope-dynamic"; then
+            JSON_FILE="llama-7b_${ROPE_TYPE}_dynamic.json"
+        elif echo "$method" | grep -q "--rope-factor"; then
+            FACTOR=$(echo "$method" | grep -oP '(?<=--rope-factor )[^ ]+' | tr '.' '_')
+            JSON_FILE="llama-7b_${ROPE_TYPE}_factor${FACTOR}.json"
+        else
+            JSON_FILE="llama-7b_${ROPE_TYPE}.json"
+        fi
+
+        JSON_PATH="$SAVE_DIR/$JSON_FILE"
+        if [ -f "$JSON_PATH" ]; then
+            GENERATED_JSON_FILES+=("$JSON_PATH")
+            echo "Generated JSON: $JSON_PATH"
+        else
+            echo "WARNING: Expected JSON not found: $JSON_PATH"
+        fi
 
         echo "Completed: $method"
         echo ""
@@ -148,17 +172,28 @@ fi
 if [ $PART2 = true ]; then
     echo "========== Part 2: Generating Plots =========="
     echo ""
-    echo "Scanning directory: $SAVE_DIR"
-    echo ""
 
-    JSON_FILES=$(find "$SAVE_DIR" -maxdepth 1 -name "*.json" -type f | sort)
-
-    if [ -z "$JSON_FILES" ]; then
-        echo "WARNING: No JSON files found in $SAVE_DIR"
-        exit 0
+    if [ ${#GENERATED_JSON_FILES[@]} -eq 0 ]; then
+        echo "WARNING: No JSON files were generated in Part 1"
+        echo "Falling back to scanning directory: $SAVE_DIR"
+        JSON_FILES=$(find "$SAVE_DIR" -maxdepth 1 -name "*.json" -type f | sort)
+        if [ -z "$JSON_FILES" ]; then
+            echo "ERROR: No JSON files found in $SAVE_DIR"
+            exit 0
+        fi
+        # Convert to array
+        while IFS= read -r file; do
+            GENERATED_JSON_FILES+=("$file")
+        done <<< "$JSON_FILES"
     fi
 
-    for INPUT_FILE in $JSON_FILES; do
+    echo "Processing ${#GENERATED_JSON_FILES[@]} JSON file(s) from Part 1:"
+    for f in "${GENERATED_JSON_FILES[@]}"; do
+        echo "  - $f"
+    done
+    echo ""
+
+    for INPUT_FILE in "${GENERATED_JSON_FILES[@]}"; do
         FILENAME=$(basename "$INPUT_FILE" .json)
         METHOD_PLOT_DIR="$PLOT_DIR/$FILENAME"
 

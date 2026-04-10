@@ -3,162 +3,170 @@
 # =============================================================================
 # eval_harness.sh
 # -----------------------------------------------------------------------------
-# Purpose: Run lm-eval-harness evaluation for RoPE methods and fine-tuned adapters
+# Purpose: LM-Eval-Harness benchmark script for long-context language models
 # -----------------------------------------------------------------------------
 # Description:
-#   This script performs a two-phase evaluation using lm-eval-harness:
-#   Phase 1: Evaluates base model with various dynamic RoPE methods
-#   Phase 2: Evaluates fine-tuned adapters trained with different RoPE methods
+#   This script runs lm-eval-harness benchmarks across different RoPE methods
+#   or fine-tuned adapters. Supports various task categories including reasoning,
+#   math, code, and long-context tasks.
 # -----------------------------------------------------------------------------
 # Usage:
 #   bash eval_harness.sh
 # -----------------------------------------------------------------------------
-# Parameters:
-#   None (all configuration is done via variables below)
-# -----------------------------------------------------------------------------
-# Globals:
-#   PYTHONPATH             - Project parent directory added to Python module search path
-#   CUDA_VISIBLE_DEVICES   - GPU device IDs for computation (default: "0,1,2,3")
-# -----------------------------------------------------------------------------
 # Output:
-#   Evaluation results saved to: results/harness/
+#   Evaluation results saved to: results/eval_harness/
 # =============================================================================
 
-PYTHONPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODEL_NAME="huggyllama/llama-7b"
-MAX_LENGTH=16384
-DTYPE="auto"
+echo "=========================================="
+echo "LM-Eval-Harness Evaluation Script"
+echo "=========================================="
 
-# ── Evaluation Tasks Configuration ───────────────────────────────────────────
-TASKS="longbench2,arc_challenge,hellaswag,truthfulqa_mc1,mmlu"
-BATCH_SIZE=2
-OUTPUT_DIR="results/harness"
-QUANT="--load-in-4bit"
+PYTHONPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH=$PYTHONPATH
 
-CUDA_DEVICES="0,1,2,3"
+export DISABLE_FLASH_ATTN=1
+export USE_FLASH_ATTN=0
+export HF_ALLOW_CODE_EVAL=1
+
+CUDA_DEVICES="2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
-# ── RoPE Methods Configuration (Phase 1) ──────────────────────────────────────
+# ── Model Configuration ──────────────────────────────────────────────────────
+MODEL_NAME="huggyllama/llama-7b"
+DTYPE="auto"
+QUANT="--load-in-4bit"
+
+MAX_LENGTH=65536
+MIN_LENGTH=2048
+BATCH_SIZE=1
+OUTPUT_DIR="results"
+
+# ── Evaluation Mode Flags ────────────────────────────────────────────────────
+ROPE=false
+ADAPTER=true
+ADAPTER_DIR="finetunes/continued_pretrain"
+
+# ── RoPE Methods Configuration ───────────────────────────────────────────────
 ROPE_METHODS=(
     "--rope-type none"
     "--rope-type linear --rope-dynamic"
     "--rope-type ntk --rope-dynamic"
     "--rope-type part-ntk --rope-dynamic"
     "--rope-type yarn --rope-dynamic"
-    "--rope-type freq-reciprocal --rope-dynamic"
-    "--rope-type freq-reciprocal-scaled --rope-dynamic"
+    "--rope-type inverse-dual-rope --rope-dynamic"
+    "--rope-type inverse-dual-rope-scaled --rope-dynamic"
+    # "--rope-type freq-reciprocal --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled --rope-dynamic"
+    # "--rope-type freq-reciprocal-scaled-no-layer --rope-dynamic"
+    # "--rope-type dual-rope --rope-dynamic"
+    # "--rope-type dual-rope-scaled --rope-dynamic"
+    # "--rope-type inverse-dual-tangle-rope --rope-dynamic"
+    # "--rope-type inverse-dual-tangle-rope-scaled --rope-dynamic"
+    # "--rope-type inverse-dual-nopos-rope --rope-dynamic"
+    # "--rope-type inverse-dual-nopos-rope-scaled --rope-dynamic"
 )
 
-# ── Adapter Configuration (Phase 2) ───────────────────────────────────────────
-ADAPTER_DIR="finetunes/continued_pretrain"
-ADAPTERS=(
-    "none_20260315_003356"
-    "linear_20260315_081529"
-    "ntk_20260315_155711"
-    "part-ntk_20260315_233845"
-    "yarn_20260316_071953"
-    "freq-reciprocal_20260317_001708"
-    "freq-reciprocal-scaled_20260320_003434"
-    "freq-reciprocal-scaled-no-layer_20260324_014910"
+# ── Adapter Paths Configuration ──────────────────────────────────────────────
+ADAPTER_PATHS=(
+    "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope-scaled_20260406_070155"
+    "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
+    "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
+    "--adapter-path ${ADAPTER_DIR}/part-ntk_20260315_233845"
+    "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
+    "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
+    "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
+    # "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
 )
 
-# ── Base Adapter Combinations (Phase 3) ──────────────────────────────────────
-# Optional: Define base adapter + target RoPE combinations for evaluation.
-# Each entry: "base_adapter_name|target_rope_type|dynamic_flag"
-# Format: "--base-combo <base_adapter>|<rope_type>[|--rope-dynamic]"
-#
-# Example: Evaluate inverse-dual-rope-scaled on top of inverse-dual-rope
-# BASE_COMBOS=(
-#     "inverse-dual-rope_20260403_103555|inverse-dual-rope-scaled|--rope-dynamic"
-# )
+# ── Base Adapter Combinations ────────────────────────────────────────────
 BASE_COMBOS=()
 
-echo "=========================================="
-echo "lm-eval Harness Evaluation"
-echo "=========================================="
-echo "Base model   : ${MODEL_NAME}"
-echo "Max length   : ${MAX_LENGTH}"
-echo "Tasks        : ${TASKS}"
-echo "Output dir   : ${OUTPUT_DIR}"
-echo "RoPE methods : ${#ROPE_METHODS[@]}"
-echo "Adapter dir  : ${ADAPTER_DIR}"
-echo "Adapters     : ${#ADAPTERS[@]}"
-echo "Base Combos  : ${#BASE_COMBOS[@]}"
-if [ ${#BASE_COMBOS[@]} -gt 0 ]; then
-    echo "  (Will evaluate base adapter + target RoPE combinations)"
+# ── Build Methods List ───────────────────────────────────────────────────────
+METHODS=()
+if [ $ROPE = true ]; then
+    METHODS+=("${ROPE_METHODS[@]}")
 fi
+if [ $ADAPTER = true ]; then
+    METHODS+=("${ADAPTER_PATHS[@]}")
+fi
+
+for combo in "${BASE_COMBOS[@]}"; do
+    IFS='|' read -r base_path rope_type rest <<< "$combo"
+    METHODS+="--base-adapter-path ${ADAPTER_DIR}/${base_path} ${rope_type} ${rest}"
+done
+
+# ── Eval Harness Arguments ───────────────────────────────────────────────────
+# Available tasks:
+# niah: niah_single_1,niah_single_2,niah_single_3,niah_multikey_1,niah_multikey_2,niah_multikey_3,niah_multiquery,niah_multivalue
+# long_context: longbench,longbench2,longcxt,passkey,ruler,babilong
+# reasoning: arc_challenge,truthfulqa,hellaswag,bbh,mmlu
+# math: gsm8k,aime,hendrycks_math,mathqa,arithmetic
+# code: humaneval,mbpp,codex2text
+# Too long tasks: bbh
+# false tasks: humaneval_infilling,aime
+# new tasks: asdiv,bbq,hendrycks_math500,triviaqa,math_word_problems,hrm8k,agieval_math
+TASKS="mbpp"
+EVAL_HARNESS_ARGS="--tasks ${TASKS} --batch-size ${BATCH_SIZE} --output-dir ${OUTPUT_DIR}/eval_harness"
+
+# Cap max length at 16384 for eval harness to avoid OOM errors
+if [ $MAX_LENGTH -gt 16384 ]; then
+    MAX_LENGTH=16384
+    echo "Max length is greater than 16384, setting to 16384"
+fi
+
+echo "=========================================="
+echo "Configuration"
+echo "=========================================="
+echo "Model          : ${MODEL_NAME}"
+echo "Max length     : ${MAX_LENGTH}"
+echo "Min length     : ${MIN_LENGTH}"
+echo "Quantization   : ${QUANT}"
+echo "Methods        : ${#METHODS[@]}"
+echo "Tasks          : ${TASKS}"
 echo "=========================================="
 
 # -----------------------------------------------------------------------------
-# Function: run_eval
+# Function: run_eval_harness_eval
 # -----------------------------------------------------------------------------
-# Purpose: Execute lm-eval-harness evaluation with given arguments
-# -----------------------------------------------------------------------------
-# Args:
-#   $1 - args: Additional command-line arguments (RoPE method or adapter path)
-# -----------------------------------------------------------------------------
-# Returns:
-#   0 on success, non-zero on failure
-#   Stdout: Evaluation progress and benchmark scores
-# -----------------------------------------------------------------------------
-run_eval() {
-    local args=$1
+run_eval_harness_eval() {
+    local method=$1
 
     echo ""
     echo "------------------------------------------"
-    echo "Evaluating: ${args}"
+    echo "Eval: eval_harness | Method: $method"
     echo "------------------------------------------"
 
     local cmd="python eval/eval_harness.py \
         --model-name ${MODEL_NAME} \
+        ${method} \
         --max-length ${MAX_LENGTH} \
+        --min-length ${MAX_LENGTH} \
         --dtype ${DTYPE} \
         ${QUANT} \
-        ${args} \
-        --tasks ${TASKS} \
-        --batch-size ${BATCH_SIZE} \
-        --output-dir ${OUTPUT_DIR} \
-        --log-samples"
+        ${EVAL_HARNESS_ARGS}"
 
-    echo "Executing: ${cmd}"
-    eval ${cmd}
+    echo "Executing: $cmd"
+    eval $cmd
+
+    if [ $? -eq 0 ]; then
+        echo "[SUCCESS] Eval harness completed: $method"
+    else
+        echo "[FAILED] Eval harness failed: $method"
+    fi
 }
 
-# ── Phase 1: Dynamic RoPE Evaluation ──────────────────────────────────────────
-echo ""
 echo "=========================================="
-echo "Phase 1: Dynamic evaluation"
+echo "Starting LM-Eval-Harness Evaluation"
 echo "=========================================="
 
-for rope_method in "${ROPE_METHODS[@]}"; do
-    run_eval "${rope_method}"
+for method in "${METHODS[@]}"; do
+    run_eval_harness_eval "$method"
 done
 
-# ── Phase 2: Fine-tuned Adapter Evaluation ────────────────────────────────────
-if [ ${#ADAPTERS[@]} -gt 0 ]; then
-    echo ""
-    echo "=========================================="
-    echo "Phase 2: Fine-tuned adapter evaluation"
-    echo "=========================================="
-
-    for adapter_entry in "${ADAPTERS[@]}"; do
-        run_eval "--adapter-path ${ADAPTER_DIR}/${adapter_entry}"
-    done
-fi
-
-# ── Phase 3: Base Adapter Combination Evaluation ─────────────────────────────
-if [ ${#BASE_COMBOS[@]} -gt 0 ]; then
-    echo ""
-    echo "=========================================="
-    echo "Phase 3: Base adapter combination evaluation"
-    echo "=========================================="
-
-    for combo in "${BASE_COMBOS[@]}"; do
-        IFS='|' read -r base_adapter rope_type rest <<< "$combo"
-        run_eval "--base-adapter-path ${ADAPTER_DIR}/${base_adapter} --rope-type ${rope_type} ${rest}"
-    done
-fi
-
 echo ""
-echo "All evaluations complete! Results saved to: ${OUTPUT_DIR}/"
+echo "=========================================="
+echo "LM-Eval-Harness Evaluation Completed!"
 echo "=========================================="
