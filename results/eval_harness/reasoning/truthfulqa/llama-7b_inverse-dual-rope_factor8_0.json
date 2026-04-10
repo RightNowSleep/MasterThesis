@@ -2,40 +2,40 @@
   "results": {
     "truthfulqa_gen": {
       "alias": "truthfulqa_gen",
-      "bleu_max,none": 24.63937563089085,
-      "bleu_max_stderr,none": 0.7813065167453749,
-      "bleu_acc,none": 0.3047735618115055,
-      "bleu_acc_stderr,none": 0.016114124156882417,
-      "bleu_diff,none": -8.636349006736557,
-      "bleu_diff_stderr,none": 0.7795716316890628,
-      "rouge1_max,none": 48.183949022996124,
-      "rouge1_max_stderr,none": 0.9114915966857351,
-      "rouge1_acc,none": 0.2631578947368421,
-      "rouge1_acc_stderr,none": 0.01541524174023699,
-      "rouge1_diff,none": -12.286236033851893,
-      "rouge1_diff_stderr,none": 0.8581435151115511,
-      "rouge2_max,none": 32.123710759409775,
-      "rouge2_max_stderr,none": 1.0246003214524362,
-      "rouge2_acc,none": 0.2215422276621787,
-      "rouge2_acc_stderr,none": 0.014537867601301149,
-      "rouge2_diff,none": -13.40232697586112,
-      "rouge2_diff_stderr,none": 1.0041966276733985,
-      "rougeL_max,none": 45.77788242596942,
-      "rougeL_max_stderr,none": 0.917057945059567,
-      "rougeL_acc,none": 0.27050183598531213,
-      "rougeL_acc_stderr,none": 0.015550778332842904,
-      "rougeL_diff,none": -12.344059287979816,
-      "rougeL_diff_stderr,none": 0.859630987709404
+      "bleu_max,none": 26.949046128029643,
+      "bleu_max_stderr,none": 0.7966660600904252,
+      "bleu_acc,none": 0.28886168910648713,
+      "bleu_acc_stderr,none": 0.01586634640138431,
+      "bleu_diff,none": -10.139443506099953,
+      "bleu_diff_stderr,none": 0.8437054083109862,
+      "rouge1_max,none": 52.12750313268932,
+      "rouge1_max_stderr,none": 0.8611602667643807,
+      "rouge1_acc,none": 0.2692778457772338,
+      "rouge1_acc_stderr,none": 0.015528566637087264,
+      "rouge1_diff,none": -12.740331029398629,
+      "rouge1_diff_stderr,none": 0.8515838401031979,
+      "rouge2_max,none": 35.87946107057222,
+      "rouge2_max_stderr,none": 1.014867026691741,
+      "rouge2_acc,none": 0.22399020807833536,
+      "rouge2_acc_stderr,none": 0.014594964329474209,
+      "rouge2_diff,none": -15.42276803431935,
+      "rouge2_diff_stderr,none": 1.049601087193101,
+      "rougeL_max,none": 49.386800851630184,
+      "rougeL_max_stderr,none": 0.8804320649584157,
+      "rougeL_acc,none": 0.26805385556915545,
+      "rougeL_acc_stderr,none": 0.015506204722834547,
+      "rougeL_diff,none": -13.043962662115133,
+      "rougeL_diff_stderr,none": 0.8678650883986325
     },
     "truthfulqa_mc1": {
       "alias": "truthfulqa_mc1",
-      "acc,none": 0.23745410036719705,
-      "acc_stderr,none": 0.014896277441041845
+      "acc,none": 0.20685434516523868,
+      "acc_stderr,none": 0.014179591496728339
     },
     "truthfulqa_mc2": {
       "alias": "truthfulqa_mc2",
-      "acc,none": 0.35677556210325734,
-      "acc_stderr,none": 0.013395059652893048
+      "acc,none": 0.3270308059665062,
+      "acc_stderr,none": 0.01313964162069574
     }
   },
   "group_subtasks": {
