@@ -24,7 +24,7 @@
 #   Visualization plots saved to: results/entropy/plots/
 # =============================================================================
 
-CUDA_DEVICES="0,1,2,3"
+CUDA_DEVICES="1,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 set -e
@@ -43,7 +43,7 @@ DATASET="emozilla/proofpile-test-tokenized"
 
 # ── Evaluation Mode Flags ─────────────────────────────────────────────────────
 ROPE=true
-ADAPTER=false
+ADAPTER=true
 ADAPTER_DIR="finetunes/continued_pretrain"
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
@@ -55,8 +55,8 @@ ROPE_METHODS=(
     # "--rope-type freq-reciprocal --rope-dynamic"
     # "--rope-type dual-rope --rope-dynamic"
     # "--rope-type inverse-dual-rope --rope-dynamic"
-    # "--rope-type inverse-dual-rope-scaled --rope-dynamic"
-    "--rope-type inverse-dual-tangle-rope --rope-dynamic"
+    "--rope-type inverse-dual-rope-scaled --rope-dynamic"
+    # "--rope-type inverse-dual-tangle-rope --rope-dynamic"
     # "--rope-type inverse-dual-tangle-rope-scaled --rope-dynamic"
     # "--rope-type inverse-dual-nopos-rope --rope-dynamic"
     # "--rope-type inverse-dual-nopos-rope-scaled --rope-dynamic"
@@ -66,6 +66,7 @@ ROPE_METHODS=(
 ADAPTER_PATHS=(
     # "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
     "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
+    "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope-scaled_20260406_070155"
 )
 
 # ── Base Adapter Configuration ─────────────────────────────────────────────
@@ -92,7 +93,7 @@ if [ -n "$BASE_ADAPTER_FOR_ENTROPY" ]; then
 fi
 
 # ── Pipeline Control Flags ────────────────────────────────────────────────────
-PART1=true
+PART1=false
 PART2=true
 
 # ── Track generated JSON files from Part 1 ──────────────────────────────────────

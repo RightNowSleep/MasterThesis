@@ -300,154 +300,125 @@ def plot_entropy_vs_position(
             If None, auto-selects layers with highest head-entropy std.
         method_name: Prefix for output filenames.
     """
-    # Auto-select up to 8 layers if not specified
     if selected_layers is None:
-        # Get up to 8 layers, but no more than available layers
         num_layers = min(data["num_layers"], 8)
         selected_layers = _auto_select_layers(data, n=num_layers)
     else:
-        # Ensure we don't have more than 8 layers
         selected_layers = selected_layers[:8]
 
     print(f"  Selected layers: {selected_layers}")
 
     lengths = data["lengths"]
-    # Use the longest sequence length for plotting
     max_length = max(lengths)
 
-    # Create a single figure (English version)
-    fig, ax = plt.subplots(figsize=_FIG_SIZE)
+    for use_norm in [False, True]:
+        key = "norm_entropy_layer_position" if use_norm else "entropy_layer_position"
+        ylabel = "Normalised Entropy H_norm" if use_norm else "Entropy (nats)"
+        ylabel_cn = "归一化熵值 H_norm" if use_norm else "熵值 (nats)"
+        suffix = "norm" if use_norm else "raw"
 
-    # Plot each layer as a separate curve
-    for layer_idx in selected_layers:
-        # Get entropy data for the longest sequence length
-        matrix = np.array(
-            data["results"][str(max_length)]["entropy_layer_position"]
-        )  # [L, T] - using raw entropy
-        # Get the entropy values for this layer
-        entropy_values = matrix[layer_idx]  # [T]
-        # Create position array
-        positions = np.arange(len(entropy_values))
+        fig, ax = plt.subplots(figsize=_FIG_SIZE)
 
-        # Get color for this layer
-        color = _get_color(layer_idx, selected_layers)
+        for layer_idx in selected_layers:
+            matrix = np.array(data["results"][str(max_length)][key])
+            entropy_values = matrix[layer_idx]
+            positions = np.arange(len(entropy_values))
+            color = _get_color(layer_idx, selected_layers)
 
-        # Plot the curve with all points
-        ax.plot(
-            positions,
-            entropy_values,
-            color=color,
-            linewidth=1.5,
-            marker=None,
-            label=f"Layer {layer_idx}",
-            linestyle="-",
+            ax.plot(
+                positions,
+                entropy_values,
+                color=color,
+                linewidth=1.5,
+                marker=None,
+                label=f"Layer {layer_idx}",
+                linestyle="-",
+            )
+
+            _end_label(ax, positions, entropy_values, f"Layer {layer_idx}", color)
+
+        if 2048 < max_length:
+            ax.axvline(x=2048, color="gray", linestyle="--", linewidth=1.5, alpha=0.7)
+            ax.text(
+                2048,
+                ax.get_ylim()[0] + 0.1,
+                "Position 2048",
+                ha="center",
+                rotation=0,
+                fontsize=_TICK_FS,
+            )
+
+        ax.set_xlabel("Token Position", fontsize=_LABEL_FS)
+        ax.set_ylabel(ylabel, fontsize=_LABEL_FS)
+        ax.set_title(
+            "Entropy vs Token Position for Different Layers",
+            fontsize=_TITLE_FS,
+            pad=10,
         )
 
-        # Add end label
-        _end_label(ax, positions, entropy_values, f"Layer {layer_idx}", color)
+        ax.tick_params(labelsize=_TICK_FS)
+        ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.5)
+        ax.legend(fontsize=_LEGEND_FS, framealpha=0.8, loc="best")
 
-    # Add vertical line at position 2048 for easy identification
-    if 2048 < max_length:
-        ax.axvline(x=2048, color="gray", linestyle="--", linewidth=1.5, alpha=0.7)
-        # Add horizontal text label
-        ax.text(
-            2048,
-            ax.get_ylim()[0] + 0.1,
-            "Position 2048",
-            ha="center",
-            rotation=0,
-            fontsize=_TICK_FS,
+        _savefig(
+            fig,
+            os.path.join(
+                out_dir, f"{method_name}_fig03_entropy_vs_position_{suffix}.{fmt}"
+            ),
+            dpi,
         )
 
-    # Set labels and title
-    ax.set_xlabel("Token Position", fontsize=_LABEL_FS)
-    ax.set_ylabel("Entropy (nats)", fontsize=_LABEL_FS)
-    ax.set_title(
-        "Entropy vs Token Position for Different Layers",
-        fontsize=_TITLE_FS,
-        pad=10,
-    )
+        fig_cn, ax_cn = plt.subplots(figsize=_FIG_SIZE)
 
-    # Set tick parameters
-    ax.tick_params(labelsize=_TICK_FS)
+        for layer_idx in selected_layers:
+            matrix = np.array(data["results"][str(max_length)][key])
+            entropy_values = matrix[layer_idx]
+            positions = np.arange(len(entropy_values))
+            color = _get_color(layer_idx, selected_layers)
 
-    # Add grid
-    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.5)
+            ax_cn.plot(
+                positions,
+                entropy_values,
+                color=color,
+                linewidth=1.5,
+                marker=None,
+                label=f"Layer {layer_idx}",
+                linestyle="-",
+            )
 
-    # Add legend
-    ax.legend(fontsize=_LEGEND_FS, framealpha=0.8, loc="best")
+            _end_label(ax_cn, positions, entropy_values, f"Layer {layer_idx}", color)
 
-    # Save the figure with the same naming convention as the original plot_entropy.py
-    _savefig(
-        fig,
-        os.path.join(out_dir, f"{method_name}_fig03_entropy_vs_position_raw.{fmt}"),
-        dpi,
-    )
+        if 2048 < max_length:
+            ax_cn.axvline(
+                x=2048,
+                color="gray",
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.7,
+            )
+            ax_cn.text(
+                2048,
+                ax_cn.get_ylim()[0] + 0.1,
+                "Token索引 2048",
+                ha="center",
+                rotation=0,
+                fontsize=_TICK_FS,
+            )
 
-    # Create Chinese version
-    fig_cn, ax_cn = plt.subplots(figsize=_FIG_SIZE)
+        ax_cn.set_xlabel("Token索引", fontsize=_LABEL_FS)
+        ax_cn.set_ylabel(ylabel_cn, fontsize=_LABEL_FS)
 
-    # Plot each layer as a separate curve
-    for layer_idx in selected_layers:
-        # Get entropy data for the longest sequence length
-        matrix = np.array(
-            data["results"][str(max_length)]["entropy_layer_position"]
-        )  # [L, T] - using raw entropy
-        # Get the entropy values for this layer
-        entropy_values = matrix[layer_idx]  # [T]
-        # Create position array
-        positions = np.arange(len(entropy_values))
+        ax_cn.tick_params(labelsize=_TICK_FS)
+        ax_cn.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.5)
+        ax_cn.legend(fontsize=_LEGEND_FS, framealpha=0.8, loc="best")
 
-        # Get color for this layer
-        color = _get_color(layer_idx, selected_layers)
-
-        # Plot the curve with all points
-        ax_cn.plot(
-            positions,
-            entropy_values,
-            color=color,
-            linewidth=1.5,
-            marker=None,
-            label=f"Layer {layer_idx}",
-            linestyle="-",
+        _savefig(
+            fig_cn,
+            os.path.join(
+                out_dir, f"{method_name}_fig03_entropy_vs_position_{suffix}_cn.{fmt}"
+            ),
+            dpi,
         )
-
-        # Add end label
-        _end_label(ax_cn, positions, entropy_values, f"Layer {layer_idx}", color)
-
-    # Add vertical line at position 2048 for easy identification
-    if 2048 < max_length:
-        ax_cn.axvline(x=2048, color="gray", linestyle="--", linewidth=1.5, alpha=0.7)
-        # Add horizontal text label
-        ax_cn.text(
-            2048,
-            ax_cn.get_ylim()[0] + 0.1,
-            "Token索引 2048",
-            ha="center",
-            rotation=0,
-            fontsize=_TICK_FS,
-        )
-
-    # Set labels (Chinese)
-    ax_cn.set_xlabel("Token索引", fontsize=_LABEL_FS)
-    ax_cn.set_ylabel("熵值 (nats)", fontsize=_LABEL_FS)
-    # No title for Chinese version
-
-    # Set tick parameters
-    ax_cn.tick_params(labelsize=_TICK_FS)
-
-    # Add grid
-    ax_cn.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.5)
-
-    # Add legend
-    ax_cn.legend(fontsize=_LEGEND_FS, framealpha=0.8, loc="best")
-
-    # Save the Chinese version
-    _savefig(
-        fig_cn,
-        os.path.join(out_dir, f"{method_name}_fig03_entropy_vs_position_raw_cn.{fmt}"),
-        dpi,
-    )
 
 
 # ---------------------------------------------------------------------------

@@ -66,6 +66,42 @@ from pathlib import Path
 from typing import List, Sequence
 
 import matplotlib
+import warnings
+
+warnings.filterwarnings("ignore")
+
+# set font for Chinese characters
+import matplotlib.font_manager as fm
+
+# Try to find available Chinese fonts
+chinese_fonts = []
+for font in fm.fontManager.ttflist:
+    if any(
+        name in font.name.lower()
+        for name in [
+            "simhei",
+            "simsun",
+            "microsoftyahei",
+            "noto sans cjk",
+            "wqy",
+            "droid sans fallback",
+        ]
+    ):
+        chinese_fonts.append(font.name)
+
+if chinese_fonts:
+    matplotlib.rcParams["font.sans-serif"] = chinese_fonts + ["DejaVu Sans"]
+else:
+    # Fallback to common Chinese fonts
+    matplotlib.rcParams["font.sans-serif"] = [
+        "SimHei",
+        "Microsoft YaHei",
+        "Noto Sans CJK SC",
+        "WenQuanYi Micro Hei",
+        "DejaVu Sans",
+    ]
+
+matplotlib.rcParams["axes.unicode_minus"] = False
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -689,80 +725,6 @@ def plot_head_layer_heatmap(
 # ---------------------------------------------------------------------------
 
 
-def _plot_entropy_vs_position_one(
-    data: dict,
-    key: str,
-    ylabel: str,
-    title_prefix: str,
-    selected_layers: List[int],
-    out_dir: str,
-    fname: str,
-    fmt: str,
-    dpi: int,
-) -> None:
-    """
-    Internal worker for Fig 3.
-
-    Args:
-        data: The data dictionary containing entropy results.
-        key: Key for the entropy metric to plot.
-        ylabel: Label for the y-axis.
-        title_prefix: Prefix for the figure title.
-        selected_layers: List of layer indices to plot.
-        out_dir: Output directory for saving figures.
-        fname: Output filename.
-        fmt: Output format (e.g., 'png', 'pdf').
-        dpi: Resolution for raster formats.
-    """
-    lengths = data["lengths"]
-    nrows, ncols = _grid(len(selected_layers))
-    top_k_boundary = max(data["results"][str(sl)]["top_k_boundary"] for sl in lengths)
-
-    fig, axes = plt.subplots(nrows, ncols, figsize=_FS_22, squeeze=False)
-
-    for ax_i, layer_idx in enumerate(selected_layers):
-        r, c = divmod(ax_i, ncols)
-        ax = axes[r][c]
-
-        _shade_boundary(ax, top_k_boundary)
-
-        for sl in lengths:
-            col = _get_color(sl, lengths)
-            matrix = np.array(data["results"][str(sl)][key])  # [L, T]
-            T = matrix.shape[1]
-            curve = matrix[layer_idx]  # [T]
-            pos_x = np.arange(T)
-            ax.plot(
-                pos_x,
-                curve,
-                color=col,
-                linewidth=1.8,
-                alpha=0.9,
-                label=f"len={sl}",
-            )
-            _end_label(ax, pos_x, curve, str(sl), col)
-
-        ax.set_title(f"Layer {layer_idx}", fontsize=_LABEL_FS, pad=6)
-        ax.set_xlabel("Token position", fontsize=_TICK_FS)
-        ax.set_ylabel(ylabel, fontsize=_TICK_FS)
-        ax.tick_params(labelsize=_TICK_FS)
-        ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.5)
-        ax.legend(fontsize=_LEGEND_FS - 1, framealpha=0.8)
-
-    for ax_i in range(len(selected_layers), nrows * ncols):
-        r, c = divmod(ax_i, ncols)
-        axes[r][c].set_visible(False)
-
-    fig.suptitle(
-        f"Fig 3 — {title_prefix}: entropy vs token position\n"
-        "Layers selected by highest head-entropy std (most specialised).\n"
-        "Gray band = forced top-k region (t < top_k)",
-        fontsize=_SUPTITLE_FS,
-        y=1.02,
-    )
-    _savefig(fig, os.path.join(out_dir, fname), dpi)
-
-
 def plot_entropy_vs_position(
     data: dict,
     out_dir: str,
@@ -772,7 +734,7 @@ def plot_entropy_vs_position(
     method_name: str = "",
 ) -> None:
     """
-    Fig 3 — two files: raw and normalised.
+    Fig 3 — four files: raw, raw_cn, norm, norm_cn.
 
     Args:
         data: The data dictionary containing entropy results.
@@ -783,31 +745,130 @@ def plot_entropy_vs_position(
             If None, auto-selects layers with highest head-entropy std.
         method_name: Prefix for output filenames.
     """
-    layers = selected_layers or _auto_select_layers(data, n=4)
-    print(f"  Fig 3 auto-selected layers: {layers}")
+    if selected_layers is None:
+        num_layers = min(data["num_layers"], 8)
+        selected_layers = _auto_select_layers(data, n=num_layers)
+    else:
+        selected_layers = selected_layers[:8]
 
-    _plot_entropy_vs_position_one(
-        data,
-        "entropy_layer_position",
-        ylabel="H (nats)",
-        title_prefix="Raw entropy",
-        selected_layers=layers,
-        out_dir=out_dir,
-        fname=f"{method_name}_fig03_entropy_vs_position_raw.{fmt}",
-        fmt=fmt,
-        dpi=dpi,
-    )
-    _plot_entropy_vs_position_one(
-        data,
-        "norm_entropy_layer_position",
-        ylabel="Mean normalised entropy  H_norm ∈ [0,1]",
-        title_prefix="Normalised entropy",
-        selected_layers=layers,
-        out_dir=out_dir,
-        fname=f"{method_name}_fig03_entropy_vs_position_norm.{fmt}",
-        fmt=fmt,
-        dpi=dpi,
-    )
+    print(f"  Fig 3 auto-selected layers: {selected_layers}")
+
+    lengths = data["lengths"]
+    max_length = max(lengths)
+
+    for use_norm in [False, True]:
+        key = "norm_entropy_layer_position" if use_norm else "entropy_layer_position"
+        ylabel = "Normalised Entropy H_norm" if use_norm else "Entropy (nats)"
+        ylabel_cn = "归一化熵值 H_norm" if use_norm else "熵值 (nats)"
+        suffix = "norm" if use_norm else "raw"
+
+        fig, ax = plt.subplots(figsize=(16, 9))
+
+        for layer_idx in selected_layers:
+            matrix = np.array(data["results"][str(max_length)][key])
+            entropy_values = matrix[layer_idx]
+            positions = np.arange(len(entropy_values))
+            color = _get_color(layer_idx, selected_layers)
+
+            ax.plot(
+                positions,
+                entropy_values,
+                color=color,
+                linewidth=1.5,
+                marker=None,
+                label=f"Layer {layer_idx}",
+                linestyle="-",
+            )
+
+            _end_label(ax, positions, entropy_values, f"Layer {layer_idx}", color)
+
+        if 2048 < max_length:
+            ax.axvline(x=2048, color="gray", linestyle="--", linewidth=1.5, alpha=0.7)
+            y_min, y_max = ax.get_ylim()
+            y_text = y_min + (y_max - y_min) * 0.05
+            ax.text(
+                2048,
+                y_text,
+                "Position 2048",
+                ha="center",
+                rotation=0,
+                fontsize=_TICK_FS,
+            )
+
+        ax.set_xlabel("Token Position", fontsize=_LABEL_FS)
+        ax.set_ylabel(ylabel, fontsize=_LABEL_FS)
+        ax.set_title(
+            "Entropy vs Token Position for Different Layers",
+            fontsize=_TITLE_FS,
+            pad=10,
+        )
+
+        ax.tick_params(labelsize=_TICK_FS)
+        ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.5)
+        ax.legend(fontsize=_LEGEND_FS, framealpha=0.8, loc="best")
+
+        _savefig(
+            fig,
+            os.path.join(
+                out_dir, f"{method_name}_fig03_entropy_vs_position_{suffix}.{fmt}"
+            ),
+            dpi,
+        )
+
+        fig_cn, ax_cn = plt.subplots(figsize=(16, 9))
+
+        for layer_idx in selected_layers:
+            matrix = np.array(data["results"][str(max_length)][key])
+            entropy_values = matrix[layer_idx]
+            positions = np.arange(len(entropy_values))
+            color = _get_color(layer_idx, selected_layers)
+
+            ax_cn.plot(
+                positions,
+                entropy_values,
+                color=color,
+                linewidth=1.5,
+                marker=None,
+                label=f"Layer {layer_idx}",
+                linestyle="-",
+            )
+
+            _end_label(ax_cn, positions, entropy_values, f"Layer {layer_idx}", color)
+
+        if 2048 < max_length:
+            ax_cn.axvline(
+                x=2048,
+                color="gray",
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.7,
+            )
+            y_min, y_max = ax_cn.get_ylim()
+            y_text = y_min + (y_max - y_min) * 0.05
+            ax_cn.text(
+                2048,
+                y_text,
+                "Token索引 2048",
+                ha="center",
+                rotation=0,
+                fontsize=_TICK_FS,
+            )
+
+        ax_cn.set_xlabel("Token索引", fontsize=_LABEL_FS)
+        ax_cn.set_ylabel(ylabel_cn, fontsize=_LABEL_FS)
+
+        ax_cn.tick_params(labelsize=_TICK_FS)
+        ax_cn.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.5)
+        ax_cn.legend(fontsize=_LEGEND_FS, framealpha=0.8, loc="best")
+
+        _savefig(
+            fig_cn,
+            os.path.join(
+                out_dir,
+                f"{method_name}_fig03_entropy_vs_position_{suffix}_cn.{fmt}",
+            ),
+            dpi,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1794,7 +1855,8 @@ def plot_all(
     os.makedirs(out_dir, exist_ok=True)
 
     # pre-compute shared layer selection so Fig 3 and Fig 5 use the same layers
-    selected = _auto_select_layers(data, n=4)
+    num_layers = min(data["num_layers"], 8)
+    selected = _auto_select_layers(data, n=num_layers)
     print(f"\nGenerating {len(_FIG_FUNCTIONS)} figures → {out_dir}/")
     print(f"Auto-selected layers for Figs 3 & 5: {selected}")
 
@@ -1925,7 +1987,7 @@ def main() -> None:
                     out_dir,
                     args.fmt,
                     args.dpi,
-                    selected_layers=selected,
+                    selected_layers=None,
                     method_name=method_name,
                 )
             elif fn is plot_position_head_heatmap:

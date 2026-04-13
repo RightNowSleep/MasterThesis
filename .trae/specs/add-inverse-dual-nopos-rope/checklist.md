@@ -1,7 +1,0 @@
-- [x] `LlamaInverseDualNoPosRoPEEmbedding` 类在 pe_llama.py 中正确定义，低频维度 pos_2 恒为 0
-- [x] `LlamaInverseDualNoPosRoPEScaledEmbedding` 类正确继承基础版并包含 BiFactor 缩放逻辑
-- [x] configuration_llama.py 的 valid_types 包含两种新类型
-- [x] configuration_llama.py 的 deprecated map 包含 dynamic- 前缀映射
-- [x] configuration_llama.py 对 inverse-dual-nopos-rope-scaled 验证 alpha/beta/gamma 参数
-- [x] modeling_llama.py 的 _init_rope() 能正确实例化两种新类型
-- [x] modeling_llama.py 的错误提示信息包含新类型名称
