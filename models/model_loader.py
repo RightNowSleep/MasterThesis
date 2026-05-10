@@ -58,6 +58,7 @@ _ROPE_TYPES_WITH_DYNAMIC_FLAG = {
     "dual-rope-scaled",
     "inverse-dual-rope",
     "inverse-dual-rope-scaled",
+    "bi-factor-scaling-rope",
     "inverse-dual-tangle-rope",
     "inverse-dual-tangle-rope-scaled",
     "inverse-dual-nopos-rope",
@@ -183,6 +184,7 @@ def _can_cache(rope_scaling: Optional[Dict]) -> bool:
         "inverse-dual-tangle-rope-scaled",
         "inverse-dual-nopos-rope",
         "inverse-dual-nopos-rope-scaled",
+        "bi-factor-scaling-rope",
     }
 
     return rope_type in inverse_types

@@ -64,7 +64,10 @@ from transformers.utils import (
     logging,
     replace_return_docstrings,
 )
-from transformers.utils.import_utils import is_torch_fx_available
+try:
+    from transformers.utils.import_utils import is_torch_fx_available
+except ImportError:
+    is_torch_fx_available = lambda: False
 from .configuration_llama import LlamaConfig
 from .pe_llama import *
 
@@ -715,6 +718,20 @@ class LlamaAttention(nn.Module):
                 gamma=_rs.get("gamma", 2.0),
             )
 
+        elif scaling_type == "bi-factor-scaling-rope":
+            _rs = self.config.rope_scaling or {}
+            self.rotary_emb = LlamaBiFactorScalingRoPE(
+                dim=self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=scaling_factor,
+                original_max_position_embeddings=self.original_max_position_embeddings,
+                dynamic=dynamic,
+                alpha=_rs.get("alpha", 0.1),
+                beta=_rs.get("beta", 0.5),
+                gamma=_rs.get("gamma", 2.0),
+            )
+
         elif scaling_type == "inverse-dual-tangle-rope":
             self.rotary_emb = LlamaInverseDualTangleRoPEEmbedding(
                 dim=self.head_dim,
@@ -774,6 +791,7 @@ class LlamaAttention(nn.Module):
                 "freq-reciprocal-scaled-no-layer, freq-reciprocal-scaled-adaptive, "
                 "dual-rope, dual-rope-scaled, "
                 "inverse-dual-rope, inverse-dual-rope-scaled, "
+                "bi-factor-scaling-rope, "
                 "inverse-dual-nopos-rope, inverse-dual-nopos-rope-scaled."
             )
 

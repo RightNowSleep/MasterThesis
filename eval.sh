@@ -43,7 +43,7 @@ export DISABLE_FLASH_ATTN=1
 export USE_FLASH_ATTN=0
 export HF_ALLOW_CODE_EVAL=1
 
-CUDA_DEVICES="1,2,3"
+CUDA_DEVICES="0,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 # ── Model Configuration ──────────────────────────────────────────────────────
@@ -57,8 +57,8 @@ BATCH_SIZE=1
 OUTPUT_DIR="results"
 
 # ── Evaluation Mode Flags ────────────────────────────────────────────────────
-ROPE=true
-ADAPTER=false
+ROPE=false
+ADAPTER=true
 ADAPTER_DIR="finetunes/continued_pretrain"
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
@@ -73,8 +73,9 @@ ROPE_METHODS=(
     # "--rope-type freq-reciprocal-scaled-no-layer --rope-dynamic"
     # "--rope-type dual-rope --rope-dynamic"
     # "--rope-type dual-rope-scaled --rope-dynamic"
-    "--rope-type inverse-dual-rope --rope-dynamic"
+    # "--rope-type inverse-dual-rope --rope-dynamic"
     # "--rope-type inverse-dual-rope-scaled --rope-dynamic"
+    # "--rope-type bi-factor-scaling-rope --rope-dynamic"
     # "--rope-type inverse-dual-tangle-rope --rope-dynamic"
     # "--rope-type inverse-dual-tangle-rope-scaled --rope-dynamic"
     # "--rope-type inverse-dual-nopos-rope --rope-dynamic"
@@ -83,16 +84,17 @@ ROPE_METHODS=(
 
 # ── Adapter Paths Configuration ──────────────────────────────────────────────
 ADAPTER_PATHS=(
-    "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
-    "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
-    "--adapter-path ${ADAPTER_DIR}/part-ntk_20260315_233845"
-    "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
-    "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
-    "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
-    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
-    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
-    "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
-    "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
+    "--adapter-path ${ADAPTER_DIR}/bi-factor-scaling-rope_20260508_120334"
+    # "--adapter-path ${ADAPTER_DIR}/inverse-dual-rope_20260403_103555"
+    # "--adapter-path ${ADAPTER_DIR}/yarn_20260316_071953"
+    # "--adapter-path ${ADAPTER_DIR}/part-ntk_20260315_233845"
+    # "--adapter-path ${ADAPTER_DIR}/ntk_20260315_155711"
+    # "--adapter-path ${ADAPTER_DIR}/linear_20260315_081529"
+    # "--adapter-path ${ADAPTER_DIR}/none_20260315_003356"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled-no-layer_20260324_014910"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal_20260317_001708"
+    # "--adapter-path ${ADAPTER_DIR}/dual-rope_20260402_113443"
+    # "--adapter-path ${ADAPTER_DIR}/freq-reciprocal-scaled_20260320_003434"
 )
 
 # ── Base Adapter Combinations ────────────────────────────────────────────
@@ -122,10 +124,10 @@ for combo in "${BASE_COMBOS[@]}"; do
 done
 
 # ── Evaluation Type Flags ────────────────────────────────────────────────────
-PERPLEXITY=true
-PERFORMANCE=false
+PERPLEXITY=false
+PERFORMANCE=true
 PASSKEY=false
-EVAL_HARNESS=false
+EVAL_HARNESS=true
 
 # ── Evaluation Arguments ─────────────────────────────────────────────────────
 PERPLEXITY_ARGS="--dataset-name emozilla/proofpile-test-tokenized \
@@ -149,12 +151,15 @@ PASSKEY_ARGS="--num-keys 5 \
 --save-dir ${OUTPUT_DIR}/passkey"
 
 # Available tasks:
+# niah: niah_single_1,niah_single_2,niah_single_3,niah_multikey_1,niah_multikey_2,niah_multikey_3,niah_multiquery,niah_multivalue
 # long_context: longbench,longbench2,longcxt,passkey,ruler,babilong
 # reasoning: arc_challenge,truthfulqa,hellaswag,bbh,mmlu
-# math: gsm8k,aime,hendrycks_math
-# code: humaneval,mbpp,humaneval_infilling
+# math: gsm8k,aime,hendrycks_math,mathqa,arithmetic,minerva_math
+# code: humaneval,mbpp,codex2text
 # Too long tasks: bbh
-TASKS="humananeval,mbpp,humananeval_infilling"
+# false tasks: humaneval_infilling,aime
+# new tasks: asdiv,bbq,hendrycks_math500,triviaqa,math_word_problems,hrm8k,agieval_math
+TASKS="longbench2,babilong,arc_challenge,truthfulqa,hellaswag,triviaqa,mmlu,gsm8k,minerva_math,mbpp"
 EVAL_HARNESS_ARGS="--tasks ${TASKS} --batch-size ${BATCH_SIZE} --output-dir ${OUTPUT_DIR}/eval_harness"
 
 echo "=========================================="
@@ -342,6 +347,10 @@ if [ "$PERPLEXITY" = true ]; then
 fi
 
 if [ "$PERFORMANCE" = true ]; then
+    if [ $MAX_LENGTH -gt 4096 ]; then
+        MAX_LENGTH=4096
+        echo "Max length is greater than 4096, setting to 4096"
+    fi
     for method in "${METHODS[@]}"; do
         run_performance_eval "$method"
     done

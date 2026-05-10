@@ -208,6 +208,7 @@ class LlamaConfig(PretrainedConfig):
             - "dual-rope-scaled": dual RoPE + attention temperature
             - "inverse-dual-rope": inverse dual RoPE (position only)
             - "inverse-dual-rope-scaled": inverse dual RoPE + attention temperature
+            - "bi-factor-scaling-rope": bi-factor scaling RoPE
             - "inverse-dual-tangle-rope": inverse dual tangle RoPE (position only)
             - "inverse-dual-tangle-rope-scaled": inverse dual tangle RoPE + attention temperature
             - "inverse-dual-nopos-rope": inverse dual no-pos RoPE (position only)
@@ -271,6 +272,7 @@ class LlamaConfig(PretrainedConfig):
             "dynamic-freq-reciprocal-scaled-adaptive": "dynamic-freq-reciprocal-scaled-adaptive",
             "dynamic-dual-rope": "dual-rope",
             "dynamic-dual-rope-scaled": "dual-rope-scaled",
+            "dynamic-bi-factor-scaling-rope": "bi-factor-scaling-rope",
             "dynamic-inverse-dual-rope": "inverse-dual-rope",
             "dynamic-inverse-dual-rope-scaled": "inverse-dual-rope-scaled",
             "dynamic-inverse-dual-tangle-rope": "inverse-dual-tangle-rope",
@@ -312,6 +314,7 @@ class LlamaConfig(PretrainedConfig):
             "dual-rope-scaled",
             "inverse-dual-rope",
             "inverse-dual-rope-scaled",
+            "bi-factor-scaling-rope",
             "inverse-dual-tangle-rope",
             "inverse-dual-tangle-rope-scaled",
             "inverse-dual-nopos-rope",

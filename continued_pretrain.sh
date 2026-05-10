@@ -56,7 +56,7 @@ QUANTIZATION="4bit"
 DATASET="emozilla/pg_books-tokenized-bos-eos-chunked-65536"
 
 # ── Infrastructure Settings ──────────────────────────────────────────────────
-CUDA_DEVICES="1,2,3"
+CUDA_DEVICES="0,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 OUTPUT_DIR="finetunes/continued_pretrain"
@@ -84,8 +84,9 @@ ROPE_METHODS=(
     # "--rope-type dual-rope --rope-factor $ROPE_FACTOR"
     # "--rope-type inverse-dual-rope --rope-factor $ROPE_FACTOR"
     # "--rope-type inverse-dual-rope-scaled --rope-factor $ROPE_FACTOR"
-    "--rope-type inverse-dual-nopos-rope --rope-factor $ROPE_FACTOR"
+    # "--rope-type inverse-dual-nopos-rope --rope-factor $ROPE_FACTOR"
     # "--rope-type inverse-dual-nopos-rope-scaled --rope-factor $ROPE_FACTOR"
+    "--rope-type bi-factor-scaling-rope --rope-factor $ROPE_FACTOR"
 )
 
 # ── Base Adapter Configuration ─────────────────────────────────────────────
@@ -98,8 +99,6 @@ ROPE_METHODS=(
 # Example: Train inverse-dual-rope-scaled on top of inverse-dual-rope
 # BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
 # BASE_ADAPTER_ROPE_TYPE="inverse-dual-rope-scaled"
-BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-nopos-rope_base"
-BASE_ADAPTER_ROPE_TYPE="inverse-dual-nopos-rope"
 
 # Uncomment to enable:
 # BASE_ADAPTER_PATH="finetunes/continued_pretrain/inverse-dual-rope_20260403_103555"
