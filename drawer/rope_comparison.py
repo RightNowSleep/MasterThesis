@@ -1,24 +1,20 @@
 """Position encoding comparison visualization for long context extension methods.
 
-This module generates a 2x2 subplot figure comparing the cosine values of
+This module generates a 1x3 subplot figure comparing the cosine values of
 different Rotary Position Embedding (RoPE) variants across position indices
-and embedding dimensions. The four methods visualized are:
+and embedding dimensions. The three methods visualized are:
 
     - Standard RoPE: Baseline rotary position encoding without any scaling.
-    - Linear Interpolation: Simple position scaling by a constant factor.
-    - Freq-Reciprocal: Block-wise frequency scaling that applies different
-      scaling factors per dimension to extend context length while preserving
-      resolution for lower-frequency dimensions.
-    - NTK-By-Parts: Frequency-band-dependent scaling that applies different
-      strategies based on the number of rotations within the original context
-      length, with smooth transitions between bands.
+    - Position Interpolation (PI): Simple position scaling by a constant factor.
+    - BiSpace-RoPE: Inverse dual-position encoding that splits position indices
+      into high-frequency (global monotonic) and low-frequency (cyclic) parts.
 
 The visualization uses scatter plots to show cosine values for selected
 dimensions, making it easy to compare how each method distributes positional
 information across the extended context window.
 
 Output:
-    drawer/rope_comparison.png: 2x2 comparison figure at 300 DPI.
+    drawer/rope_comparison.png: 1x3 comparison figure at 300 DPI.
 """
 
 import os
@@ -44,116 +40,17 @@ def get_rope_curve(dim, max_pos, base=10000):
             Defaults to 10000.
 
     Returns:
-        torch.Tensor: Tensor of shape (max_pos, dim//2) containing cosine values
-            for each position-dimension pair.
+        torch.Tensor: Tensor of shape (max_pos) containing cosine values
+            for each position index.
     """
-    d_half = dim // 2
-    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
+    inv_freq = 1.0 / (base ** ((2 * dim) / 128))
     pos = torch.arange(max_pos, dtype=torch.float32)
-    freqs = pos[:, None] * inv_freq[None, :]
-    return freqs.cos()
-
-
-def get_freq_reciprocal_curve(dim, max_pos, base=10000, orig_L0=2048, S=8.0):
-    """Compute the cosine values of Freq-Reciprocal position encoding.
-
-    This method applies a block-wise scaling factor to positions to extend
-    the effective context length while maintaining resolution for lower
-    dimensions. Dimensions below the threshold i_star receive linearly
-    interpolated scaling, while dimensions at or above i_star receive the
-    full scaling factor S.
-
-    Args:
-        dim (int): The dimension of the embedding space. Must be even.
-        max_pos (int): The maximum position index (exclusive upper bound).
-        base (float, optional): The base value for computing inverse frequencies.
-            Defaults to 10000.
-        orig_L0 (int, optional): The original training context length in tokens.
-            Defaults to 2048.
-        S (float, optional): The scaling factor for high-frequency dimensions.
-            Must be greater than 1.0. Defaults to 8.0.
-
-    Returns:
-        torch.Tensor: Tensor of shape (max_pos, dim//2) containing cosine values
-            for each position-dimension pair under Freq-Reciprocal scaling.
-    """
-    d_half = dim // 2
-    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
-
-    # Calculate i_star: the threshold dimension index separating scaled and unscaled regions
-    r = orig_L0 * inv_freq / (2 * math.pi)
-    i_star = int((r >= 1.0).sum().item())
-    i_star = max(1, min(i_star, d_half - 1))
-
-    # Compute block b_i: dimension-specific scaling factors
-    inv_theta_istar = base ** (2.0 * i_star / dim)
-    denom = inv_theta_istar - 1.0
-    K = (S - 1.0) / denom if abs(denom) > 1e-8 else 0.0
-
-    inv_theta = 1.0 / inv_freq
-    b = 1.0 + K * (inv_theta - 1.0)
-    b[i_star:] = S
-    b = torch.clamp(b, 1.0, S)
-
-    # Compute effective positions after applying per-dimension scaling
-    pos = torch.arange(max_pos, dtype=torch.float32)
-    t_eff = torch.floor(pos[:, None] / b[None, :])
-    freqs = t_eff * inv_freq[None, :]
-    return freqs.cos()
-
-
-def get_ntk_by_parts_curve(
-    dim,
-    max_pos,
-    base=10000,
-    orig_L0=2048,
-    scaling_factor=8.0,
-    alpha=1.0,
-    beta=32.0,
-):
-    """Compute the cosine values of NTK-By-Parts position encoding.
-
-    This method applies different scaling strategies to different frequency
-    bands based on the number of rotations within the original context length:
-
-        - High frequency (r_d >= beta): No scaling applied to preserve local information.
-        - Low frequency (r_d <= alpha): Linear interpolation by scaling_factor.
-        - Middle frequency (alpha < r_d < beta): Smooth transition between the two regimes.
-
-    The rotation count r_d = orig_L0 / lambda_d, where lambda_d is the wavelength.
-    Higher r_d indicates more rotations within the original context, corresponding
-    to higher frequency dimensions.
-
-    Args:
-        dim (int): The dimension of the embedding space. Must be even.
-        max_pos (int): The maximum position index (exclusive upper bound).
-        base (float, optional): The base value for computing inverse frequencies.
-            Defaults to 10000.
-        orig_L0 (int, optional): The original training context length in tokens.
-            Defaults to 2048.
-        scaling_factor (float, optional): The extension ratio S for context length.
-            Defaults to 8.0.
-        alpha (float, optional): Lower threshold for rotation count. Dimensions with
-            r_d <= alpha receive full scaling. Defaults to 1.0.
-        beta (float, optional): Upper threshold for rotation count. Dimensions with
-            r_d >= beta receive no scaling. Defaults to 32.0.
-
-    Returns:
-        torch.Tensor: Tensor of shape (max_pos, dim//2) containing cosine values
-            for each position-dimension pair under NTK-By-Parts scaling.
-    """
-    theta_d = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
-    lambda_d = 2 * math.pi / theta_d
-    r_d = orig_L0 / lambda_d
-    w_ext = torch.clamp((r_d - alpha) / (beta - alpha), 0.0, 1.0)
-    inv_freq = theta_d * w_ext + (1.0 - w_ext) * theta_d / scaling_factor
-    pos = torch.arange(max_pos, dtype=torch.float32)
-    freqs = pos[:, None] * inv_freq[None, :]
-    return freqs.cos()
+    freqs = pos * inv_freq
+    return torch.round(freqs.cos(), decimals=4)
 
 
 def get_linear_curve(dim, max_pos, base=10000, scale_factor=8.0):
-    """Compute the cosine values of Linear Interpolation position encoding.
+    """Compute the cosine values of Position Interpolation (PI) position encoding.
 
     This method uniformly scales all positions by a constant factor to extend
     the context length. It is the simplest approach for length extrapolation,
@@ -171,69 +68,93 @@ def get_linear_curve(dim, max_pos, base=10000, scale_factor=8.0):
         torch.Tensor: Tensor of shape (max_pos, dim//2) containing cosine values
             for each position-dimension pair under linear scaling.
     """
-    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
+    inv_freq = 1.0 / (base ** ((2 * dim) / 128))
     pos = torch.arange(max_pos, dtype=torch.float32)
     scaled_pos = pos / scale_factor
-    freqs = scaled_pos[:, None] * inv_freq[None, :]
-    return freqs.cos()
+    freqs = scaled_pos * inv_freq
+    return torch.round(freqs.cos(), decimals=4)
 
 
-# --------------------------
-# Visualization parameters
-# --------------------------
+def get_bispace_rope_curve(dim, max_pos, base=10000, orig_L0=2048):
+    """Compute the cosine values of BiSpace-RoPE (Inverse Dual RoPE) position encoding.
+
+    This method splits position indices into two parts based on the critical
+    dimension i_star:
+        - High-frequency dimensions (i < i_star): position index = t (global, monotonic)
+        - Low-frequency dimensions (i >= i_star): position index = t % L_0 (cyclic)
+
+    Args:
+        dim (int): The dimension of the embedding space. Must be even.
+        max_pos (int): The maximum position index (exclusive upper bound).
+        base (float, optional): The base value for computing inverse frequencies.
+            Defaults to 10000.
+        orig_L0 (int, optional): The original training context length in tokens.
+            Defaults to 2048.
+
+    Returns:
+        torch.Tensor: Tensor of shape (max_pos) containing cosine values
+            for each position index under BiSpace-RoPE encoding.
+    """
+    inv_freq = 1.0 / (base ** ((2 * dim) / 128))
+    pos = torch.arange(max_pos, dtype=torch.float32)
+    pos = pos % orig_L0
+    freqs = pos * inv_freq
+    return torch.round(freqs.cos(), decimals=4)
+
+
+VIS_DIMS = [50, 60]
+COLORS = ["#d62728", "#1f77b4"]
+MISSING_COLOR = "#2ca02c"
+
 DIM = 128
 BASE = 15
 ORIG_L0 = 64
 SCALE_FACTOR = 8.0
-ALPHA = 1.0
-BETA = 32.0
 
 ROPE_POS_MAX = 63
-FRQ_POS_MAX = 511
-NTK_POS_MAX = 511
-LINEAR_POS_MAX = 511
+PI_POS_MAX = 511
+BISPACE_POS_MAX = 511
 
-# Dimensions to visualize (selected for clear contrast)
-VIS_DIMS = [30, 60]
-COLORS = ["#d62728", "#1f77b4"]  # Red for low dimension, Blue for high dimension
-
-# --------------------------
-# Compute curves for selected dimensions
-# --------------------------
 rope_cos_dict = {}
-frq_cos_dict = {}
-ntk_cos_dict = {}
-linear_cos_dict = {}
+pi_cos_dict = {}
+bispace_cos_dict = {}
 
 for vis_dim in VIS_DIMS:
-    rope_cos_dict[vis_dim] = get_rope_curve(DIM, ROPE_POS_MAX + 1, BASE)[:, vis_dim]
-    frq_cos_dict[vis_dim] = get_freq_reciprocal_curve(
-        DIM,
-        FRQ_POS_MAX + 1,
+    rope_cos_dict[vis_dim] = get_rope_curve(
+        vis_dim,
+        ROPE_POS_MAX + 1,
+        BASE,
+    )
+    pi_cos_dict[vis_dim] = get_linear_curve(
+        vis_dim,
+        PI_POS_MAX + 1,
+        BASE,
+        SCALE_FACTOR,
+    )
+    bispace_cos_dict[vis_dim] = get_bispace_rope_curve(
+        vis_dim,
+        BISPACE_POS_MAX + 1,
         BASE,
         ORIG_L0,
-        SCALE_FACTOR,
-    )[:, vis_dim]
-    ntk_cos_dict[vis_dim] = get_ntk_by_parts_curve(
-        DIM,
-        NTK_POS_MAX + 1,
-        BASE,
-        ORIG_L0,
-        SCALE_FACTOR,
-        ALPHA,
-        BETA,
-    )[:, vis_dim]
-    linear_cos_dict[vis_dim] = get_linear_curve(
-        DIM,
-        LINEAR_POS_MAX + 1,
-        BASE,
-        SCALE_FACTOR,
-    )[:, vis_dim]
+    )
 
-# --------------------------
-# Generate 2x2 comparison plot
-# --------------------------
-fig = plt.figure(figsize=(14, 12), dpi=120)
+rope_value_sets = {}
+for vis_dim in VIS_DIMS:
+    rope_values = rope_cos_dict[vis_dim].numpy()
+    rope_value_sets[vis_dim] = set(rope_values)
+
+pi_missing_masks = {}
+bispace_missing_masks = {}
+for vis_dim in VIS_DIMS:
+    rope_set = rope_value_sets[vis_dim]
+    pi_values = pi_cos_dict[vis_dim].numpy()
+    pi_missing_masks[vis_dim] = torch.tensor([v not in rope_set for v in pi_values])
+    bispace_values = bispace_cos_dict[vis_dim].numpy()
+    bispace_missing_masks[vis_dim] = torch.tensor(
+        [v not in rope_set for v in bispace_values]
+    )
+
+fig = plt.figure(figsize=(18, 6), dpi=120)
 fig.suptitle(
     "Position Encoding Comparison for Long Context Extension",
     fontsize=16,
@@ -241,9 +162,9 @@ fig.suptitle(
     y=0.98,
 )
 
-# Top-left plot: Standard RoPE (baseline, short context)
-ax1 = plt.subplot(2, 2, 1)
-for vis_dim, color in zip(VIS_DIMS, COLORS):
+ax1 = plt.subplot(1, 3, 1)
+for idx, vis_dim in enumerate(VIS_DIMS):
+    color = COLORS[idx]
     plt.scatter(
         torch.arange(ROPE_POS_MAX + 1).numpy(),
         rope_cos_dict[vis_dim].numpy(),
@@ -253,66 +174,39 @@ for vis_dim, color in zip(VIS_DIMS, COLORS):
         label=f"dim={vis_dim}",
     )
 plt.title(f"Standard RoPE | Position 0~63", fontsize=14, fontweight=600)
+plt.xlabel("Position", fontsize=12)
 plt.ylabel("Cosine Value", fontsize=12)
 plt.xticks([0, 10, 20, 30, 40, 50, 60])
 plt.grid(alpha=0.3, linestyle="--")
 plt.ylim(-1.1, 1.1)
 
-# Top-right plot: Linear Interpolation
-ax2 = plt.subplot(2, 2, 2)
-for vis_dim, color in zip(VIS_DIMS, COLORS):
+ax2 = plt.subplot(1, 3, 2)
+for idx, vis_dim in enumerate(VIS_DIMS):
+    color = COLORS[idx]
+    missing_mask = pi_missing_masks[vis_dim]
+    present_mask = ~missing_mask
+    present_positions = torch.arange(PI_POS_MAX + 1)[present_mask]
+    present_values = pi_cos_dict[vis_dim].numpy()[present_mask]
+    missing_positions = torch.arange(PI_POS_MAX + 1)[missing_mask]
+    missing_values = pi_cos_dict[vis_dim].numpy()[missing_mask]
     plt.scatter(
-        torch.arange(LINEAR_POS_MAX + 1).numpy(),
-        linear_cos_dict[vis_dim].numpy(),
+        present_positions.numpy(),
+        present_values,
         color=color,
         s=30,
         alpha=0.7,
         label=f"dim={vis_dim}",
     )
-plt.title(
-    f"Linear (scale={SCALE_FACTOR}) | Position 0~511",
-    fontsize=14,
-    fontweight=600,
-)
-plt.xticks([0, 80, 160, 240, 320, 400, 480])
-plt.grid(alpha=0.3, linestyle="--")
-plt.ylim(-1.1, 1.1)
-
-# Bottom-left plot: Freq-Reciprocal
-ax3 = plt.subplot(2, 2, 3)
-for vis_dim, color in zip(VIS_DIMS, COLORS):
     plt.scatter(
-        torch.arange(FRQ_POS_MAX + 1).numpy(),
-        frq_cos_dict[vis_dim].numpy(),
-        color=color,
+        missing_positions.numpy(),
+        missing_values,
+        color=MISSING_COLOR,
         s=30,
         alpha=0.7,
-        label=f"dim={vis_dim}",
+        marker="x",
     )
 plt.title(
-    f"Freq-Reciprocal (S={SCALE_FACTOR}) | Position 0~511",
-    fontsize=14,
-    fontweight=600,
-)
-plt.xlabel("Position", fontsize=12)
-plt.ylabel("Cosine Value", fontsize=12)
-plt.xticks([0, 80, 160, 240, 320, 400, 480])
-plt.grid(alpha=0.3, linestyle="--")
-plt.ylim(-1.1, 1.1)
-
-# Bottom-right plot: NTK-By-Parts
-ax4 = plt.subplot(2, 2, 4)
-for vis_dim, color in zip(VIS_DIMS, COLORS):
-    plt.scatter(
-        torch.arange(NTK_POS_MAX + 1).numpy(),
-        ntk_cos_dict[vis_dim].numpy(),
-        color=color,
-        s=30,
-        alpha=0.7,
-        label=f"dim={vis_dim}",
-    )
-plt.title(
-    f"NTK-By-Parts (S={SCALE_FACTOR}) | Position 0~511",
+    f"Position Interpolation (scale={SCALE_FACTOR}) | Position 0~511",
     fontsize=14,
     fontweight=600,
 )
@@ -321,14 +215,54 @@ plt.xticks([0, 80, 160, 240, 320, 400, 480])
 plt.grid(alpha=0.3, linestyle="--")
 plt.ylim(-1.1, 1.1)
 
-# Place shared legend at bottom center
+ax3 = plt.subplot(1, 3, 3)
+for idx, vis_dim in enumerate(VIS_DIMS):
+    color = COLORS[idx]
+    missing_mask = bispace_missing_masks[vis_dim]
+    present_mask = ~missing_mask
+    present_positions = torch.arange(BISPACE_POS_MAX + 1)[present_mask]
+    present_values = bispace_cos_dict[vis_dim].numpy()[present_mask]
+    missing_positions = torch.arange(BISPACE_POS_MAX + 1)[missing_mask]
+    missing_values = bispace_cos_dict[vis_dim].numpy()[missing_mask]
+    plt.scatter(
+        present_positions.numpy(),
+        present_values,
+        color=color,
+        s=30,
+        alpha=0.7,
+        label=f"dim={vis_dim}",
+    )
+    plt.scatter(
+        missing_positions.numpy(),
+        missing_values,
+        color=MISSING_COLOR,
+        s=30,
+        alpha=0.7,
+        marker="x",
+    )
+plt.title(
+    f"BiSpace-RoPE (L0={ORIG_L0}) | Position 0~511",
+    fontsize=14,
+    fontweight=600,
+)
+plt.xlabel("Position", fontsize=12)
+plt.xticks([0, 80, 160, 240, 320, 400, 480])
+plt.grid(alpha=0.3, linestyle="--")
+plt.ylim(-1.1, 1.1)
+
 handles, labels = ax1.get_legend_handles_labels()
+handles.append(
+    plt.scatter(
+        [], [], color=MISSING_COLOR, s=30, alpha=0.7, marker="x", label="Not in RoPE"
+    )
+)
+labels.append("Not in RoPE")
 fig.legend(
     handles,
     labels,
     loc="lower center",
-    bbox_to_anchor=(0.5, -0.01),
-    ncol=2,
+    bbox_to_anchor=(0.5, 0),
+    ncol=3,
     fontsize=12,
     frameon=True,
     fancybox=True,
@@ -336,5 +270,5 @@ fig.legend(
 )
 
 plt.tight_layout()
-plt.subplots_adjust(bottom=0.05)
+plt.subplots_adjust(bottom=0.12)
 plt.savefig("drawer/rope_comparison.png", dpi=300)

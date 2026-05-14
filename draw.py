@@ -1,4 +1,5 @@
-"""Layer normalization function comparison plotter for attention scaling.
+"""
+Layer normalization function comparison plotter for attention scaling.
 
 Plots six candidate functions (logarithmic, exponential, sigmoid variants)
 that map transformer layer indices (0–31) to a normalized range [0, 1].
