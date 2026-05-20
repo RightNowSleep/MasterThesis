@@ -24,7 +24,7 @@
 #   Visualization plots saved to: results/entropy/plots/
 # =============================================================================
 
-CUDA_DEVICES="1,2,3"
+CUDA_DEVICES="0,2,3"
 export CUDA_VISIBLE_DEVICES=$CUDA_DEVICES
 
 set -e
@@ -43,7 +43,7 @@ DATASET="emozilla/proofpile-test-tokenized"
 
 # ── Evaluation Mode Flags ─────────────────────────────────────────────────────
 ROPE=true
-ADAPTER=true
+ADAPTER=false
 ADAPTER_DIR="finetunes/continued_pretrain"
 
 # ── RoPE Methods Configuration ───────────────────────────────────────────────
@@ -75,6 +75,12 @@ ADAPTER_PATHS=(
 BASE_ADAPTER_FOR_ENTROPY=""
 # Example:
 # BASE_ADAPTER_FOR_ENTROPY="finetunes/inverse-dual-rope_20260403|inverse-dual-rope-scaled"
+
+# ── Plot Layers Configuration ──────────────────────────────────────────────
+# Optional: Specify preferred layer indices for Fig 3 (space-separated)
+# If empty, auto-select 8 layers by head-entropy std
+# Example: PLOT_LAYERS="31 13 8 23 30 9 28 14"
+PLOT_LAYERS="31 13 8 23 30 9 28 14"
 
 # ── Build Methods List ───────────────────────────────────────────────────────
 # Combine enabled RoPE methods and adapter paths into the final evaluation list
@@ -204,9 +210,15 @@ if [ $PART2 = true ]; then
         echo "Output: $METHOD_PLOT_DIR"
         echo "--------------------------------------------------"
 
+        LAYERS_ARG=""
+        if [ -n "$PLOT_LAYERS" ]; then
+            LAYERS_ARG="--layers $PLOT_LAYERS"
+        fi
+
         python "$PLOT_SCRIPT" \
             --input "$INPUT_FILE" \
-            --out-dir "$METHOD_PLOT_DIR"
+            --out-dir "$METHOD_PLOT_DIR" \
+            $LAYERS_ARG
 
         echo "Plots generated for: $FILENAME"
         echo ""

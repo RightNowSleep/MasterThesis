@@ -1,0 +1,8 @@
+- [x] `_auto_select_layers` 接受 `preferred_layers` 参数，三种场景（未指定/不足8层/超过8层）行为正确
+- [x] `_auto_select_layers` 对越界索引静默忽略，对重复索引去重
+- [x] `plot_entropy_vs_position` 接受并传递 `preferred_layers` 参数
+- [x] `plot_all` 接受并传递 `preferred_layers` 参数
+- [x] `--layers` CLI 参数可正确解析为整数列表
+- [x] `main` 函数在单图模式和全图模式下均正确传递 `preferred_layers`
+- [x] `entropy.sh` 的 `PLOT_LAYERS` 变量为空时不传递 `--layers`，非空时正确传递
+- [x] 不指定 `--layers` 时，图3输出与修改前完全一致（向后兼容）

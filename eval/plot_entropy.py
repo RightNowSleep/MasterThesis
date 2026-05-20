@@ -360,20 +360,48 @@ def _normalize_data(data: dict) -> dict:
     return data
 
 
-def _auto_select_layers(data: dict, n: int = 4) -> List[int]:
+def _auto_select_layers(
+    data: dict,
+    n: int = 4,
+    preferred_layers: List[int] | None = None,
+) -> List[int]:
     """
-    Return the indices of the *n* layers with the highest average head-entropy
-    standard deviation across all evaluated sequence lengths.
+    Return the indices of *n* layers to visualise, with optional user
+    preference for specific layers.
 
-    These layers show the most intra-layer head specialisation and are the
-    most informative to inspect in detail.
+    Selection logic
+    ----------------
+    1. **No preferred layers** (preferred_layers is None or empty):
+       Select the *n* layers with the highest average head-entropy std
+       across all evaluated sequence lengths (original behaviour).
+
+    2. **Preferred layers specified**:
+       - Start with the preferred list (preserving user order).
+       - If len(preferred) < n: fill the remaining slots with the
+         highest-std layers from the auto-selection that are NOT already
+         in the preferred set (no duplicates).
+       - If len(preferred) > n: trim to the first *n* entries.
+
+    Why head-entropy std?
+    ----------------------
+    The per-layer head-entropy standard deviation measures how
+    differently the attention heads within a layer behave.  A high std
+    means strong *specialisation* — some heads focus tightly while
+    others attend broadly.  These layers are the most informative to
+    inspect because they reveal the greatest diversity in attention
+    patterns and are most sensitive to changes in positional encoding
+    (such as different RoPE methods).
 
     Args:
         data: The data dictionary containing entropy results.
         n: Number of layers to select, default is 4.
+        preferred_layers: Optional list of user-specified layer indices
+            that take priority.  Duplicates are removed; out-of-range
+            indices are silently dropped.
 
     Returns:
-        List of layer indices sorted by descending standard deviation.
+        List of layer indices (length <= n), with preferred layers first
+        followed by auto-selected layers sorted by descending std.
     """
     lengths = data["lengths"]
     num_layers = data["num_layers"]
@@ -382,8 +410,30 @@ def _auto_select_layers(data: dict, n: int = 4) -> List[int]:
         std = np.array(data["results"][str(sl)]["head_norm_std_by_layer"])
         avg_std += std
     avg_std /= len(lengths)
-    selected = np.argsort(avg_std)[-n:][::-1].tolist()
-    return selected  # descending std
+    auto_order = np.argsort(avg_std)[::-1].tolist()
+
+    if not preferred_layers:
+        return auto_order[:n]
+
+    valid_preferred = [l for l in preferred_layers if 0 <= l < num_layers]
+    seen = set()
+    unique_preferred: List[int] = []
+    for l in valid_preferred:
+        if l not in seen:
+            unique_preferred.append(l)
+            seen.add(l)
+
+    if len(unique_preferred) >= n:
+        return unique_preferred[:n]
+
+    for l in auto_order:
+        if l not in seen:
+            unique_preferred.append(l)
+            seen.add(l)
+        if len(unique_preferred) == n:
+            break
+
+    return unique_preferred
 
 
 def _grid(n: int):
@@ -732,6 +782,7 @@ def plot_entropy_vs_position(
     dpi: int,
     selected_layers: List[int] | None = None,
     method_name: str = "",
+    preferred_layers: List[int] | None = None,
 ) -> None:
     """
     Fig 3 — four files: raw, raw_cn, norm, norm_cn.
@@ -742,16 +793,23 @@ def plot_entropy_vs_position(
         fmt: Output format (e.g., 'png', 'pdf').
         dpi: Resolution for raster formats.
         selected_layers: Optional list of layer indices to plot.
-            If None, auto-selects layers with highest head-entropy std.
+            If None, auto-selects layers (using preferred_layers if given).
         method_name: Prefix for output filenames.
+        preferred_layers: Optional user-specified layer indices that take
+            priority when auto-selecting.  Ignored when selected_layers is
+            explicitly provided.
     """
     if selected_layers is None:
         num_layers = min(data["num_layers"], 8)
-        selected_layers = _auto_select_layers(data, n=num_layers)
+        selected_layers = _auto_select_layers(
+            data,
+            n=num_layers,
+            preferred_layers=preferred_layers,
+        )
     else:
         selected_layers = selected_layers[:8]
 
-    print(f"  Fig 3 auto-selected layers: {selected_layers}")
+    print(f"  Fig 3 selected layers: {selected_layers}")
 
     lengths = data["lengths"]
     max_length = max(lengths)
@@ -810,7 +868,8 @@ def plot_entropy_vs_position(
         _savefig(
             fig,
             os.path.join(
-                out_dir, f"{method_name}_fig03_entropy_vs_position_{suffix}.{fmt}"
+                out_dir,
+                f"{method_name}_fig03_entropy_vs_position_{suffix}.{fmt}",
             ),
             dpi,
         )
@@ -1841,6 +1900,7 @@ def plot_all(
     fmt: str = "png",
     dpi: int = _DPI,
     method_name: str = "",
+    preferred_layers: List[int] | None = None,
 ) -> None:
     """
     Generate all seven figures.
@@ -1851,14 +1911,19 @@ def plot_all(
         fmt: Output format ('png', 'pdf', or 'svg').
         dpi: Resolution for raster formats.
         method_name: Prefix for output filenames.
+        preferred_layers: Optional user-specified layer indices that take
+            priority for layer selection (used in Figs 3 & 5).
     """
     os.makedirs(out_dir, exist_ok=True)
 
-    # pre-compute shared layer selection so Fig 3 and Fig 5 use the same layers
     num_layers = min(data["num_layers"], 8)
-    selected = _auto_select_layers(data, n=num_layers)
+    selected = _auto_select_layers(
+        data,
+        n=num_layers,
+        preferred_layers=preferred_layers,
+    )
     print(f"\nGenerating {len(_FIG_FUNCTIONS)} figures → {out_dir}/")
-    print(f"Auto-selected layers for Figs 3 & 5: {selected}")
+    print(f"Selected layers for Figs 3 & 5: {selected}")
 
     for fig_num, fn in enumerate(_FIG_FUNCTIONS, start=1):
         print(f"\n[Fig {fig_num}] {fn.__name__}")
@@ -1871,6 +1936,7 @@ def plot_all(
                     dpi,
                     selected_layers=selected,
                     method_name=method_name,
+                    preferred_layers=preferred_layers,
                 )
             elif fn is plot_position_head_heatmap:
                 fn(
@@ -1939,6 +2005,18 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=range(1, 10),
         help="Generate only figure N (1–9); omit for all.",
     )
+    p.add_argument(
+        "--layers",
+        type=int,
+        nargs="*",
+        default=None,
+        help=(
+            "Preferred layer indices for Fig 3 (space-separated, e.g. --layers 0 5 15 31). "
+            "If fewer than 8, remaining slots are filled by auto-selection (highest head-entropy std). "
+            "If more than 8, excess layers are trimmed. "
+            "Omit to use the default auto-selection of 8 layers."
+        ),
+    )
     return p
 
 
@@ -1975,11 +2053,15 @@ def main() -> None:
 
     out_dir = args.out_dir or str(input_path.parent / "plots" / input_path.stem)
 
+    preferred = args.layers
+
     if args.fig is not None:
         fn = _FIG_FUNCTIONS[args.fig - 1]
         os.makedirs(out_dir, exist_ok=True)
         print(f"\nGenerating Fig {args.fig} → {out_dir}/")
-        selected = _auto_select_layers(data, n=4)
+        num_layers = min(data["num_layers"], 8)
+        selected = _auto_select_layers(data, n=num_layers, preferred_layers=preferred)
+        print(f"Selected layers: {selected}")
         try:
             if fn is plot_entropy_vs_position:
                 fn(
@@ -1987,8 +2069,9 @@ def main() -> None:
                     out_dir,
                     args.fmt,
                     args.dpi,
-                    selected_layers=None,
+                    selected_layers=selected,
                     method_name=method_name,
+                    preferred_layers=preferred,
                 )
             elif fn is plot_position_head_heatmap:
                 fn(
@@ -2004,7 +2087,14 @@ def main() -> None:
         except Exception as exc:
             print(f"[ERROR] {exc}")
     else:
-        plot_all(data, out_dir, fmt=args.fmt, dpi=args.dpi, method_name=method_name)
+        plot_all(
+            data,
+            out_dir,
+            fmt=args.fmt,
+            dpi=args.dpi,
+            method_name=method_name,
+            preferred_layers=preferred,
+        )
 
 
 if __name__ == "__main__":
